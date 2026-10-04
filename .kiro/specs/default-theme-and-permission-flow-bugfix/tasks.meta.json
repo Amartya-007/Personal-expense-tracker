@@ -1,0 +1,137 @@
+{
+  "pbtResults": {
+    "1. Write bug condition exploration tests": {
+      "status": "passed",
+      "failingExample": "All 3 bug condition cases failed as expected on unfixed code, confirming the bug exists:\n\nCase 1 — savedThemePreference=null (first launch):\n  Expected: ThemeMode.light\n  Actual:   ThemeMode.system\n  Counterexample: ThemeModeNotifier.state == ThemeMode.system with no saved preference\n\nCase 2 — savedThemePreference='system':\n  Expected: ThemeMode.light\n  Actual:   ThemeMode.system\n  Counterexample: ThemeModeNotifier.state == ThemeMode.system when pref='system'\n\nCase 3 — constructor seed before load() completes:\n  Expected: ThemeMode.light (seed)\n  Actual:   ThemeMode.system (seed)\n  Counterexample: Constructor seeds ThemeMode.system instead of ThemeMode.light",
+      "lastRunTimestamp": 1790878540925
+    }
+  },
+  "executionHistory": {
+    "1. Write bug condition exploration tests": [
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790878379080
+      },
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790878387663
+      },
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790878554217
+      }
+    ],
+    "2. Write preservation property tests (BEFORE implementing fix)": [
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790878379526
+      },
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790878558559
+      },
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790878806621
+      }
+    ],
+    "3.1 Fix default theme fallback in `ThemeModeNotifier`": [
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790878379672
+      },
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790878814020
+      },
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790878874752
+      }
+    ],
+    "3.2 Wrap SMS permission request in try/catch in `PermissionService`": [
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790878379772
+      },
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790878879145
+      },
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790879071678
+      }
+    ],
+    "3.3 Verify bug condition exploration test now passes": [
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790878379866
+      },
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790879079216
+      },
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790879110314
+      }
+    ],
+    "3.4 Verify preservation tests still pass": [
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790878379996
+      },
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790879114705
+      },
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790879155625
+      }
+    ],
+    "4. Checkpoint — Ensure all tests pass": [
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790878380071
+      },
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790879159456
+      },
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790879258025
+      }
+    ],
+    "3. Fix Default Theme and SMS Permission Crash": [
+      {
+        "executionId": "cc992a43-32b6-427f-9ca2-00bca281238a",
+        "chatSessionId": "sess_8772fb2d-4094-4319-aed6-3ff5b6be0988",
+        "timestamp": 1790879155696
+      }
+    ]
+  }
+}

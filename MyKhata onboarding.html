@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MyKhata onboarding</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f4f3fb;--sf:#fff;--s2:#ebeaf6;--ink:#17163a;--mut:#767493;--ln:#e3e1f1;--ac:#5b3df5;--ac2:#ffb627;--on:#fff;--in:#12a574;--ex:#e5484d;--g1:#6d54ff;--g2:#2d1bb0;--sh:0 10px 30px rgba(40,30,120,.14)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0e0e1f;--sf:#181833;--s2:#222247;--ink:#f1f0fc;--mut:#9391b8;--ln:#2a2a52;--ac:#8d7bff;--on:#12102e;--in:#4fdcab;--ex:#ff7075;--g1:#6a56f0;--g2:#241a78;--sh:0 10px 30px rgba(0,0,0,.45)}}
+:root[data-theme=dark]{--bg:#0e0e1f;--sf:#181833;--s2:#222247;--ink:#f1f0fc;--mut:#9391b8;--ln:#2a2a52;--ac:#8d7bff;--on:#12102e;--in:#4fdcab;--ex:#ff7075;--g1:#6a56f0;--g2:#241a78;--sh:0 10px 30px rgba(0,0,0,.45)}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{font-family:Sora,system-ui,sans-serif;background:var(--s2);color:var(--ink);display:flex;justify-content:center;align-items:center;font-size:14px}
+button{font:inherit;color:inherit;cursor:pointer}
+#app{width:100%;max-width:410px;height:100%;max-height:840px;background:var(--bg);position:relative;overflow:hidden;padding-top:env(safe-area-inset-top,0px)}
+@media(min-width:500px){#app{height:min(840px,96vh);border-radius:34px;box-shadow:var(--sh)}}
+#top{position:absolute;top:env(safe-area-inset-top,0px);left:0;right:0;z-index:5;padding:16px 20px 0;display:flex;align-items:center;gap:14px;transition:opacity .4s}
+#bars{flex:1;display:flex;gap:5px}#bars i{flex:1;height:4px;border-radius:2px;background:var(--ln);overflow:hidden;position:relative}
+#bars i:after{content:"";position:absolute;inset:0;background:var(--ac);transform:scaleX(0);transform-origin:left;transition:transform .6s cubic-bezier(.2,.8,.2,1)}#bars i.on:after{transform:none}
+#top button{background:none;border:0;color:var(--mut);font-weight:600;font-size:13px;padding:6px 2px;min-width:34px;transition:opacity .3s}
+.scr{position:absolute;inset:0;display:flex;flex-direction:column;padding-top:calc(env(safe-area-inset-top,0px) + 40px);transition:transform .55s cubic-bezier(.2,.8,.2,1),opacity .45s}
+.body{flex:1;overflow-y:auto;padding:12px 24px 12px;display:flex;flex-direction:column}
+.ft{padding:12px 24px calc(22px + env(safe-area-inset-bottom,0px));display:grid;gap:8px}
+.st{animation:rise .7s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i)*70ms + 120ms)}
+@keyframes rise{from{opacity:0;transform:translateY(22px)}}
+h1{font-size:28px;font-weight:800;letter-spacing:-.8px;line-height:1.15;margin-bottom:10px}
+p.s{color:var(--mut);line-height:1.6;font-size:14px}
+.art{height:250px;display:grid;place-items:center;margin:6px 0 14px;position:relative}
+.art svg{width:100%;max-width:300px;height:auto;overflow:visible}
+.btn{width:100%;border:0;border-radius:20px;padding:17px;background:var(--ac);color:var(--on);font-weight:800;font-size:15px;transition:transform .15s,opacity .3s,background .3s;position:relative;overflow:hidden}.btn:active{transform:scale(.97)}
+.btn.g{background:none;color:var(--mut);font-weight:600;padding:10px}.btn:disabled{opacity:.35;pointer-events:none}
+.btn:not(.g):after{content:"";position:absolute;top:0;bottom:0;width:60px;left:-80px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent);transform:skewX(-20deg);animation:shine 3.2s infinite 1.2s}
+@keyframes shine{to{left:130%}}
+input{width:100%;font:inherit;color:var(--ink);background:var(--sf);border:2px solid transparent;border-radius:18px;padding:16px;outline:0;transition:border-color .2s;box-shadow:0 1px 0 var(--ln)}input:focus{border-color:var(--ac)}
+.f{margin-bottom:14px}.f label{display:block;font-size:12px;font-weight:600;color:var(--mut);margin:0 0 6px 4px}
+.pre{position:relative}.pre b{position:absolute;left:16px;top:50%;transform:translateY(-50%);font-weight:700}.pre input{padding-left:36px;font-variant-numeric:tabular-nums}
+.chip{display:flex;align-items:center;gap:12px;background:var(--sf);border-radius:18px;padding:12px 14px;margin-bottom:8px;box-shadow:var(--sh);animation:pop .5s cubic-bezier(.3,1.5,.5,1)}
+@keyframes pop{from{transform:scale(.6) translateY(10px);opacity:0}}
+.ic{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;font-size:19px;background:var(--s2);flex:none}
+.row{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--ln)}.row:last-child{border:0}.row div{flex:1}.row b{display:block;font-size:14px;font-weight:600}.row small{display:block;color:var(--mut);font-size:12px;margin-top:2px;line-height:1.4}
+.card{background:var(--sf);border-radius:22px;padding:2px 16px;box-shadow:var(--sh)}
+.tg{width:46px;height:28px;border-radius:14px;background:var(--s2);position:relative;flex:none;transition:background .3s;cursor:pointer;border:0}.tg:after{content:"";position:absolute;left:3px;top:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.3);transition:transform .4s cubic-bezier(.3,1.4,.5,1)}.tg.on{background:var(--ac)}.tg.on:after{transform:translateX(18px)}
+.cap{font-size:12px;color:var(--mut);line-height:1.5;margin:6px 4px 12px}
+.fp{width:110px;height:110px;border-radius:50%;background:var(--s2);display:grid;place-items:center;font-size:50px;position:relative;cursor:pointer;transition:background .4s,transform .5s cubic-bezier(.3,1.5,.5,1)}
+.fp:before,.fp:after{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid var(--ac);opacity:0;animation:ring 2.4s infinite}.fp:after{animation-delay:1.2s}
+@keyframes ring{0%{transform:scale(1);opacity:.6}100%{transform:scale(1.9);opacity:0}}
+.fp.ok{background:var(--in);transform:scale(1.12);color:#fff}.fp.ok:before,.fp.ok:after{display:none}
+.float{animation:fl 4s ease-in-out infinite}@keyframes fl{50%{transform:translateY(-9px)}}
+.orb{transform-origin:150px 120px;animation:orb 14s linear infinite}@keyframes orb{to{transform:rotate(360deg)}}
+.scan{animation:scan 2.6s ease-in-out infinite}@keyframes scan{0%,100%{transform:translateY(0)}50%{transform:translateY(96px)}}
+.slideL{animation:sl 1s .3s cubic-bezier(.2,.8,.2,1) both}@keyframes sl{from{transform:translateX(-60px);opacity:0}}
+.popA{animation:pop .7s .9s cubic-bezier(.3,1.5,.5,1) both;transform-origin:center;transform-box:fill-box}
+.draw{stroke-dasharray:1;stroke-dashoffset:1;animation:dr 1.6s .4s ease forwards}@keyframes dr{to{stroke-dashoffset:var(--end,0)}}
+.cf i{position:absolute;width:9px;height:9px;border-radius:3px;left:50%;top:50%;animation:cf 1.6s cubic-bezier(.2,.8,.3,1) both;animation-delay:calc(var(--d)*.04s + .5s)}
+@keyframes cf{from{transform:translate(0,0) scale(.2);opacity:1}to{transform:translate(var(--x),var(--y)) rotate(300deg);opacity:0}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;animation-delay:0s!important}}
+</style></head><body>
+<div id="app"><div id="top"><button id="bk" onclick="go(cur-1)" aria-label="Back">‹</button><div id="bars"></div><button id="sk" onclick="go(cur+1)">Skip</button></div><div id="st"></div></div>
+<script>
+const $=s=>document.querySelector(s);let cur=0,accs=[],busy=0;
+const SV=(inner)=>`<svg viewBox="0 0 300 220" aria-hidden="true">${inner}</svg>`;
+const bg=`<circle cx="150" cy="115" r="92" fill="var(--s2)"/><circle cx="150" cy="115" r="62" fill="var(--ln)" opacity=".6"/>`;
+const ART={
+logo:()=>SV(`${bg}<g class="orb"><circle cx="150" cy="22" r="13" fill="var(--ac2)"/><text x="150" y="27" text-anchor="middle" font-size="14" font-weight="800" fill="#2a1d00" font-family="Sora">₹</text><circle cx="240" cy="120" r="9" fill="var(--ac)" opacity=".8"/><circle cx="60" cy="150" r="7" fill="var(--in)"/></g><g class="float"><rect x="98" y="62" width="104" height="124" rx="20" fill="url(#lg)"/><rect x="98" y="62" width="16" height="124" rx="8" fill="#000" opacity=".18"/><circle cx="160" cy="112" r="22" fill="none" stroke="var(--ac2)" stroke-width="4"/><text x="160" y="121" text-anchor="middle" font-size="26" font-weight="800" fill="var(--ac2)" font-family="Sora">₹</text><rect x="132" y="150" width="56" height="5" rx="2.5" fill="#fff" opacity=".6"/><rect x="144" y="162" width="32" height="5" rx="2.5" fill="#fff" opacity=".35"/></g><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--g1)"/><stop offset="1" stop-color="var(--g2)"/></linearGradient></defs>`),
+sms:()=>SV(`${bg}<g class="slideL"><rect x="34" y="52" width="148" height="62" rx="18" fill="var(--sf)"/><rect x="50" y="68" width="90" height="7" rx="3.5" fill="var(--mut)" opacity=".5"/><rect x="50" y="83" width="116" height="7" rx="3.5" fill="var(--mut)" opacity=".3"/><rect x="50" y="98" width="60" height="7" rx="3.5" fill="var(--mut)" opacity=".3"/></g><path class="draw" pathLength="1" d="M150 120 C150 140 170 140 176 150" stroke="var(--ac)" stroke-width="3" stroke-dasharray="1" fill="none" stroke-linecap="round"/><g class="popA"><rect x="112" y="142" width="160" height="66" rx="18" fill="var(--ac)"/><text x="130" y="168" font-size="12" fill="#fff" opacity=".8" font-family="Sora">Swiggy · UPI</text><text x="130" y="194" font-size="20" font-weight="800" fill="#fff" font-family="Sora">−₹450</text><circle cx="248" cy="175" r="14" fill="var(--in)"/><path d="M241 175l5 5 9-10" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>`),
+rcp:()=>SV(`${bg}<g class="float"><path d="M104 40h92v138l-11-8-12 8-11-8-12 8-12-8-11 8-12-8-11 8z" fill="var(--sf)"/><rect x="118" y="58" width="64" height="7" rx="3.5" fill="var(--mut)" opacity=".6"/><rect x="118" y="78" width="48" height="6" rx="3" fill="var(--mut)" opacity=".35"/><rect x="118" y="94" width="56" height="6" rx="3" fill="var(--mut)" opacity=".35"/><rect x="118" y="110" width="40" height="6" rx="3" fill="var(--mut)" opacity=".35"/><rect x="118" y="134" width="64" height="9" rx="4.5" fill="var(--ac)" opacity=".8"/></g><g class="scan"><rect x="84" y="46" width="132" height="4" rx="2" fill="var(--ac2)"/><rect x="84" y="46" width="132" height="26" fill="var(--ac2)" opacity=".15"/></g>`),
+bud:()=>SV(`${bg}<g class="float"><circle cx="150" cy="112" r="56" fill="none" stroke="var(--s2)" stroke-width="16"/><circle cx="150" cy="112" r="56" fill="none" stroke="var(--ac)" stroke-width="16" stroke-linecap="round" transform="rotate(-90 150 112)" pathLength="1" class="draw" stroke-dasharray="1" style="--end:.16"/><text x="150" y="108" text-anchor="middle" font-size="12" fill="var(--mut)" font-family="Sora">Food</text><text x="150" y="130" text-anchor="middle" font-size="20" font-weight="800" fill="var(--ink)" font-family="Sora">84%</text></g><g class="popA"><rect x="206" y="36" width="70" height="32" rx="16" fill="var(--ac2)"/><text x="241" y="57" text-anchor="middle" font-size="12" font-weight="800" fill="#2a1d00" font-family="Sora">90% alert</text></g>`),
+done:()=>SV(`${bg}<circle cx="150" cy="115" r="56" fill="var(--in)" class="popA"/><path class="draw" pathLength="1" d="M124 116l20 20 34-40" stroke="#fff" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round" style="animation-delay:.9s"/>`)};
+const dotsH=n=>`<div class="cf">${Array.from({length:n},(_,i)=>{const a=i/n*6.28,r=100+Math.random()*60;return`<i style="--d:${i};--x:${Math.cos(a)*r}px;--y:${Math.sin(a)*r-20}px;background:${['var(--ac)','var(--ac2)','var(--in)','var(--ex)'][i%4]}"></i>`}).join('')}</div>`;
+const tg=on=>`<button class="tg ${on?'on':''}" onclick="this.classList.toggle('on')" aria-label="Toggle"></button>`;
+const feat=(art,t,s,cta='Next')=>`<div class="body"><div class="art st" style="--i:0">${ART[art]()}</div><h1 class="st" style="--i:1">${t}</h1><p class="s st" style="--i:2">${s}</p></div><div class="ft st" style="--i:3"><button class="btn" onclick="go(cur+1)">${cta}</button></div>`;
+const STEPS=[
+()=>`<div class="body" style="justify-content:center;text-align:center"><div class="art st" style="--i:0;height:270px">${ART.logo()}</div><h1 class="st" style="--i:1;font-size:34px">MyKhata</h1><p class="s st" style="--i:2">Record, understand and monitor your money with the least possible effort.</p></div><div class="ft st" style="--i:3"><button class="btn" onclick="go(1)">Get started</button><small style="text-align:center;color:var(--mut);font-size:12px;padding-top:4px">Private · Offline · No sign-up · No ads</small></div>`,
+()=>feat('sms','Bank messages, sorted for you','MyKhata spots transaction SMS and lines them up for review. Nothing is added until you confirm it.'),
+()=>feat('rcp','Keep receipts with the expense','Snap or attach receipts. They stay on this phone, next to the expense they belong to.'),
+()=>feat('bud','Budgets that tell you early','Set a limit, then get a nudge at 75%, 90% and 100%. Once per period, never spam.'),
+()=>`<div class="body"><h1 class="st" style="--i:0;margin-top:10px">Add your first bank account</h1><p class="s st" style="--i:1;margin-bottom:20px">Use the balance you have right now. You can change it any time.</p><div class="st" style="--i:2"><div class="f"><label>Account name</label><input id="an" placeholder="e.g. SBI" autocomplete="off" oninput="chk()"></div><div class="f"><label>Current balance</label><div class="pre"><b>₹</b><input id="ab" inputmode="numeric" placeholder="0" enterkeyhint="done" oninput="chk()"></div></div></div><div id="al"></div><button class="btn g st" style="--i:3;color:var(--ac);font-weight:700" onclick="addAcc()">+ Add another bank account</button><p class="cap st" style="--i:4">Cash is a payment method in MyKhata, so you don't need a Cash account.</p></div><div class="ft"><button class="btn" id="nx" disabled onclick="addAcc(1)">Continue</button></div>`,
+()=>`<div class="body"><h1 class="st" style="--i:0;margin-top:10px">A few permissions</h1><p class="s st" style="--i:1;margin-bottom:16px">Each one is optional. We only use them for the reason shown.</p><div class="card st" style="--i:2">${[['🔔','Notifications','Budget alerts and payment reminders'],['📍','Location','Saved with an expense, only at the moment you save'],['📷','Camera','Photograph receipts'],['🖼️','Photos','Attach receipts from your gallery'],['💬','SMS','Detect bank messages so you can review them']].map(x=>`<div class="row"><span class="ic">${x[0]}</span><div><b>${x[1]}</b><small>${x[2]}</small></div>${tg(1)}</div>`).join('')}</div><p class="cap st" style="--i:3">You can change these later in Settings.</p></div><div class="ft"><button class="btn" onclick="go(cur+1)">Allow selected</button></div>`,
+()=>`<div class="body" style="align-items:center;text-align:center"><div class="st" style="--i:0;margin:50px 0 34px"><div class="fp" id="fp" onclick="bio()">👆</div></div><h1 class="st" style="--i:1">Lock it down</h1><p class="s st" style="--i:2">Open MyKhata with your fingerprint or face. If that doesn't work, your phone's PIN or pattern does.</p></div><div class="ft st" style="--i:3"><button class="btn" id="bb" onclick="bio()">Enable biometric lock</button><button class="btn g" onclick="go(cur+1)">Maybe later</button></div>`,
+()=>`<div class="body" style="align-items:center;text-align:center;justify-content:center"><div class="art" style="position:relative;height:250px">${ART.done()}${dotsH(24)}</div><h1 class="st" style="--i:1">You're all set</h1><p class="s st" style="--i:2">${accs.length?accs.map(a=>a.n).join(' and ')+' ready to track.':'Ready to track.'} Tap + on Home whenever you spend.</p></div><div class="ft st" style="--i:3"><button class="btn" onclick="this.textContent='Opening Home…';setTimeout(()=>go(0),1200)">Open MyKhata</button></div>`
+];
+const bars=$('#bars');STEPS.forEach(()=>bars.appendChild(document.createElement('i')));
+function chk(){const n=$('#an'),b=$('#ab');$('#nx').disabled=!(accs.length||(n.value.trim()&&b.value.trim()))}
+function addAcc(go2){const n=$('#an'),b=$('#ab');if(n.value.trim()){accs.push({n:n.value.trim(),b:+b.value||0});const d=document.createElement('div');d.className='chip';d.innerHTML=`<span class="ic">🏦</span><div style="flex:1"><b>${n.value.trim()}</b></div><b style="font-variant-numeric:tabular-nums">₹${(+b.value||0).toLocaleString('en-IN')}</b>`;$('#al').appendChild(d);n.value='';b.value='';if(!go2)n.focus()}if(go2&&accs.length)go(cur+1);chk()}
+function bio(){const f=$('#fp');f.classList.add('ok');f.textContent='✓';const b=$('#bb');b.textContent='Biometric lock on';b.disabled=true;setTimeout(()=>go(cur+1),1000)}
+function go(n){if(busy||n<0||n>=STEPS.length)return;busy=1;const dir=n>=cur?1:-1,st=$('#st'),old=st.firstChild,el=document.createElement('div');el.className='scr';el.style.cssText=`transform:translateX(${dir*60}px);opacity:0`;el.innerHTML=STEPS[n]();st.appendChild(el);el.offsetWidth;
+if(old){old.style.transform=`translateX(${-dir*60}px)`;old.style.opacity=0}
+el.style.transform='';el.style.opacity=1;cur=n;[...bars.children].forEach((b,i)=>b.classList.toggle('on',i<=n));
+$('#bk').style.opacity=n>0&&n<STEPS.length-1?1:0;$('#bk').style.pointerEvents=n>0?'auto':'none';$('#sk').style.opacity=n>0&&n<4?1:0;$('#sk').style.pointerEvents=n>0&&n<4?'auto':'none';$('#top').style.opacity=n==0?0:1;
+if(n===4){const a=$('#an');setTimeout(()=>{},0)}
+setTimeout(()=>{old&&old.remove();busy=0},560)}
+go(0);
+</script></body></html>

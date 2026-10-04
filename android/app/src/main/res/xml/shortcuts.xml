@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="add_expense"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_add_expense_short"
+        android:shortcutLongLabel="@string/shortcut_add_expense_long">
+        <intent
+            android:action="com.MyKhata.mykhata.ACTION_ADD_EXPENSE"
+            android:targetPackage="com.MyKhata.mykhata"
+            android:targetClass="com.MyKhata.mykhata.MainActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="view_budgets"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_budgets_short"
+        android:shortcutLongLabel="@string/shortcut_budgets_long">
+        <intent
+            android:action="com.MyKhata.mykhata.ACTION_VIEW_BUDGETS"
+            android:targetPackage="com.MyKhata.mykhata"
+            android:targetClass="com.MyKhata.mykhata.MainActivity" />
+    </shortcut>
+</shortcuts>
