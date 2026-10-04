@@ -1,5 +1,7 @@
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/constants/app_constants.dart';
 import '../../core/logging/app_logger.dart';
 
 class LocationResult {
@@ -17,6 +19,14 @@ class LocationResult {
 class LocationService {
   Future<LocationResult?> getCurrentLocation() async {
     try {
+      // Respect the user's "save location" setting. It was stored during
+      // onboarding but never read, so turning it off had no effect (and the
+      // app kept asking the OS for permission on every save).
+      final prefs = await SharedPreferences.getInstance();
+      if (!(prefs.getBool(AppConstants.prefAutoLocationCapture) ?? true)) {
+        return null;
+      }
+
       final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) return null;
 

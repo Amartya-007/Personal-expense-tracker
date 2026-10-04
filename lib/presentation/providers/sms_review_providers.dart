@@ -47,7 +47,8 @@ class SmsQueueNotifier extends StateNotifier<AsyncValue<List<SmsReviewModel>>> {
 
   Future<int> scanInbox() async {
     try {
-      final pendingCount = await _parserService.processPendingMessages();
+      final pendingCount =
+          await _parserService.processPendingMessages(force: true);
       final inboxCount = await _parserService.scanInboxAndQueue();
       await loadQueue();
       return pendingCount + inboxCount;

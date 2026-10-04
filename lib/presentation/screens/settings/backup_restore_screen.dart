@@ -2,120 +2,314 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
+import '../../../core/theme/app_text.dart';
 import '../../../services/backup/backup_service.dart';
+import '../../../services/export/export_service.dart';
+import '../../../services/import/import_service.dart';
+import '../../providers/account_providers.dart';
+import '../../providers/insights_providers.dart';
+import '../../providers/transaction_providers.dart';
+import '../../widgets/app_sheets.dart';
+import '../../widgets/fade_slide_in.dart';
+import '../../widgets/list_widgets.dart';
+import '../../widgets/section_header.dart';
 
-class BackupRestoreScreen extends StatefulWidget {
+/// One place for everything that moves data in or out of the app: full
+/// backup/restore, CSV/PDF export and CSV import. (These were split across a
+/// "Backup & Restore" screen and an "Import / Export" sheet that only
+/// exported, while `ImportService` had no UI at all.)
+class BackupRestoreScreen extends ConsumerStatefulWidget {
   const BackupRestoreScreen({super.key});
 
   @override
-  State<BackupRestoreScreen> createState() => _BackupRestoreScreenState();
+  ConsumerState<BackupRestoreScreen> createState() =>
+      _BackupRestoreScreenState();
 }
 
-class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
-  bool _isProcessing = false;
+class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
   final BackupService _backupService = BackupService();
+  final ExportService _exportService = ExportService();
+  final ImportService _importService = ImportService();
 
-  // BUG FIX: try/catch/finally ensures _isProcessing never sticks on error.
-  Future<void> _createBackup() async {
-    setState(() => _isProcessing = true);
+  bool _busy = false;
+
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(content: Text(message), duration: const Duration(seconds: 6)),
+      );
+  }
+
+  /// Runs [task] with a progress bar, blocking other actions, and always
+  /// clears the busy state (even when the task throws).
+  Future<void> _run(Future<void> Function() task, String failurePrefix) async {
+    if (_busy) return;
+    setState(() => _busy = true);
     try {
-      final file = await _backupService.createFullBackupPackage();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Backup created at ${file.path}')),
-        );
-      }
+      await task();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Backup failed: $e')));
-      }
+      _toast('$failurePrefix: $e');
     } finally {
-      if (mounted) setState(() => _isProcessing = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
+
+  Future<void> _createBackup() => _run(() async {
+        final file = await _backupService.createFullBackupPackage();
+        _toast('Backup saved to ${file.path}');
+      }, 'Backup failed');
 
   Future<void> _restoreBackup() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['zip'],
     );
+    final path = result?.files.single.path;
+    if (path == null || !mounted) return;
 
-    if (result == null || result.files.single.path == null) return;
+    // Restoring replaces everything, so never do it without asking.
+    final ok = await confirmDestructive(
+      context,
+      title: 'Replace all data?',
+      message:
+          'Restoring this backup replaces the transactions, accounts and receipts currently in MyKhata. This cannot be undone.',
+      confirmLabel: 'Restore',
+    );
+    if (!ok) return;
 
-    setState(() => _isProcessing = true);
-    try {
-      final success = await _backupService.restoreFullBackupPackage(
-        File(result.files.single.path!),
+    await _run(() async {
+      final success = await _backupService.restoreFullBackupPackage(File(path));
+      _toast(
+        success
+            ? 'Backup restored. Please restart the app to finish.'
+            : 'Restore failed. The file may be corrupt.',
       );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              success
-                  ? 'Backup restored successfully! Please restart the app.'
-                  : 'Backup restore failed. The file may be corrupt.',
-            ),
-          ),
-        );
-      }
+    }, 'Restore failed');
+  }
+
+  Future<void> _exportCsv() => _run(() async {
+        final file = await _exportService.exportToCsv();
+        _toast('CSV saved to ${file.path}');
+      }, 'Export failed');
+
+  Future<void> _exportPdf() => _run(() async {
+        final file = await _exportService.generatePdfReport();
+        _toast('PDF report saved to ${file.path}');
+      }, 'PDF export failed');
+
+  Future<void> _importCsv() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+    );
+    final path = result?.files.single.path;
+    if (path == null || !mounted) return;
+
+    setState(() => _busy = true);
+    CsvPreviewResult preview;
+    try {
+      preview = await _importService.previewCsvImport(File(path));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Restore failed: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _isProcessing = false);
+      _toast('Could not read that file: $e');
+      if (mounted) setState(() => _busy = false);
+      return;
     }
+    if (!mounted) return;
+    setState(() => _busy = false);
+
+    final confirmed = await AppBottomSheet.show<bool>(
+      context,
+      title: 'Import preview',
+      builder: (_) => _ImportPreview(preview: preview),
+    );
+    if (confirmed != true) return;
+
+    await _run(() async {
+      final ok = await _importService.executeCsvImport(
+        preview.validTransactions,
+      );
+      if (ok) {
+        // Refresh everything that shows transactions or balances.
+        await ref.read(transactionListProvider.notifier).fetchInitial();
+        ref.read(accountListProvider.notifier).loadAccounts();
+        ref.invalidate(recentTransactionsProvider);
+        ref.invalidate(homeInsightsProvider);
+        ref.invalidate(analyticsSummaryProvider);
+        _toast('Imported ${preview.validTransactions.length} transactions.');
+      } else {
+        _toast('Import failed and nothing was changed.');
+      }
+    }, 'Import failed');
   }
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Backup & Restore')),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
+      appBar: AppBar(
+        title: const Text('Backup & data'),
+        bottom: _busy
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(3),
+                child: LinearProgressIndicator(
+                  minHeight: 3,
+                  color: p.primary,
+                  backgroundColor: p.surface2,
+                ),
+              )
+            : null,
+      ),
+      body: AbsorbPointer(
+        absorbing: _busy,
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            18,
+            8,
+            18,
+            MediaQuery.of(context).padding.bottom + 24,
+          ),
           children: [
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.backup, color: AppColors.primary),
-                title: const Text('Create Full Backup'),
-                subtitle: const Text(
-                  'Generates a complete ZIP archive with database and receipt photos.',
-                ),
-                trailing: ElevatedButton(
-                  onPressed: _isProcessing ? null : _createBackup,
-                  child: const Text('Backup'),
-                ),
+            FadeSlideIn(
+              child: Text(
+                'Everything stays on this phone unless you move it yourself.',
+                style: AppText.caption(p.muted),
               ),
             ),
-            const SizedBox(height: 16),
-            Card(
-              child: ListTile(
-                leading: const Icon(
-                  Icons.restore_page,
-                  color: AppColors.secondary,
-                ),
-                title: const Text('Restore Backup'),
-                subtitle: const Text(
-                  'Restore application data from a previously created ZIP file.',
-                ),
-                trailing: ElevatedButton(
-                  onPressed: _isProcessing ? null : _restoreBackup,
-                  child: const Text('Restore'),
-                ),
+            const SizedBox(height: 18),
+            FadeSlideIn(
+              index: 1,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SectionHeader(title: 'Backup'),
+                  SettingsGroup(
+                    children: [
+                      ListRowTile(
+                        emoji: '💾',
+                        title: 'Create full backup',
+                        subtitle: 'ZIP with your database and receipt photos',
+                        onTap: _createBackup,
+                      ),
+                      ListRowTile(
+                        emoji: '♻️',
+                        title: 'Restore from backup',
+                        subtitle: 'Replaces all current data',
+                        onTap: _restoreBackup,
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            if (_isProcessing) ...[
-              const SizedBox(height: 32),
-              const CircularProgressIndicator(),
-            ],
+            const SizedBox(height: 20),
+            FadeSlideIn(
+              index: 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SectionHeader(title: 'Export'),
+                  SettingsGroup(
+                    children: [
+                      ListRowTile(
+                        emoji: '📊',
+                        title: 'Export CSV',
+                        subtitle: 'All transactions as a spreadsheet',
+                        onTap: _exportCsv,
+                      ),
+                      ListRowTile(
+                        emoji: '📄',
+                        title: 'Export PDF report',
+                        subtitle: 'Totals and summaries',
+                        onTap: _exportPdf,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            FadeSlideIn(
+              index: 3,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SectionHeader(title: 'Import'),
+                  SettingsGroup(
+                    children: [
+                      ListRowTile(
+                        emoji: '📥',
+                        title: 'Import transactions from CSV',
+                        subtitle: 'You will see a preview before anything is added',
+                        onTap: _importCsv,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ImportPreview extends StatelessWidget {
+  final CsvPreviewResult preview;
+
+  const _ImportPreview({required this.preview});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final ready = preview.validTransactions.length;
+
+    Widget stat(String label, int value, Color color) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            children: [
+              Expanded(child: Text(label, style: AppText.body(p.ink))),
+              Text('$value', style: AppText.bodyStrong(color)),
+            ],
+          ),
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        stat('Ready to import', ready, p.income),
+        stat('Duplicates skipped', preview.duplicateCount, p.muted),
+        stat('Rows rejected', preview.rejectedCount, p.expense),
+        if (preview.errors.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text('First problems', style: AppText.section(p.muted)),
+          const SizedBox(height: 6),
+          for (final e in preview.errors.take(3))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                'Row ${e.rowIndex}: ${e.message}',
+                style: AppText.caption(p.muted),
+              ),
+            ),
+        ],
+        const SizedBox(height: 18),
+        ElevatedButton(
+          onPressed: ready == 0 ? null : () => Navigator.pop(context, true),
+          child: Text(ready == 0 ? 'Nothing to import' : 'Import $ready transactions'),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+      ],
     );
   }
 }

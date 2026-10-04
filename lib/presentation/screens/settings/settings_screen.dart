@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 
-import '../../../core/constants/app_colors.dart';
-import '../../../services/export/export_service.dart';
+import '../../../core/navigation/app_routes.dart';
+import '../../../core/permissions/permission_service.dart';
+import '../../../core/theme/app_palette.dart';
+import '../../../core/theme/app_text.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/settings_providers.dart';
+import '../../providers/sms_review_providers.dart';
+import '../../widgets/app_card.dart';
+import '../../widgets/app_sheets.dart';
+import '../../widgets/fade_slide_in.dart';
+import '../../widgets/list_widgets.dart';
+import '../../widgets/pressable.dart';
+import '../../widgets/section_header.dart';
 import '../sms_review/sms_review_screen.dart';
 import 'accounts_management_screen.dart';
 import 'backup_restore_screen.dart';
@@ -18,730 +26,354 @@ import 'tags_management_screen.dart';
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
-  void _showProfileSheet(BuildContext context, bool isDark) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+  Future<void> _editName(
+    BuildContext context,
+    WidgetRef ref,
+    String current,
+  ) async {
+    final values = await showFieldsSheet(
+      context,
+      title: 'Your name',
+      submitLabel: 'Save',
+      fields: [
+        FieldSpec(
+          label: 'Name',
+          hint: 'What should we call you?',
+          initial: current,
+          required: true,
         ),
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Profile',
-              style: GoogleFonts.sora(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildProfileRow('👤', 'Name', 'Amar', isDark),
-            _buildProfileRow('₹', 'Currency', 'INR only', isDark),
-            _buildProfileRow(
-              '💳',
-              'Default Account',
-              'Primary Account',
-              isDark,
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Close'),
-              ),
-            ),
-          ],
+      ],
+    );
+    if (values == null) return;
+    await ref.read(userNameProvider.notifier).setUserName(values[0]);
+  }
+
+  /// Turning a feature on asks for the OS permission first; if it is refused
+  /// the switch stays off and the user is told why.
+  Future<void> _togglePermissionPref({
+    required BuildContext context,
+    required bool value,
+    required BoolPrefNotifier notifier,
+    required Future<bool> Function() requestPermission,
+    required String deniedMessage,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (value) {
+      final granted = await requestPermission();
+      if (!granted) {
+        await notifier.set(false);
+        messenger.showSnackBar(SnackBar(content: Text(deniedMessage)));
+        return;
+      }
+    }
+    await notifier.set(value);
+  }
+
+  Future<void> _toggleBiometrics(
+    BuildContext context,
+    WidgetRef ref,
+    bool value,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final success =
+        await ref.read(authProvider.notifier).toggleBiometrics(value);
+    if (!success && value) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Unable to enable biometrics. Make sure a fingerprint, face or screen lock is set up in Android Settings.',
+          ),
         ),
+      );
+    }
+  }
+
+  void _showAppearanceSheet(BuildContext context) {
+    AppBottomSheet.show<void>(
+      context,
+      title: 'Appearance',
+      builder: (_) => Consumer(
+        builder: (context, ref, _) {
+          // Watched inside the sheet so the selection updates live. (This used
+          // to call ref.watch from a tap callback, which Riverpod rejects.)
+          final mode = ref.watch(themeModeProvider);
+          return SegmentedButton<ThemeMode>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(
+                value: ThemeMode.light,
+                icon: Icon(Icons.light_mode_rounded),
+                label: Text('Light'),
+              ),
+              ButtonSegment(
+                value: ThemeMode.dark,
+                icon: Icon(Icons.dark_mode_rounded),
+                label: Text('Dark'),
+              ),
+            ],
+            selected: {mode == ThemeMode.dark ? ThemeMode.dark : ThemeMode.light},
+            onSelectionChanged: (s) =>
+                ref.read(themeModeProvider.notifier).setThemeMode(s.first),
+          );
+        },
       ),
     );
   }
 
-  void _showAppearanceSheet(BuildContext context, WidgetRef ref, bool isDark) {
-    final currentTheme = ref.watch(themeModeProvider);
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Appearance',
-              style: GoogleFonts.sora(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? AppColors.surface2Dark
-                    : AppColors.surface2Light,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                children: [
-                  _buildThemeOption(
-                    'System',
-                    currentTheme == ThemeMode.system,
-                    () {
-                      ref
-                          .read(themeModeProvider.notifier)
-                          .setThemeMode(ThemeMode.system);
-                      Navigator.pop(ctx);
-                    },
-                    isDark,
-                  ),
-                  _buildThemeOption(
-                    'Light',
-                    currentTheme == ThemeMode.light,
-                    () {
-                      ref
-                          .read(themeModeProvider.notifier)
-                          .setThemeMode(ThemeMode.light);
-                      Navigator.pop(ctx);
-                    },
-                    isDark,
-                  ),
-                  _buildThemeOption('Dark', currentTheme == ThemeMode.dark, () {
-                    ref
-                        .read(themeModeProvider.notifier)
-                        .setThemeMode(ThemeMode.dark);
-                    Navigator.pop(ctx);
-                  }, isDark),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showImportExportSheet(BuildContext context, bool isDark) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Import / Export',
-              style: GoogleFonts.sora(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: const Text('⬆️', style: TextStyle(fontSize: 22)),
-              title: Text(
-                'Export CSV',
-                style: GoogleFonts.sora(fontWeight: FontWeight.w600),
-              ),
-              subtitle: Text(
-                'Written in small batches',
-                style: GoogleFonts.sora(fontSize: 12),
-              ),
-              onTap: () async {
-                Navigator.pop(ctx);
-                // BUG FIX: capture messenger before await; wrap in try/catch.
-                final messenger = ScaffoldMessenger.of(context);
-                try {
-                  final file = await ExportService().exportToCsv();
-                  messenger.showSnackBar(
-                    SnackBar(content: Text('Exported CSV to ${file.path}')),
-                  );
-                } catch (e) {
-                  messenger.showSnackBar(
-                    SnackBar(content: Text('Export failed: $e')),
-                  );
-                }
-              },
-            ),
-            ListTile(
-              leading: const Text('📄', style: TextStyle(fontSize: 22)),
-              title: Text(
-                'Export PDF Report',
-                style: GoogleFonts.sora(fontWeight: FontWeight.w600),
-              ),
-              subtitle: Text(
-                'Date range, totals and summaries',
-                style: GoogleFonts.sora(fontSize: 12),
-              ),
-              onTap: () async {
-                Navigator.pop(ctx);
-                // BUG FIX: capture messenger before await; wrap in try/catch.
-                final messenger = ScaffoldMessenger.of(context);
-                try {
-                  final file = await ExportService().generatePdfReport();
-                  messenger.showSnackBar(
-                    SnackBar(content: Text('Generated PDF at ${file.path}')),
-                  );
-                } catch (e) {
-                  messenger.showSnackBar(
-                    SnackBar(content: Text('PDF export failed: $e')),
-                  );
-                }
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showAboutDialog(BuildContext context, bool isDark) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 36),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+  void _showAbout(BuildContext context) {
+    AppBottomSheet.show<void>(
+      context,
+      builder: (ctx) {
+        final p = ctx.palette;
+        return Column(
           children: [
             Container(
               width: 76,
               height: 76,
               decoration: BoxDecoration(
-                color: isDark ? AppColors.primaryDark : AppColors.primary,
+                gradient: p.heroGradient,
                 borderRadius: BorderRadius.circular(24),
               ),
-              child: const Center(
-                child: Text('📒', style: TextStyle(fontSize: 36)),
-              ),
+              alignment: Alignment.center,
+              child: const Text('📒', style: TextStyle(fontSize: 36)),
             ),
             const SizedBox(height: 14),
-            Text(
-              'MyKhata',
-              style: GoogleFonts.sora(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
+            Text('MyKhata', style: AppText.display(p.ink)),
             const SizedBox(height: 6),
             Text(
               'Version 1.0 · Offline · No ads · No login',
-              style: GoogleFonts.sora(
-                fontSize: 12.5,
-                color: isDark
-                    ? AppColors.textSecondaryDark
-                    : AppColors.textSecondaryLight,
-              ),
+              style: AppText.caption(p.muted),
             ),
+            const SizedBox(height: 8),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildThemeOption(
-    String title,
-    bool isSelected,
-    VoidCallback onTap,
-    bool isDark,
-  ) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? (isDark ? AppColors.surfaceDark : AppColors.surfaceLight)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(11),
-            boxShadow: isSelected
-                ? [
-                    isDark
-                        ? AppColors.cardShadowDark
-                        : AppColors.cardShadowLight,
-                  ]
-                : null,
-          ),
-          child: Center(
-            child: Text(
-              title,
-              style: GoogleFonts.sora(
-                fontSize: 13,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                color: isSelected
-                    ? (isDark
-                          ? AppColors.textPrimaryDark
-                          : AppColors.textPrimaryLight)
-                    : (isDark
-                          ? AppColors.textSecondaryDark
-                          : AppColors.textSecondaryLight),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  static Widget _buildProfileRow(
-    String emoji,
-    String title,
-    String value,
-    bool isDark,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Text(emoji, style: const TextStyle(fontSize: 18)),
-          const SizedBox(width: 12),
-          Text(
-            title,
-            style: GoogleFonts.sora(fontWeight: FontWeight.w600, fontSize: 14),
-          ),
-          const Spacer(),
-          Text(
-            value,
-            style: GoogleFonts.sora(
-              fontSize: 13,
-              color: isDark
-                  ? AppColors.textSecondaryDark
-                  : AppColors.textSecondaryLight,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = context.palette;
+    final auth = ref.watch(authProvider);
+    final name = ref.watch(userNameProvider);
+    final smsOn = ref.watch(autoSmsDetectionProvider);
+    final locationOn = ref.watch(autoLocationCaptureProvider);
+    final themeMode = ref.watch(themeModeProvider);
+    final waiting = ref.watch(smsQueueProvider('detected')).value?.length ?? 0;
+
+    Widget section(int index, String title, List<Widget> rows) => FadeSlideIn(
+          index: index,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SectionHeader(title: title),
+              SettingsGroup(children: rows),
+            ],
+          ),
+        );
+
+    Switch toggle(bool value, ValueChanged<bool> onChanged) => Switch(
+          value: value,
+          activeThumbColor: p.primary,
+          onChanged: onChanged,
+        );
 
     return Scaffold(
-      backgroundColor: isDark
-          ? AppColors.backgroundDark
-          : AppColors.backgroundLight,
+      backgroundColor: p.background,
       body: SafeArea(
         bottom: false,
         child: ListView(
-          padding: EdgeInsets.fromLTRB(18, 16, 18, MediaQuery.of(context).padding.bottom + 130),
+          padding: EdgeInsets.fromLTRB(
+            18,
+            16,
+            18,
+            MediaQuery.of(context).padding.bottom + 130,
+          ),
           children: [
-            // Title
-            Text(
-              'Settings',
-              style: GoogleFonts.sora(
-                fontSize: 26,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.5,
-                color: isDark
-                    ? AppColors.textPrimaryDark
-                    : AppColors.textPrimaryLight,
-              ),
-            ),
+            FadeSlideIn(child: Text('Settings', style: AppText.display(p.ink))),
             const SizedBox(height: 16),
 
-            // Profile Hero Banner
-            InkWell(
-              onTap: () => _showProfileSheet(context, isDark),
-              borderRadius: BorderRadius.circular(26),
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: isDark
-                      ? AppColors.heroGradientDark
-                      : AppColors.heroGradientLight,
-                  borderRadius: BorderRadius.circular(26),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF5B3DF5).withValues(alpha: 0.25),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 54,
-                      height: 54,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
+            // Profile: now shows (and edits) the real saved name instead of a
+            // hardcoded one.
+            FadeSlideIn(
+              index: 1,
+              child: Pressable(
+                onTap: () => _editName(context, ref, name),
+                scale: 0.98,
+                child: AppCard(
+                  gradient: p.heroGradient,
+                  radius: 26,
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 54,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
                         child: Text(
-                          'A',
-                          style: GoogleFonts.sora(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                          ),
+                          name.isEmpty
+                              ? '👤'
+                              : String.fromCharCode(name.runes.first).toUpperCase(),
+                          style: AppText.title(Colors.white).copyWith(fontSize: 24),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Amar',
-                            style: GoogleFonts.sora(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              name.isEmpty ? 'Add your name' : name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppText.title(Colors.white),
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Local profile · INR · No account needed',
-                            style: GoogleFonts.sora(
-                              fontSize: 12,
-                              color: Colors.white.withValues(alpha: 0.8),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Local profile · INR · No account needed',
+                              style: AppText.caption(
+                                Colors.white.withValues(alpha: 0.8),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      color: Colors.white70,
-                    ),
-                  ],
+                      const Icon(Icons.edit_rounded, color: Colors.white70, size: 20),
+                    ],
+                  ),
                 ),
               ),
             ),
+            const SizedBox(height: 22),
 
-            const SizedBox(height: 18),
-
-            // Card Group 1: Data & Categories
-            _buildSettingsCard(isDark, [
-              _buildRow(
-                '👤',
-                'Profile',
-                isDark,
-                onTap: () => _showProfileSheet(context, isDark),
+            section(2, 'Manage', [
+              ListRowTile(
+                emoji: '🏦',
+                title: 'Accounts',
+                onTap: () =>
+                    AppRoutes.push(context, const AccountsManagementScreen()),
               ),
-              _buildRow(
-                '🏦',
-                'Accounts',
-                isDark,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const AccountsManagementScreen(),
-                    ),
-                  );
-                },
+              ListRowTile(
+                emoji: '🏷',
+                title: 'Categories',
+                onTap: () =>
+                    AppRoutes.push(context, const CategoriesManagementScreen()),
               ),
-              _buildRow(
-                '🏷',
-                'Categories',
-                isDark,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const CategoriesManagementScreen(),
-                    ),
-                  );
-                },
+              ListRowTile(
+                emoji: '#️⃣',
+                title: 'Tags',
+                onTap: () =>
+                    AppRoutes.push(context, const TagsManagementScreen()),
               ),
-              _buildRow(
-                '#️⃣',
-                'Tags',
-                isDark,
-                isLast: true,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const TagsManagementScreen(),
-                    ),
-                  );
-                },
+              ListRowTile(
+                emoji: '🔁',
+                title: 'Recurring payments',
+                onTap: () =>
+                    AppRoutes.push(context, const RecurringPaymentsScreen()),
+              ),
+              ListRowTile(
+                emoji: '🧾',
+                title: 'Receipts',
+                onTap: () =>
+                    AppRoutes.push(context, const ReceiptGalleryScreen()),
               ),
             ]),
+            const SizedBox(height: 22),
 
-            const SizedBox(height: 14),
-
-            // Card Group 2: Features & Automation
-            _buildSettingsCard(isDark, [
-              _buildRow(
-                '🔁',
-                'Recurring Payments',
-                isDark,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const RecurringPaymentsScreen(),
-                    ),
-                  );
-                },
-              ),
-              _buildRow(
-                '🧾',
-                'Receipts',
-                isDark,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ReceiptGalleryScreen(),
-                    ),
-                  );
-                },
-              ),
-              _buildRow(
-                '💬',
-                'SMS Detection',
-                isDark,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SmsReviewScreen()),
-                  );
-                },
-              ),
-              _buildRow(
-                '📍',
-                'Location',
-                isDark,
-                isLast: true,
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Location is captured on transaction save when permitted.',
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ]),
-
-            const SizedBox(height: 14),
-
-            // Card Group 3: System & Security
-            _buildSettingsCard(isDark, [
-              _buildRow(
-                '💾',
-                'Backup & Restore',
-                isDark,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const BackupRestoreScreen(),
-                    ),
-                  );
-                },
-              ),
-              _buildRow(
-                '⇅',
-                'Import / Export',
-                isDark,
-                onTap: () => _showImportExportSheet(context, isDark),
-              ),
-              _buildRow(
-                '🗑',
-                'Recently Deleted',
-                isDark,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const RecentlyDeletedScreen(),
-                    ),
-                  );
-                },
-              ),
-              _buildRow(
-                '🔒',
-                'Security',
-                isDark,
-                trailing: Switch(
-                  value: authState.isBiometricsEnabled,
-                  activeThumbColor: isDark
-                      ? AppColors.primaryDark
-                      : AppColors.primary,
-                  onChanged: (val) async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    final success = await ref
-                        .read(authProvider.notifier)
-                        .toggleBiometrics(val);
-                    if (!success && val) {
-                      messenger.showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Unable to enable biometrics. Please ensure biometrics or device screen lock is set up in Android Settings.',
-                          ),
-                        ),
-                      );
-                    }
-                  },
+            // These two used to be a "SMS Detection" link and a "Location" row
+            // that only showed a snackbar; the onboarding choices behind them
+            // were never read. They are real switches now.
+            section(3, 'Automation', [
+              ListRowTile(
+                emoji: '💬',
+                title: 'Detect bank SMS',
+                subtitle: 'Queue transaction messages for your review',
+                trailing: toggle(
+                  smsOn,
+                  (v) => _togglePermissionPref(
+                    context: context,
+                    value: v,
+                    notifier: ref.read(autoSmsDetectionProvider.notifier),
+                    requestPermission: PermissionService.requestSmsPermission,
+                    deniedMessage:
+                        'SMS permission is needed to detect bank messages. You can allow it in Android Settings.',
+                  ),
                 ),
               ),
-              _buildRow(
-                '🎨',
-                'Appearance',
-                isDark,
-                onTap: () => _showAppearanceSheet(context, ref, isDark),
+              ListRowTile(
+                emoji: '📨',
+                title: 'Review detected messages',
+                subtitle: waiting > 0
+                    ? '$waiting waiting for review'
+                    : 'Nothing waiting',
+                onTap: () => AppRoutes.push(context, const SmsReviewScreen()),
               ),
-              _buildRow(
-                'ℹ️',
-                'About',
-                isDark,
-                isLast: true,
-                onTap: () => _showAboutDialog(context, isDark),
+              ListRowTile(
+                emoji: '📍',
+                title: 'Save location with expenses',
+                subtitle: 'Captured only at the moment you save',
+                trailing: toggle(
+                  locationOn,
+                  (v) => _togglePermissionPref(
+                    context: context,
+                    value: v,
+                    notifier: ref.read(autoLocationCaptureProvider.notifier),
+                    requestPermission:
+                        PermissionService.requestLocationPermission,
+                    deniedMessage:
+                        'Location permission is needed. You can allow it in Android Settings.',
+                  ),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 22),
+
+            section(4, 'Data', [
+              ListRowTile(
+                emoji: '💾',
+                title: 'Backup & data',
+                subtitle: 'Backup, restore, export and import',
+                onTap: () =>
+                    AppRoutes.push(context, const BackupRestoreScreen()),
+              ),
+              ListRowTile(
+                emoji: '🗑',
+                title: 'Recently deleted',
+                onTap: () =>
+                    AppRoutes.push(context, const RecentlyDeletedScreen()),
+              ),
+            ]),
+            const SizedBox(height: 22),
+
+            section(5, 'App', [
+              ListRowTile(
+                emoji: '🔒',
+                title: 'Biometric lock',
+                subtitle: 'Ask for fingerprint, face or PIN on open',
+                trailing: toggle(
+                  auth.isBiometricsEnabled,
+                  (v) => _toggleBiometrics(context, ref, v),
+                ),
+              ),
+              ListRowTile(
+                emoji: '🎨',
+                title: 'Appearance',
+                subtitle: themeMode == ThemeMode.dark ? 'Dark' : 'Light',
+                onTap: () => _showAppearanceSheet(context),
+              ),
+              ListRowTile(
+                emoji: 'ℹ️',
+                title: 'About',
+                onTap: () => _showAbout(context),
               ),
             ]),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildSettingsCard(bool isDark, List<Widget> children) {
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          isDark ? AppColors.cardShadowDark : AppColors.cardShadowLight,
-        ],
-        border: Border.all(
-          color: isDark ? AppColors.borderDark : AppColors.borderLight,
-          width: 1.0,
-        ),
-      ),
-      child: Column(children: children),
-    );
-  }
-
-  Widget _buildRow(
-    String emoji,
-    String title,
-    bool isDark, {
-    VoidCallback? onTap,
-    Widget? trailing,
-    bool isLast = false,
-  }) {
-    return Column(
-      children: [
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(isLast ? 20 : 0),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? AppColors.surface2Dark
-                        : AppColors.surface2Light,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Center(
-                    child: Text(emoji, style: const TextStyle(fontSize: 19)),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: GoogleFonts.sora(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: isDark
-                          ? AppColors.textPrimaryDark
-                          : AppColors.textPrimaryLight,
-                    ),
-                  ),
-                ),
-                trailing ??
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      size: 20,
-                      color: isDark
-                          ? AppColors.textSecondaryDark
-                          : AppColors.textSecondaryLight,
-                    ),
-              ],
-            ),
-          ),
-        ),
-        if (!isLast)
-          Divider(
-            color: isDark ? AppColors.borderDark : AppColors.borderLight,
-            height: 1,
-          ),
-      ],
     );
   }
 }

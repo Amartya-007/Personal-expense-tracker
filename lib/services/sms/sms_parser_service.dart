@@ -1,6 +1,8 @@
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/constants/app_constants.dart';
 import '../../core/logging/app_logger.dart';
 import '../../data/models/sms_review_model.dart';
 import '../../data/repositories/sms_repository.dart';
@@ -132,8 +134,18 @@ class SmsParserService {
   /// Returns the number of new items added to the review queue.
   /// Gracefully returns 0 when SMS permission has not been granted — the app
   /// continues to function normally without SMS features.
-  Future<int> processPendingMessages() async {
+  ///
+  /// Skipped when the user turned "Detect bank SMS" off in Settings, unless
+  /// [force] is set (an explicit manual sync).
+  Future<int> processPendingMessages({bool force = false}) async {
     try {
+      if (!force) {
+        final prefs = await SharedPreferences.getInstance();
+        if (!(prefs.getBool(AppConstants.prefAutoSmsDetection) ?? true)) {
+          return 0;
+        }
+      }
+
       // Do nothing if the user has not granted SMS permission.
       final hasPermission = await SmsCaptureService.hasPermission();
       if (!hasPermission) return 0;
