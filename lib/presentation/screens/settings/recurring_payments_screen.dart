@@ -1,127 +1,272 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
-import '../../../core/constants/app_colors.dart';
+
+import '../../../core/theme/app_palette.dart';
+import '../../../core/theme/app_text.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../../data/models/account_model.dart';
+import '../../../data/models/category_model.dart';
 import '../../../data/models/recurring_payment_model.dart';
 import '../../providers/account_providers.dart';
 import '../../providers/category_providers.dart';
 import '../../providers/recurring_providers.dart';
+import '../../widgets/app_sheets.dart';
+import '../../widgets/list_widgets.dart';
 
 class RecurringPaymentsScreen extends ConsumerWidget {
   const RecurringPaymentsScreen({super.key});
 
-  void _showAddDialog(BuildContext context, WidgetRef ref) {
-    final nameCtrl = TextEditingController();
-    final amtCtrl = TextEditingController();
-    String frequency = 'monthly';
+  Future<void> _add(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final accounts = ref.read(accountListProvider).value ?? [];
+    final categories = await ref.read(expenseCategoriesProvider.future);
+    if (!context.mounted) return;
 
-    showDialog(
-      context: context,
-      builder: (ctx) => Consumer(
-        builder: (context, ref, _) {
-          final categories = ref.watch(expenseCategoriesProvider).value ?? [];
-          final accounts = ref.watch(accountListProvider).value ?? [];
+    // Previously the form just did nothing when these were empty.
+    if (accounts.isEmpty || categories.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Add an account and an expense category first.'),
+        ),
+      );
+      return;
+    }
 
-          return AlertDialog(
-            title: const Text('Add Recurring Rule'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Name (e.g., Netflix)')),
-                  const SizedBox(height: 8),
-                  TextField(controller: amtCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Amount (₹)')),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    initialValue: frequency,
-                    decoration: const InputDecoration(labelText: 'Frequency'),
-                    items: const [
-                      DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
-                      DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
-                      DropdownMenuItem(value: 'yearly', child: Text('Yearly')),
-                    ],
-                    onChanged: (val) => frequency = val ?? 'monthly',
-                  ),
-                ],
-              ),
+    final rule = await AppBottomSheet.show<RecurringPaymentModel>(
+      context,
+      title: 'Add recurring payment',
+      builder: (_) => _RecurringForm(accounts: accounts, categories: categories),
+    );
+    if (rule == null) return;
+
+    await ref.read(recurringListProvider.notifier).createRecurringPayment(rule);
+  }
+
+  Future<void> _delete(
+    BuildContext context,
+    WidgetRef ref,
+    RecurringPaymentModel rule,
+  ) async {
+    final ok = await confirmDestructive(
+      context,
+      title: 'Delete ${rule.name}?',
+      message: 'Future reminders for this payment will stop.',
+    );
+    if (!ok) return;
+    await ref
+        .read(recurringListProvider.notifier)
+        .deleteRecurringPayment(rule.id);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+    final dateFormat = DateFormat('d MMM yyyy');
+
+    return ManagementScaffold<RecurringPaymentModel>(
+      title: 'Recurring payments',
+      items: ref.watch(recurringListProvider),
+      emptyEmoji: '🔁',
+      emptyTitle: 'Nothing recurring',
+      emptyMessage:
+          'Add rent, subscriptions or EMIs and get reminded when they are due.',
+      addLabel: 'Add payment',
+      onAdd: () => _add(context, ref),
+      rowBuilder: (context, r) => ListRowTile(
+        emoji: '🔁',
+        title: r.name,
+        subtitle:
+            'Due ${dateFormat.format(r.nextDueDate)} · ${_label(r.frequency)}',
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              CurrencyFormatter.format(r.amount),
+              style: AppText.bodyStrong(p.expense),
             ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-              ElevatedButton(
-                onPressed: () {
-                  final name = nameCtrl.text.trim();
-                  final amt = double.tryParse(amtCtrl.text.trim()) ?? 0.0;
-                  if (name.isEmpty || amt <= 0 || categories.isEmpty || accounts.isEmpty) return;
+            IconButton(
+              tooltip: 'Delete',
+              icon: Icon(Icons.delete_outline_rounded, color: p.expense),
+              onPressed: () => _delete(context, ref, r),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-                  final rule = RecurringPaymentModel(
-                    id: const Uuid().v4(),
-                    name: name,
-                    amount: amt,
-                    categoryId: categories.first.id,
-                    accountId: accounts.first.id,
-                    paymentMethod: 'UPI',
-                    frequency: frequency,
-                    nextDueDate: DateTime.now().add(const Duration(days: 30)),
-                    createdAt: DateTime.now(),
-                  );
+  static String _label(String frequency) {
+    if (frequency.isEmpty) return frequency;
+    return frequency[0].toUpperCase() + frequency.substring(1);
+  }
+}
 
-                  ref.read(recurringListProvider.notifier).createRecurringPayment(rule);
-                  Navigator.pop(ctx);
-                },
-                child: const Text('Save'),
-              ),
-            ],
-          );
-        },
+class _RecurringForm extends StatefulWidget {
+  final List<AccountModel> accounts;
+  final List<CategoryModel> categories;
+
+  const _RecurringForm({required this.accounts, required this.categories});
+
+  @override
+  State<_RecurringForm> createState() => _RecurringFormState();
+}
+
+class _RecurringFormState extends State<_RecurringForm> {
+  final TextEditingController _name = TextEditingController();
+  final TextEditingController _amount = TextEditingController();
+  String _frequency = 'monthly';
+  late String _accountId = widget.accounts.first.id;
+  late String _categoryId = widget.categories.first.id;
+  late DateTime _firstDue = _defaultDue('monthly');
+  String? _error;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _amount.dispose();
+    super.dispose();
+  }
+
+  /// First due date one cycle from today. This used to be a flat 30 days for
+  /// every frequency, so a weekly rule's first reminder was a month away.
+  static DateTime _defaultDue(String frequency) {
+    final now = DateTime.now();
+    switch (frequency) {
+      case 'weekly':
+        return now.add(const Duration(days: 7));
+      case 'yearly':
+        return DateTime(now.year + 1, now.month, now.day);
+      case 'monthly':
+      default:
+        final month = now.month == 12 ? 1 : now.month + 1;
+        final year = now.month == 12 ? now.year + 1 : now.year;
+        final lastDay = DateTime(year, month + 1, 0).day;
+        return DateTime(year, month, now.day > lastDay ? lastDay : now.day);
+    }
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _firstDue,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: DateTime(now.year + 5),
+    );
+    if (picked != null) setState(() => _firstDue = picked);
+  }
+
+  void _submit() {
+    final name = _name.text.trim();
+    final amount = double.tryParse(_amount.text.trim()) ?? 0;
+    if (name.isEmpty) {
+      setState(() => _error = 'Give this payment a name.');
+      return;
+    }
+    if (amount <= 0) {
+      setState(() => _error = 'Enter an amount greater than zero.');
+      return;
+    }
+
+    Navigator.pop(
+      context,
+      RecurringPaymentModel(
+        id: const Uuid().v4(),
+        name: name,
+        amount: amount,
+        categoryId: _categoryId,
+        accountId: _accountId,
+        paymentMethod: 'UPI',
+        frequency: _frequency,
+        nextDueDate: _firstDue,
+        createdAt: DateTime.now(),
       ),
     );
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final recurringAsync = ref.watch(recurringListProvider);
+  Widget build(BuildContext context) {
+    final p = context.palette;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Recurring Payments'),
-      ),
-      body: recurringAsync.when(
-        data: (list) {
-          if (list.isEmpty) return const Center(child: Text('No recurring payments set up.'));
-          return ListView.builder(
-            itemCount: list.length,
-            itemBuilder: (context, index) {
-              final r = list[index];
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: ListTile(
-                  title: Text(r.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('Due: ${r.nextDueDate.day}/${r.nextDueDate.month}/${r.nextDueDate.year} (${r.frequency})'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(CurrencyFormatter.format(r.amount), style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.expense)),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.red),
-                        onPressed: () {
-                          ref.read(recurringListProvider.notifier).deleteRecurringPayment(r.id);
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Error: $err')),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddDialog(context, ref),
-        child: const Icon(Icons.add),
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _name,
+          autofocus: true,
+          textInputAction: TextInputAction.next,
+          onChanged: (_) => setState(() => _error = null),
+          decoration: const InputDecoration(
+            labelText: 'Name',
+            hintText: 'e.g. Netflix, Rent',
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _amount,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          onChanged: (_) => setState(() => _error = null),
+          decoration: const InputDecoration(labelText: 'Amount (₹)'),
+        ),
+        const SizedBox(height: 14),
+        Text('Repeats', style: AppText.section(p.muted)),
+        const SizedBox(height: 8),
+        SegmentedButton<String>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(value: 'weekly', label: Text('Weekly')),
+            ButtonSegment(value: 'monthly', label: Text('Monthly')),
+            ButtonSegment(value: 'yearly', label: Text('Yearly')),
+          ],
+          selected: {_frequency},
+          onSelectionChanged: (s) => setState(() {
+            _frequency = s.first;
+            _firstDue = _defaultDue(_frequency);
+          }),
+        ),
+        const SizedBox(height: 14),
+        DropdownButtonFormField<String>(
+          initialValue: _accountId,
+          decoration: const InputDecoration(labelText: 'Pay from'),
+          items: [
+            for (final a in widget.accounts)
+              DropdownMenuItem(value: a.id, child: Text(a.name)),
+          ],
+          onChanged: (v) => setState(() => _accountId = v ?? _accountId),
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          initialValue: _categoryId,
+          decoration: const InputDecoration(labelText: 'Category'),
+          items: [
+            for (final c in widget.categories)
+              DropdownMenuItem(value: c.id, child: Text(c.name)),
+          ],
+          onChanged: (v) => setState(() => _categoryId = v ?? _categoryId),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: _pickDate,
+          icon: const Icon(Icons.event_rounded),
+          label: Text('First due: ${DateFormat('d MMM yyyy').format(_firstDue)}'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: p.ink,
+            side: BorderSide(color: p.border),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 10),
+          Text(_error!, style: AppText.caption(p.expense)),
+        ],
+        const SizedBox(height: 16),
+        ElevatedButton(onPressed: _submit, child: const Text('Add payment')),
+      ],
     );
   }
 }

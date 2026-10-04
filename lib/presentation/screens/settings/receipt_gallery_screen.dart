@@ -1,56 +1,118 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/navigation/app_routes.dart';
+import '../../../core/theme/app_palette.dart';
+import '../../../data/models/receipt_model.dart';
 import '../../providers/receipt_providers.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/fade_slide_in.dart';
 
 class ReceiptGalleryScreen extends ConsumerWidget {
   const ReceiptGalleryScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
     final receiptsAsync = ref.watch(receiptGalleryProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Receipt Gallery'),
-      ),
+      appBar: AppBar(title: const Text('Receipts')),
       body: receiptsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, _) => EmptyState(
+          emoji: '⚠️',
+          title: 'Could not load receipts',
+          message: '$err',
+        ),
         data: (receipts) {
           if (receipts.isEmpty) {
-            return const Center(child: Text('No receipt images captured yet.'));
+            return const EmptyState(
+              emoji: '🧾',
+              title: 'No receipts yet',
+              message:
+                  'Attach a photo to an expense and it will show up here.',
+            );
           }
           return GridView.builder(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.fromLTRB(
+              18,
+              8,
+              18,
+              MediaQuery.of(context).padding.bottom + 24,
+            ),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
             ),
             itemCount: receipts.length,
             itemBuilder: (context, index) {
               final r = receipts[index];
-              return GestureDetector(
-                onTap: () {
-                  showDialog(
-                    context: context,
-                    builder: (_) => Dialog(
-                      child: Image.file(File(r.filePath)),
+              return FadeSlideIn(
+                index: index,
+                offsetY: 12,
+                child: GestureDetector(
+                  onTap: () => AppRoutes.push(context, _ReceiptViewer(receipt: r)),
+                  child: Hero(
+                    tag: 'receipt-${r.id}',
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        color: p.surface2,
+                        child: Image.file(
+                          File(r.thumbnailPath),
+                          fit: BoxFit.cover,
+                          // A missing/corrupt thumbnail used to throw.
+                          errorBuilder: (_, __, ___) => Icon(
+                            Icons.broken_image_outlined,
+                            color: p.muted,
+                          ),
+                        ),
+                      ),
                     ),
-                  );
-                },
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.file(
-                    File(r.thumbnailPath),
-                    fit: BoxFit.cover,
                   ),
                 ),
               );
             },
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Error: $err')),
+      ),
+    );
+  }
+}
+
+class _ReceiptViewer extends StatelessWidget {
+  final ReceiptModel receipt;
+
+  const _ReceiptViewer({required this.receipt});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+      ),
+      body: Center(
+        child: Hero(
+          tag: 'receipt-${receipt.id}',
+          child: InteractiveViewer(
+            minScale: 1,
+            maxScale: 5,
+            child: Image.file(
+              File(receipt.filePath),
+              errorBuilder: (_, __, ___) => const Icon(
+                Icons.broken_image_outlined,
+                color: Colors.white54,
+                size: 48,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

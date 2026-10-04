@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/theme/app_palette.dart';
 import '../../../data/models/tag_model.dart';
 import '../../../data/repositories/tag_repository.dart';
+import '../../widgets/app_sheets.dart';
+import '../../widgets/list_widgets.dart';
 
 final tagRepositoryProvider = Provider((ref) => TagRepository());
 final tagsListProvider = FutureProvider<List<TagModel>>((ref) async {
@@ -13,81 +16,63 @@ final tagsListProvider = FutureProvider<List<TagModel>>((ref) async {
 class TagsManagementScreen extends ConsumerWidget {
   const TagsManagementScreen({super.key});
 
-  void _showAddTagDialog(BuildContext context, WidgetRef ref) {
-    final nameCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Add Tag'),
-        content: TextField(
-          controller: nameCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Tag Name (e.g., College, Travel)',
-          ),
+  Future<void> _add(BuildContext context, WidgetRef ref) async {
+    final values = await showFieldsSheet(
+      context,
+      title: 'Add tag',
+      submitLabel: 'Add tag',
+      fields: const [
+        FieldSpec(
+          label: 'Tag name',
+          hint: 'e.g. College, Travel',
+          required: true,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final name = nameCtrl.text.trim();
-              if (name.isEmpty) return;
-
-              final tag = TagModel(id: const Uuid().v4(), name: name);
-              await ref.read(tagRepositoryProvider).createTag(tag);
-              ref.invalidate(tagsListProvider);
-              // BUG FIX: use ctx.mounted (the dialog context) not context.mounted
-              // (the outer widget context). If the dialog was dismissed while
-              // createTag was awaiting, Navigator.pop(ctx) would throw on a
-              // stale inactive navigator.
-              if (ctx.mounted) {
-                Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+      ],
     );
+    if (values == null || !context.mounted) return;
+
+    await ref
+        .read(tagRepositoryProvider)
+        .createTag(TagModel(id: const Uuid().v4(), name: values[0]));
+    ref.invalidate(tagsListProvider);
+  }
+
+  Future<void> _delete(
+    BuildContext context,
+    WidgetRef ref,
+    TagModel tag,
+  ) async {
+    final ok = await confirmDestructive(
+      context,
+      title: 'Delete #${tag.name}?',
+      message: 'It will be removed from any transactions that use it.',
+    );
+    if (!ok) return;
+    await ref.read(tagRepositoryProvider).deleteTag(tag.id);
+    ref.invalidate(tagsListProvider);
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tagsAsync = ref.watch(tagsListProvider);
+    final p = context.palette;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Tags')),
-      body: tagsAsync.when(
-        data: (tags) {
-          if (tags.isEmpty) {
-            return const Center(child: Text('No tags created yet.'));
-          }
-          return ListView.builder(
-            itemCount: tags.length,
-            itemBuilder: (context, index) {
-              final t = tags[index];
-              return ListTile(
-                leading: const Icon(Icons.label_outline),
-                title: Text(t.name),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  onPressed: () async {
-                    await ref.read(tagRepositoryProvider).deleteTag(t.id);
-                    ref.invalidate(tagsListProvider);
-                  },
-                ),
-              );
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Error: $err')),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddTagDialog(context, ref),
-        child: const Icon(Icons.add),
+    return ManagementScaffold<TagModel>(
+      title: 'Tags',
+      items: ref.watch(tagsListProvider),
+      emptyEmoji: '#️⃣',
+      emptyTitle: 'No tags yet',
+      emptyMessage:
+          'Tags let you group transactions across categories, like a trip.',
+      addLabel: 'Add tag',
+      onAdd: () => _add(context, ref),
+      rowBuilder: (context, tag) => ListRowTile(
+        emoji: '🏷',
+        title: tag.name,
+        trailing: IconButton(
+          tooltip: 'Delete tag',
+          icon: Icon(Icons.delete_outline_rounded, color: p.expense),
+          onPressed: () => _delete(context, ref, tag),
+        ),
       ),
     );
   }

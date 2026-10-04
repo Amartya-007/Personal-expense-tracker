@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/constants/app_colors.dart';
+
+import '../../../core/theme/app_palette.dart';
+import '../../../core/theme/app_text.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/fade_slide_in.dart';
+import '../../widgets/pressable.dart';
 
 class LockScreen extends ConsumerStatefulWidget {
   const LockScreen({super.key});
@@ -10,9 +14,10 @@ class LockScreen extends ConsumerStatefulWidget {
   ConsumerState<LockScreen> createState() => _LockScreenState();
 }
 
-class _LockScreenState extends ConsumerState<LockScreen> with SingleTickerProviderStateMixin {
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
+class _LockScreenState extends ConsumerState<LockScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseController;
+  late final Animation<double> _pulseAnimation;
 
   @override
   void initState() {
@@ -22,13 +27,13 @@ class _LockScreenState extends ConsumerState<LockScreen> with SingleTickerProvid
       duration: const Duration(milliseconds: 1800),
     )..repeat(reverse: true);
 
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.1).animate(
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.08).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    // Trigger biometric check automatically as early as possible on frame load
+    // Trigger the biometric prompt as early as possible.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _handleUnlock();
+      if (mounted) _handleUnlock();
     });
   }
 
@@ -44,86 +49,65 @@ class _LockScreenState extends ConsumerState<LockScreen> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final inkColor = isDark ? AppColors.darkInk : AppColors.ink;
-    final mutedColor = isDark ? AppColors.darkMuted : AppColors.muted;
-    final surface2Color = isDark ? AppColors.darkSurface2 : AppColors.surface2;
+    final p = context.palette;
     final isUnlocked = ref.watch(authProvider).isUnlocked;
+    final accent = isUnlocked ? p.income : p.primary;
 
     return Scaffold(
+      backgroundColor: p.background,
       body: SafeArea(
         child: Center(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // 📒 Notebook icon in squircle
-                Container(
-                  width: 70,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.35),
-                        blurRadius: 18,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: FadeSlideIn(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      gradient: p.heroGradient,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: p.primary.withValues(alpha: 0.35),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    alignment: Alignment.center,
+                    child: const Text('📒', style: TextStyle(fontSize: 34)),
                   ),
-                  child: const Center(
-                    child: Text('📒', style: TextStyle(fontSize: 34)),
-                  ),
-                ),
+                  const SizedBox(height: 18),
+                  Text('MyKhata', style: AppText.display(p.ink)),
+                  const SizedBox(height: 4),
+                  Text('Locked', style: AppText.caption(p.muted)),
+                  const SizedBox(height: 48),
 
-                const SizedBox(height: 16),
-
-                Text(
-                  'MyKhata',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
-                    color: inkColor,
-                  ),
-                ),
-
-                const SizedBox(height: 4),
-
-                Text(
-                  'Locked',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: mutedColor,
-                  ),
-                ),
-
-                const SizedBox(height: 48),
-
-                // Pulsating Fingerprint Sensor (tap to manual retry if prompt was cancelled)
-                ScaleTransition(
-                  scale: _pulseAnimation,
-                  child: GestureDetector(
-                    onTap: _handleUnlock,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      width: 92,
-                      height: 92,
-                      decoration: BoxDecoration(
-                        color: isUnlocked ? AppColors.income : surface2Color,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: (isUnlocked ? AppColors.income : AppColors.primary).withValues(alpha: 0.25),
-                            blurRadius: 20,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      child: Center(
+                  // Pulsing unlock button (tap to retry if the prompt was
+                  // dismissed).
+                  ScaleTransition(
+                    scale: _pulseAnimation,
+                    child: Pressable(
+                      onTap: _handleUnlock,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        width: 96,
+                        height: 96,
+                        decoration: BoxDecoration(
+                          color: isUnlocked ? p.income : p.surface2,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: accent.withValues(alpha: 0.28),
+                              blurRadius: 24,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        alignment: Alignment.center,
                         child: Text(
                           isUnlocked ? '✓' : '👆',
                           style: TextStyle(
@@ -134,33 +118,20 @@ class _LockScreenState extends ConsumerState<LockScreen> with SingleTickerProvid
                       ),
                     ),
                   ),
-                ),
 
-                const SizedBox(height: 24),
-
-                Text(
-                  'Touch sensor or tap below to unlock',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: mutedColor,
-                    fontWeight: FontWeight.w500,
+                  const SizedBox(height: 28),
+                  Text(
+                    'Touch the sensor to unlock',
+                    textAlign: TextAlign.center,
+                    style: AppText.caption(p.muted),
                   ),
-                ),
-
-                const SizedBox(height: 8),
-
-                TextButton(
-                  onPressed: _handleUnlock,
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _handleUnlock,
+                    child: const Text('Use device PIN / biometrics'),
                   ),
-                  child: const Text(
-                    'Use device PIN / Biometrics',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

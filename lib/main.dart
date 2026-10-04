@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -10,7 +11,7 @@ import 'core/theme/app_theme.dart';
 import 'presentation/providers/auth_provider.dart';
 import 'presentation/providers/settings_providers.dart';
 import 'presentation/providers/sms_review_providers.dart';
-import 'presentation/screens/lock/lock_screen.dart';
+import 'presentation/screens/lock/auth_guard.dart';
 import 'presentation/screens/main/main_navigation_screen.dart';
 import 'presentation/screens/onboarding/onboarding_screen.dart';
 import 'services/notifications/notification_service.dart';
@@ -78,6 +79,18 @@ class _MyKhataAppState extends ConsumerState<MyKhataApp>
     super.dispose();
   }
 
+  /// While locked, the system back button must not pop screens that are
+  /// hidden behind the lock screen; it leaves the app instead.
+  @override
+  Future<bool> didPopRoute() async {
+    final auth = ref.read(authProvider);
+    if (!auth.isReady || !auth.isUnlocked) {
+      await SystemNavigator.pop();
+      return true;
+    }
+    return false;
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     ref.read(authProvider.notifier).handleAppLifecycleState(state);
@@ -100,23 +113,14 @@ class _MyKhataAppState extends ConsumerState<MyKhataApp>
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
+      // The lock gate wraps the whole navigator so it covers every screen.
+      builder: (context, child) => AuthGuard(
+        blockWhileLoading: widget.isOnboardingComplete,
+        child: child ?? const SizedBox.shrink(),
+      ),
       home: widget.isOnboardingComplete
-          ? const AuthGuard()
+          ? const MainNavigationScreen()
           : const OnboardingScreen(),
     );
-  }
-}
-
-class AuthGuard extends ConsumerWidget {
-  const AuthGuard({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authProvider);
-
-    if (!authState.isUnlocked) {
-      return const LockScreen();
-    }
-    return const MainNavigationScreen();
   }
 }

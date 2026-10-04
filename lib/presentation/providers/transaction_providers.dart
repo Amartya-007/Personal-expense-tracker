@@ -189,6 +189,14 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
     _ref.invalidate(homeInsightsProvider);
     _ref.invalidate(analyticsSummaryProvider);
   }
+
+  /// Permanently removes an already soft-deleted transaction. Soft-deleted
+  /// items are not in the visible list, so only the "recently deleted" view
+  /// needs refreshing.
+  Future<void> permanentlyDeleteTransaction(String id) async {
+    await _repository.permanentlyDeleteTransaction(id);
+    _ref.invalidate(recentlyDeletedTransactionsProvider);
+  }
 }
 
 final transactionListProvider =

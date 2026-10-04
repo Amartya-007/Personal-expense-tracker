@@ -1,101 +1,97 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
-import '../../../core/constants/app_colors.dart';
+
+import '../../../core/theme/app_palette.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/account_model.dart';
 import '../../providers/account_providers.dart';
+import '../../widgets/app_sheets.dart';
+import '../../widgets/list_widgets.dart';
 
 class AccountsManagementScreen extends ConsumerWidget {
   const AccountsManagementScreen({super.key});
 
-  void _showAddAccountDialog(BuildContext context, WidgetRef ref) {
-    final nameCtrl = TextEditingController();
-    final balCtrl = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Add Bank Account'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(labelText: 'Account Name (e.g., HDFC)'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: balCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Initial Balance (₹)'),
-            ),
-          ],
+  Future<void> _add(BuildContext context, WidgetRef ref) async {
+    final values = await showFieldsSheet(
+      context,
+      title: 'Add account',
+      submitLabel: 'Add account',
+      fields: const [
+        FieldSpec(
+          label: 'Account name',
+          hint: 'e.g. HDFC Savings',
+          required: true,
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              final name = nameCtrl.text.trim();
-              final bal = double.tryParse(balCtrl.text.trim()) ?? 0.0;
-              if (name.isEmpty) return;
-
-              final acc = AccountModel(
-                id: const Uuid().v4(),
-                name: name,
-                currentBalance: bal,
-                initialBalance: bal,
-                createdAt: DateTime.now(),
-                updatedAt: DateTime.now(),
-              );
-
-              ref.read(accountListProvider.notifier).createAccount(acc);
-              Navigator.pop(ctx);
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+        FieldSpec(label: 'Current balance (₹)', numeric: true, initial: '0'),
+      ],
     );
+    if (values == null || !context.mounted) return;
+
+    final balance = double.tryParse(values[1]) ?? 0.0;
+    final now = DateTime.now();
+    await ref.read(accountListProvider.notifier).createAccount(
+          AccountModel(
+            id: const Uuid().v4(),
+            name: values[0],
+            currentBalance: balance,
+            initialBalance: balance,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+  }
+
+  Future<void> _delete(
+    BuildContext context,
+    WidgetRef ref,
+    AccountModel account,
+    int accountCount,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (accountCount <= 1) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Keep at least one account to record transactions.'),
+        ),
+      );
+      return;
+    }
+
+    final ok = await confirmDestructive(
+      context,
+      title: 'Remove ${account.name}?',
+      message:
+          'The account is hidden from your lists. Existing transactions are kept.',
+      confirmLabel: 'Remove',
+    );
+    if (!ok || !context.mounted) return;
+    await ref.read(accountListProvider.notifier).deleteAccount(account.id);
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
     final accountsAsync = ref.watch(accountListProvider);
+    final count = accountsAsync.value?.length ?? 0;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Bank Accounts'),
-      ),
-      body: accountsAsync.when(
-        data: (accounts) {
-          if (accounts.isEmpty) {
-            return const Center(child: Text('No active bank accounts.'));
-          }
-          return ListView.builder(
-            itemCount: accounts.length,
-            itemBuilder: (context, index) {
-              final acc = accounts[index];
-              return ListTile(
-                leading: const CircleAvatar(child: Icon(Icons.account_balance)),
-                title: Text(acc.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text('Balance: ${CurrencyFormatter.format(acc.currentBalance)}'),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline, color: AppColors.expense),
-                  onPressed: () {
-                    ref.read(accountListProvider.notifier).deleteAccount(acc.id);
-                  },
-                ),
-              );
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Error: $err')),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddAccountDialog(context, ref),
-        child: const Icon(Icons.add),
+    return ManagementScaffold<AccountModel>(
+      title: 'Bank accounts',
+      items: accountsAsync,
+      emptyEmoji: '🏦',
+      emptyTitle: 'No accounts yet',
+      emptyMessage: 'Add a bank account or wallet to start tracking balances.',
+      addLabel: 'Add account',
+      onAdd: () => _add(context, ref),
+      rowBuilder: (context, acc) => ListRowTile(
+        emoji: '🏦',
+        title: acc.name,
+        subtitle: CurrencyFormatter.format(acc.currentBalance),
+        trailing: IconButton(
+          tooltip: 'Remove account',
+          icon: Icon(Icons.delete_outline_rounded, color: p.expense),
+          onPressed: () => _delete(context, ref, acc, count),
+        ),
       ),
     );
   }

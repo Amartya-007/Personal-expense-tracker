@@ -8,18 +8,25 @@ class AuthState {
   final bool isUnlocked;
   final bool isBiometricsEnabled;
 
+  /// False until the stored biometric setting has been read. While false the
+  /// UI shows a neutral splash instead of briefly flashing private content.
+  final bool isReady;
+
   AuthState({
     required this.isUnlocked,
     required this.isBiometricsEnabled,
+    this.isReady = true,
   });
 
   AuthState copyWith({
     bool? isUnlocked,
     bool? isBiometricsEnabled,
+    bool? isReady,
   }) {
     return AuthState(
       isUnlocked: isUnlocked ?? this.isUnlocked,
       isBiometricsEnabled: isBiometricsEnabled ?? this.isBiometricsEnabled,
+      isReady: isReady ?? this.isReady,
     );
   }
 }
@@ -29,16 +36,31 @@ class AuthNotifier extends StateNotifier<AuthState> {
   bool _isAuthenticating = false;
 
   AuthNotifier(this._authService)
-      : super(AuthState(isUnlocked: true, isBiometricsEnabled: false)) {
+      : super(
+          AuthState(
+            isUnlocked: false,
+            isBiometricsEnabled: false,
+            isReady: false,
+          ),
+        ) {
     _init();
   }
 
   Future<void> _init() async {
-    final enabled = await _authService.isBiometricsEnabled();
+    bool enabled = false;
+    try {
+      enabled = await _authService.isBiometricsEnabled();
+    } catch (_) {
+      // If the setting cannot be read, behave as before: open the app.
+      enabled = false;
+    }
+    if (!mounted) return;
+
     if (enabled) {
       state = state.copyWith(
         isBiometricsEnabled: true,
         isUnlocked: false,
+        isReady: true,
       );
       // Immediately trigger biometric prompt on cold startup
       authenticate();
@@ -46,6 +68,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         isBiometricsEnabled: false,
         isUnlocked: true,
+        isReady: true,
       );
     }
   }

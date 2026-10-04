@@ -1,0 +1,207 @@
+import 'package:flutter/material.dart';
+
+import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_palette.dart';
+import '../../core/theme/app_text.dart';
+
+/// Standard bottom sheet chrome (rounded top, drag handle, title, keyboard
+/// inset handling). Replaces 10 near-identical hand-built sheets.
+class AppBottomSheet {
+  AppBottomSheet._();
+
+  static Future<T?> show<T>(
+    BuildContext context, {
+    String? title,
+    required WidgetBuilder builder,
+  }) {
+    return showModalBottomSheet<T>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final p = ctx.palette;
+        final media = MediaQuery.of(ctx);
+        return Padding(
+          padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+          child: Container(
+            decoration: BoxDecoration(
+              color: p.surface,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
+            ),
+            padding: EdgeInsets.fromLTRB(
+              20,
+              12,
+              20,
+              20 + media.viewPadding.bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: p.border,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+                if (title != null) ...[
+                  const SizedBox(height: 16),
+                  Text(title, style: AppText.title(p.ink)),
+                ],
+                const SizedBox(height: 16),
+                Flexible(
+                  child: SingleChildScrollView(child: builder(ctx)),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Describes one text field in [showFieldsSheet].
+class FieldSpec {
+  final String label;
+  final String? hint;
+  final String initial;
+  final bool numeric;
+  final bool required;
+
+  const FieldSpec({
+    required this.label,
+    this.hint,
+    this.initial = '',
+    this.numeric = false,
+    this.required = false,
+  });
+}
+
+/// Shows a sheet with the given fields and resolves to the trimmed values (in
+/// order), or null if dismissed. Controllers are owned and disposed by the
+/// sheet, so callers no longer leak `TextEditingController`s.
+Future<List<String>?> showFieldsSheet(
+  BuildContext context, {
+  required String title,
+  required List<FieldSpec> fields,
+  String submitLabel = 'Save',
+}) {
+  return AppBottomSheet.show<List<String>>(
+    context,
+    title: title,
+    builder: (_) => _FieldsForm(fields: fields, submitLabel: submitLabel),
+  );
+}
+
+class _FieldsForm extends StatefulWidget {
+  final List<FieldSpec> fields;
+  final String submitLabel;
+
+  const _FieldsForm({required this.fields, required this.submitLabel});
+
+  @override
+  State<_FieldsForm> createState() => _FieldsFormState();
+}
+
+class _FieldsFormState extends State<_FieldsForm> {
+  late final List<TextEditingController> _controllers;
+  int? _errorIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _controllers = [
+      for (final f in widget.fields) TextEditingController(text: f.initial),
+    ];
+  }
+
+  @override
+  void dispose() {
+    for (final c in _controllers) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void _submit() {
+    for (var i = 0; i < widget.fields.length; i++) {
+      if (widget.fields[i].required && _controllers[i].text.trim().isEmpty) {
+        setState(() => _errorIndex = i);
+        return;
+      }
+    }
+    Navigator.pop(context, [for (final c in _controllers) c.text.trim()]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < widget.fields.length; i++) ...[
+          TextField(
+            controller: _controllers[i],
+            autofocus: i == 0,
+            keyboardType: widget.fields[i].numeric
+                ? const TextInputType.numberWithOptions(decimal: true)
+                : TextInputType.text,
+            textInputAction: i == widget.fields.length - 1
+                ? TextInputAction.done
+                : TextInputAction.next,
+            onChanged: (_) {
+              if (_errorIndex == i) setState(() => _errorIndex = null);
+            },
+            onSubmitted: (_) {
+              if (i == widget.fields.length - 1) _submit();
+            },
+            decoration: InputDecoration(
+              labelText: widget.fields[i].label,
+              hintText: widget.fields[i].hint,
+              errorText: _errorIndex == i ? 'This field is required' : null,
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        const SizedBox(height: 4),
+        ElevatedButton(onPressed: _submit, child: Text(widget.submitLabel)),
+      ],
+    );
+  }
+}
+
+/// Confirmation dialog for destructive actions. Resolves to true if the
+/// user confirmed.
+Future<bool> confirmDestructive(
+  BuildContext context, {
+  required String title,
+  required String message,
+  String confirmLabel = 'Delete',
+}) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: Text(message),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          style: TextButton.styleFrom(foregroundColor: AppColors.expense),
+          child: Text(confirmLabel),
+        ),
+      ],
+    ),
+  );
+  return result ?? false;
+}
