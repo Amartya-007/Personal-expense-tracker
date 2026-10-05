@@ -12,7 +12,8 @@ class RecurringListNotifier extends StateNotifier<AsyncValue<List<RecurringPayme
   }
 
   Future<void> loadRecurringPayments() async {
-    state = const AsyncValue.loading();
+    // Keep showing existing data while reloading so lists don't blink.
+    if (!state.hasValue) state = const AsyncValue.loading();
     try {
       final list = await _repository.getAllRecurringPayments();
       state = AsyncValue.data(list);

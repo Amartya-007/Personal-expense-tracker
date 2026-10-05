@@ -15,7 +15,8 @@ class AccountListNotifier
   }
 
   Future<void> loadAccounts() async {
-    state = const AsyncValue.loading();
+    // Keep showing existing data while reloading so lists don't blink.
+    if (!state.hasValue) state = const AsyncValue.loading();
     try {
       final accounts = await _repository.getActiveAccounts();
       state = AsyncValue.data(accounts);

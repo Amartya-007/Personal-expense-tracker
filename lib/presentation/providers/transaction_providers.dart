@@ -70,8 +70,16 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
     fetchInitial();
   }
 
+  // Guards against out-of-order responses (e.g. typing in search quickly) and
+  // against firing fetchMore repeatedly while one is already running.
+  int _requestId = 0;
+  bool _fetchingMore = false;
+
   Future<void> fetchInitial() async {
-    state = state.copyWith(isLoading: true, transactions: []);
+    final requestId = ++_requestId;
+    // Keep the current rows visible while reloading. Clearing them made the
+    // list blink and jump back to the top on every refresh.
+    state = state.copyWith(isLoading: true);
     try {
       final txs = await _repository.getTransactionsPaged(
         limit: 30,
@@ -85,6 +93,7 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
         endDate: state.dateRange?.end,
       );
 
+      if (requestId != _requestId || !mounted) return; // superseded
       state = state.copyWith(
         transactions: txs,
         isLoading: false,
@@ -92,12 +101,18 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
       );
     } catch (e, st) {
       await AppLogger.e('fetchInitial failed', error: e, stackTrace: st);
-      state = state.copyWith(isLoading: false);
+      if (requestId == _requestId && mounted) {
+        state = state.copyWith(isLoading: false);
+      }
     }
   }
 
   Future<void> fetchMore() async {
-    if (state.isLoading || !state.hasMore) return;
+    // Scrolling fires this many times per second; without the guard the same
+    // page was appended repeatedly (duplicate rows).
+    if (state.isLoading || _fetchingMore || !state.hasMore) return;
+    _fetchingMore = true;
+    final requestId = _requestId;
 
     try {
       final lastTx = state.transactions.isNotEmpty
@@ -116,20 +131,30 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
         startDate: state.dateRange?.start,
         endDate: state.dateRange?.end,
       );
+      // Filters changed while this page was loading: drop it.
+      if (requestId != _requestId || !mounted) return;
       state = state.copyWith(
         transactions: [...state.transactions, ...newTxs],
         hasMore: newTxs.length >= 30,
       );
     } catch (e, st) {
       await AppLogger.e('fetchMore failed', error: e, stackTrace: st);
+    } finally {
+      _fetchingMore = false;
     }
   }
 
   void setSearchQuery(String? query) {
-    state = state.copyWith(searchQuery: query);
+    // copyWith keeps the old value for null, so clearing must be explicit
+    // (the search box used to stay filtered after its text was deleted).
+    state = state.copyWith(searchQuery: query, clearSearch: query == null);
     fetchInitial();
   }
 
+  /// Replaces the whole filter set; a null argument means "no filter".
+  /// (Previously null meant "leave unchanged", so choosing "All" for a type,
+  /// payment method or date range could never remove that filter.) The search
+  /// text is not a filter here and is kept.
   void setFilters({
     String? type,
     String? categoryId,
@@ -137,7 +162,11 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
     String? paymentMethod,
     DateTimeRange? dateRange,
   }) {
-    state = state.copyWith(
+    state = TransactionState(
+      transactions: state.transactions,
+      isLoading: state.isLoading,
+      hasMore: state.hasMore,
+      searchQuery: state.searchQuery,
       type: type,
       categoryId: categoryId,
       accountId: accountId,
@@ -173,7 +202,18 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
   }
 
   Future<void> softDeleteTransaction(String id) async {
-    await _repository.softDeleteTransaction(id);
+    // Remove the row synchronously. A swiped Dismissible must leave the tree
+    // as soon as onDismissed fires (Flutter asserts otherwise), and the list
+    // no longer blanks itself while reloading.
+    state = state.copyWith(
+      transactions: state.transactions.where((t) => t.id != id).toList(),
+    );
+    try {
+      await _repository.softDeleteTransaction(id);
+    } catch (_) {
+      await fetchInitial(); // put the row back, then let the caller report it
+      rethrow;
+    }
     await fetchInitial();
     _ref.read(accountListProvider.notifier).loadAccounts();
     _ref.invalidate(recentTransactionsProvider);

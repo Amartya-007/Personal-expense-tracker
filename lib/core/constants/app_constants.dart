@@ -3,6 +3,9 @@ class AppConstants {
   static const String currencySymbol = '₹';
   static const String currencyCode = 'INR';
 
+  // Payment methods offered across the app (add transaction, filters).
+  static const List<String> paymentMethods = ['UPI', 'Cash', 'Debit Card'];
+
   // DB Pagination
   static const int defaultPageSize = 30;
   static const int undoDurationSeconds = 10;

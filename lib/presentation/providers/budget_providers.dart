@@ -12,7 +12,8 @@ class BudgetListNotifier extends StateNotifier<AsyncValue<List<BudgetModel>>> {
   }
 
   Future<void> loadBudgets() async {
-    state = const AsyncValue.loading();
+    // Keep showing existing data while reloading so lists don't blink.
+    if (!state.hasValue) state = const AsyncValue.loading();
     try {
       final list = await _repository.getActiveBudgets();
       state = AsyncValue.data(list);

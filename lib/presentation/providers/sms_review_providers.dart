@@ -21,7 +21,8 @@ class SmsQueueNotifier extends StateNotifier<AsyncValue<List<SmsReviewModel>>> {
   }
 
   Future<void> loadQueue() async {
-    state = const AsyncValue.loading();
+    // Keep showing existing data while reloading so lists don't blink.
+    if (!state.hasValue) state = const AsyncValue.loading();
     try {
       await _parserService.processPendingMessages();
       final list = await _repository.getQueueByStatus(_status);

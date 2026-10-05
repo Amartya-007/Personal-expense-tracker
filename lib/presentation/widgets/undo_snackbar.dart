@@ -13,7 +13,6 @@ class UndoSnackbar {
         duration: const Duration(seconds: 10),
         action: SnackBarAction(
           label: 'UNDO',
-          textColor: Theme.of(context).colorScheme.secondary,
           onPressed: onUndo,
         ),
         behavior: SnackBarBehavior.floating,
