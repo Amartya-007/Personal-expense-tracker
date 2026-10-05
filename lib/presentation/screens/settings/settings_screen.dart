@@ -14,6 +14,7 @@ import '../../widgets/fade_slide_in.dart';
 import '../../widgets/list_widgets.dart';
 import '../../widgets/pressable.dart';
 import '../../widgets/section_header.dart';
+import '../../widgets/sms_permission_help.dart';
 import '../sms_review/sms_review_screen.dart';
 import 'accounts_management_screen.dart';
 import 'backup_restore_screen.dart';
@@ -56,13 +57,18 @@ class SettingsScreen extends ConsumerWidget {
     required BoolPrefNotifier notifier,
     required Future<bool> Function() requestPermission,
     required String deniedMessage,
+    VoidCallback? onDenied,
   }) async {
     final messenger = ScaffoldMessenger.of(context);
     if (value) {
       final granted = await requestPermission();
       if (!granted) {
         await notifier.set(false);
-        messenger.showSnackBar(SnackBar(content: Text(deniedMessage)));
+        if (onDenied != null) {
+          onDenied();
+        } else {
+          messenger.showSnackBar(SnackBar(content: Text(deniedMessage)));
+        }
         return;
       }
     }
@@ -301,6 +307,13 @@ class SettingsScreen extends ConsumerWidget {
                     requestPermission: PermissionService.requestSmsPermission,
                     deniedMessage:
                         'SMS permission is needed to detect bank messages. You can allow it in Android Settings.',
+                    // Android often blocks this for sideloaded apps; show how
+                    // to unblock it (or paste messages instead).
+                    onDenied: () => showSmsPermissionHelp(
+                      context,
+                      onPaste: () =>
+                          AppRoutes.push(context, const SmsReviewScreen()),
+                    ),
                   ),
                 ),
               ),

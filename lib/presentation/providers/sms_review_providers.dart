@@ -3,12 +3,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/logging/app_logger.dart';
 import '../../data/models/sms_review_model.dart';
 import '../../data/repositories/sms_repository.dart';
+import '../../services/sms/sms_capture_service.dart';
 import '../../services/sms/sms_parser_service.dart';
 
 final smsRepositoryProvider = Provider((ref) => SmsRepository());
 final smsParserServiceProvider = Provider((ref) => SmsParserService());
 
 final smsQueueStatusTabProvider = StateProvider<String>((ref) => 'detected');
+
+/// The account chosen for a detected SMS (keyed by review id). Null means
+/// "use the best match".
+final smsAccountChoiceProvider = StateProvider.family<String?, String>(
+  (ref, smsId) => null,
+);
+
+/// Whether Android currently lets the app read/receive SMS.
+final smsPermissionProvider = FutureProvider.autoDispose<bool>((ref) async {
+  return SmsCaptureService.hasPermission();
+});
 
 class SmsQueueNotifier extends StateNotifier<AsyncValue<List<SmsReviewModel>>> {
   final SmsRepository _repository;
@@ -44,6 +56,15 @@ class SmsQueueNotifier extends StateNotifier<AsyncValue<List<SmsReviewModel>>> {
       );
       rethrow;
     }
+  }
+
+  /// Adds hand-pasted messages to the queue (no SMS permission required).
+  Future<({int added, int duplicate, int unrecognized})> addPasted(
+    String text,
+  ) async {
+    final result = await _parserService.queueManualMessages(text);
+    await loadQueue();
+    return result;
   }
 
   Future<int> scanInbox() async {

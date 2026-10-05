@@ -23,6 +23,10 @@ class PermissionService {
     }
   }
 
+  /// Opens this app's page in Android Settings (where permissions, and the
+  /// "Allow restricted settings" menu for sideloaded apps, live).
+  static Future<bool> openSettings() => openAppSettings();
+
   static Future<bool> requestLocationPermission() async {
     final status = await Permission.locationWhenInUse.request();
     return status.isGranted;

@@ -67,6 +67,45 @@ class SmsParserService {
     return null;
   }
 
+  /// Queues bank messages the user pasted in by hand. This needs **no SMS
+  /// permission**, so it works even when Android blocks SMS access (for
+  /// example "restricted settings" on a sideloaded app).
+  ///
+  /// Several messages can be pasted at once; separate them with a blank line.
+  Future<({int added, int duplicate, int unrecognized})> queueManualMessages(
+    String text,
+  ) async {
+    var added = 0;
+    var duplicate = 0;
+    var unrecognized = 0;
+
+    final chunks = text
+        .split(RegExp(r'\n\s*\n'))
+        .map((c) => c.trim())
+        .where((c) => c.isNotEmpty);
+
+    for (final chunk in chunks) {
+      final parsed = parseSmsMessage('PASTED', chunk);
+      if (parsed == null) {
+        unrecognized++;
+        continue;
+      }
+      final isDup = await _duplicateDetector.isDuplicate(
+        referenceId: parsed.referenceId,
+        smsMessageId: parsed.smsMessageId,
+        amount: parsed.amount,
+        date: parsed.date,
+      );
+      if (isDup) {
+        duplicate++;
+        continue;
+      }
+      await _smsRepo.addToQueue(parsed);
+      added++;
+    }
+    return (added: added, duplicate: duplicate, unrecognized: unrecognized);
+  }
+
   /// Reads the SMS inbox history via the legacy MethodChannel and queues any
   /// unprocessed bank transactions for user review.
   ///
