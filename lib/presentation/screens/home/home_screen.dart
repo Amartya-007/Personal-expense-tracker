@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:mykhata/presentation/providers/settings_providers.dart'; //do not remove by OWNER
 
-import '../../../core/constants/app_colors.dart';
 import '../../../core/navigation/app_routes.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_palette.dart';
@@ -18,7 +17,7 @@ import '../../providers/insights_providers.dart';
 import '../../providers/recurring_providers.dart';
 import '../../providers/sms_review_providers.dart';
 import '../../providers/transaction_providers.dart';
-import '../../widgets/animated_progress_bar.dart';
+import '../../widgets/budget_row.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_sheets.dart';
 import '../../widgets/async_section.dart';
@@ -163,7 +162,7 @@ class HomeScreen extends ConsumerWidget {
                 final ok = await confirmDestructive(
                   context,
                   title: 'Delete ${item.name}?',
-                  message: 'Future reminders for this payment will stop.',
+                  message: 'It will no longer appear on Home.',
                 );
                 if (!ok || !context.mounted) return;
                 await _recurringAction(
@@ -195,12 +194,16 @@ class HomeScreen extends ConsumerWidget {
     final smsCount = ref.watch(smsQueueProvider('detected')).value?.length ?? 0;
     final userName = ref.watch(userNameProvider);
 
+    // Reload in place (keeps what is on screen) rather than invalidating the
+    // notifier-backed providers, which would blink every section.
     Future<void> refresh() async {
-      ref.invalidate(accountListProvider);
       ref.invalidate(recentTransactionsProvider);
-      ref.invalidate(budgetListProvider);
-      ref.invalidate(recurringListProvider);
       ref.invalidate(homeInsightsProvider);
+      await Future.wait([
+        ref.read(accountListProvider.notifier).loadAccounts(),
+        ref.read(budgetListProvider.notifier).loadBudgets(),
+        ref.read(recurringListProvider.notifier).loadRecurringPayments(),
+      ]);
     }
 
     return Scaffold(
@@ -288,7 +291,7 @@ class HomeScreen extends ConsumerWidget {
                   value: accountsAsync,
                   skeletonHeight: 150,
                   errorLabel: 'Could not load accounts',
-                  onRetry: () => ref.invalidate(accountListProvider),
+                  onRetry: () => ref.read(accountListProvider.notifier).loadAccounts(),
                   builder: (accounts) => _HeroCard(
                     accounts: accounts,
                     onEditAccount: (acc) => _editBalance(context, ref, acc),
@@ -312,7 +315,7 @@ class HomeScreen extends ConsumerWidget {
                     AsyncSection(
                       value: budgetsAsync,
                       errorLabel: 'Could not load budgets',
-                      onRetry: () => ref.invalidate(budgetListProvider),
+                      onRetry: () => ref.read(budgetListProvider.notifier).loadBudgets(),
                       builder: (budgets) {
                         if (budgets.isEmpty) {
                           return EmptyState(
@@ -330,47 +333,11 @@ class HomeScreen extends ConsumerWidget {
                         return SettingsGroup(
                           children: [
                             for (final b in shown)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 14,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Flexible(
-                                          child: Text(
-                                            '${AppColors.getCategoryEmoji(b.categoryName)} ${b.categoryName ?? 'Budget'}',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: AppText.body(p.ink),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          '${CurrencyFormatter.format(b.spentAmount)} / ${CurrencyFormatter.format(b.amount)}',
-                                          style: AppText.body(p.ink),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    AnimatedProgressBar(
-                                      value: b.percentage,
-                                      color: budgetProgressColor(p, b.percentage),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      b.percentage >= 1.0
-                                          ? 'Limit reached · ${(b.percentage * 100).round()}% used'
-                                          : '${CurrencyFormatter.format(b.remainingAmount)} left · ${(b.percentage * 100).round()}% used',
-                                      style: AppText.caption(p.muted),
-                                    ),
-                                  ],
-                                ),
+                              BudgetRow(
+                                budget: b,
+                                onTap: () => ref
+                                    .read(mainTabProvider.notifier)
+                                    .state = _budgetsTab,
                               ),
                           ],
                         );
@@ -444,14 +411,16 @@ class HomeScreen extends ConsumerWidget {
                     AsyncSection(
                       value: recurringAsync,
                       errorLabel: 'Could not load recurring payments',
-                      onRetry: () => ref.invalidate(recurringListProvider),
+                      onRetry: () => ref
+                          .read(recurringListProvider.notifier)
+                          .loadRecurringPayments(),
                       builder: (list) {
                         if (list.isEmpty) {
                           return EmptyState(
                             compact: true,
                             emoji: '🔁',
                             title: 'No recurring payments',
-                            message: 'Add rent or subscriptions to get reminded.',
+                            message: 'Add rent or subscriptions to keep track of what is due.',
                             actionLabel: 'Add one',
                             onAction: () => AppRoutes.push(
                               context,

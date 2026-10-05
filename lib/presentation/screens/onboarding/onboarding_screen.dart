@@ -526,7 +526,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             row(
               '🔔',
               'Notifications',
-              'Budget alerts and payment reminders',
+              'Alerts when you near a budget limit',
               _notifEnabled,
               (v) => setState(() => _notifEnabled = v),
             ),

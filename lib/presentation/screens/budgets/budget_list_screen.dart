@@ -1,13 +1,34 @@
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../../core/constants/app_colors.dart';
+import 'package:intl/intl.dart';
+
+import '../../../core/theme/app_motion.dart';
+import '../../../core/theme/app_palette.dart';
+import '../../../core/theme/app_text.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/budget_model.dart';
 import '../../providers/budget_providers.dart';
+import '../../providers/category_providers.dart';
+import '../../widgets/animated_progress_bar.dart';
+import '../../widgets/app_card.dart';
+import '../../widgets/app_sheets.dart';
+import '../../widgets/async_section.dart';
+import '../../widgets/budget_row.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/fade_slide_in.dart';
+import '../../widgets/list_widgets.dart';
+import '../../widgets/pressable.dart';
+import '../../widgets/section_header.dart';
 import '../../widgets/undo_snackbar.dart';
-import 'add_edit_budget_dialog.dart';
+import 'budget_form.dart';
+
+const Map<String, String> _periodNoun = {
+  'weekly': 'week',
+  'monthly': 'month',
+  'yearly': 'year',
+};
 
 class BudgetListScreen extends ConsumerStatefulWidget {
   const BudgetListScreen({super.key});
@@ -17,540 +38,369 @@ class BudgetListScreen extends ConsumerStatefulWidget {
 }
 
 class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
-  String _selectedPeriod = 'Monthly';
+  // This selector used to be decorative: it never filtered anything, so
+  // weekly, monthly and yearly budgets were all mixed into one total.
+  String _period = 'monthly';
 
-  void _showBudgetDetail(BuildContext context, BudgetModel budget, double percentage) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final percent = (percentage * 100).round();
+  Future<void> _createBudget(List<BudgetModel> existing) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final categories = await ref.read(expenseCategoriesProvider.future);
+    if (!mounted) return;
+    if (categories.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Add an expense category first.')),
+      );
+      return;
+    }
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+    final budget = await AppBottomSheet.show<BudgetModel>(
+      context,
+      title: 'Create budget',
+      builder: (_) => BudgetForm(
+        categories: categories,
+        existing: existing,
+        initialPeriod: _period,
+      ),
+    );
+    if (budget == null) return;
+
+    await ref.read(budgetListProvider.notifier).createBudget(budget);
+    if (mounted) setState(() => _period = budget.period);
+  }
+
+  Future<void> _editLimit(BudgetModel budget) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final values = await showFieldsSheet(
+      context,
+      title: 'Edit ${budget.categoryName ?? 'budget'} limit',
+      submitLabel: 'Save limit',
+      fields: [
+        FieldSpec(
+          label: 'Limit (₹)',
+          numeric: true,
+          required: true,
+          initial: budget.amount.toStringAsFixed(0),
         ),
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '${budget.categoryName ?? 'Category'} budget',
-              style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 14),
+      ],
+    );
+    if (values == null) return;
 
-            // Top Status Card
-            Container(
-              width: double.infinity,
+    final amount = double.tryParse(values[0].replaceAll(',', ''));
+    if (amount == null || amount <= 0) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Enter a limit greater than zero.')),
+      );
+      return;
+    }
+    await ref
+        .read(budgetListProvider.notifier)
+        .updateBudget(budget.copyWith(amount: amount));
+  }
+
+  Future<void> _delete(BudgetModel budget) async {
+    final notifier = ref.read(budgetListProvider.notifier);
+    await notifier.deleteBudget(budget.id);
+    if (!mounted) return;
+    UndoSnackbar.show(
+      context,
+      message: 'Budget deleted',
+      onUndo: () => notifier.createBudget(budget),
+    );
+  }
+
+  void _showBudgetDetail(BudgetModel budget) {
+    final dateFormat = DateFormat('d MMM');
+
+    AppBottomSheet.show<void>(
+      context,
+      title: '${budget.categoryName ?? 'Category'} budget',
+      builder: (ctx) {
+        final p = ctx.palette;
+        final noun = _periodNoun[budget.period] ?? 'period';
+        final percent = (budget.usedRatio * 100).round();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppCard(
+              shadow: false,
               padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.surface2Dark : AppColors.surface2Light,
-                borderRadius: BorderRadius.circular(20),
-              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    CurrencyFormatter.format(budget.remainingAmount),
-                    style: GoogleFonts.sora(
-                      fontSize: 32,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
-                      color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                    ),
+                    budget.overAmount > 0
+                        ? 'Over by ${CurrencyFormatter.format(budget.overAmount)}'
+                        : CurrencyFormatter.format(budget.remainingAmount),
+                    style: AppText.display(
+                      budget.overAmount > 0 ? p.expense : p.ink,
+                    ).copyWith(fontSize: 30),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'left of ${CurrencyFormatter.format(budget.amount)} this month',
-                    style: GoogleFonts.sora(
-                      fontSize: 12,
-                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                    ),
+                    budget.overAmount > 0
+                        ? 'spent ${CurrencyFormatter.format(budget.spentAmount)} of ${CurrencyFormatter.format(budget.amount)} this $noun'
+                        : 'left of ${CurrencyFormatter.format(budget.amount)} this $noun',
+                    style: AppText.caption(p.muted),
                   ),
                   const SizedBox(height: 14),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(5),
-                    child: LinearProgressIndicator(
-                      value: percentage.clamp(0.0, 1.0),
-                      backgroundColor: isDark ? AppColors.surfaceDark : Colors.white,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        percentage >= 1.0
-                            ? AppColors.expense
-                            : percentage >= 0.75
-                                ? AppColors.secondary
-                                : (isDark ? AppColors.primaryDark : AppColors.primary),
-                      ),
-                      minHeight: 8,
-                    ),
+                  AnimatedProgressBar(
+                    value: budget.percentage,
+                    color: budgetProgressColor(p, budget.usedRatio),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${dateFormat.format(budget.startDate)} – ${dateFormat.format(budget.endDate)} · $percent% used',
+                    style: AppText.caption(p.muted),
                   ),
                 ],
               ),
             ),
-
-            const SizedBox(height: 20),
-            Text(
-              'Alerts',
-              style: GoogleFonts.sora(fontSize: 14, fontWeight: FontWeight.w700),
-            ),
+            const SizedBox(height: 18),
+            Text('ALERTS', style: AppText.section(p.muted)),
             const SizedBox(height: 8),
-
-            Container(
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                  width: 1.0,
+            SettingsGroup(
+              children: [
+                for (final threshold in const [75, 90, 100])
+                  ListRowTile(
+                    leading: Text(
+                      percent >= threshold ? '✅' : '⏳',
+                      style: const TextStyle(fontSize: 18),
+                    ),
+                    title: '$threshold% reached',
+                    subtitle: percent >= threshold
+                        ? 'Notified once this $noun'
+                        : 'You will be notified when you get there',
+                  ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _editLimit(budget);
+              },
+              icon: const Icon(Icons.edit_rounded, size: 18),
+              label: const Text('Edit limit'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: p.ink,
+                side: BorderSide(color: p.border),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
                 ),
-              ),
-              child: Column(
-                children: [75, 90, 100].map((threshold) {
-                  final isReached = percent >= threshold;
-                  final isLast = threshold == 100;
-                  return Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        child: Row(
-                          children: [
-                            Text(
-                              isReached ? '✅' : '⏳',
-                              style: const TextStyle(fontSize: 16),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '$threshold% reached',
-                                    style: GoogleFonts.sora(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                                    ),
-                                  ),
-                                  Text(
-                                    isReached ? 'Notified once this period' : 'Not triggered yet',
-                                    style: GoogleFonts.sora(
-                                      fontSize: 12,
-                                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (!isLast)
-                        Divider(
-                          color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                          height: 1,
-                        ),
-                    ],
-                  );
-                }).toList(),
               ),
             ),
-
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: TextButton(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  ref.read(budgetListProvider.notifier).deleteBudget(budget.id);
-                  UndoSnackbar.show(
-                    context,
-                    message: 'Budget deleted',
-                    onUndo: () {
-                      ref.read(budgetListProvider.notifier).createBudget(budget);
-                    },
-                  );
-                },
-                child: Text(
-                  'Delete budget',
-                  style: GoogleFonts.sora(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.expense,
-                  ),
-                ),
-              ),
+            const SizedBox(height: 4),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _delete(budget);
+              },
+              style: TextButton.styleFrom(foregroundColor: p.expense),
+              child: const Text('Delete budget'),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     final budgetsAsync = ref.watch(budgetListProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final all = budgetsAsync.value ?? const <BudgetModel>[];
+    final noun = _periodNoun[_period] ?? 'month';
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
+      backgroundColor: p.background,
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: EdgeInsets.fromLTRB(18, 16, 18, MediaQuery.of(context).padding.bottom + 130),
-          children: [
-            // Top Bar: Title & + button
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Budgets',
-                  style: GoogleFonts.sora(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
-                    color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (_) => const AddEditBudgetDialog(),
-                    );
-                  },
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        isDark ? AppColors.cardShadowDark : AppColors.cardShadowLight,
-                      ],
-                      border: Border.all(
-                        color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                        width: 1.0,
-                      ),
-                    ),
-                    child: Center(
-                      child: Icon(
-                        Icons.add,
-                        size: 22,
-                        color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+        child: RefreshIndicator(
+          color: p.primary,
+          onRefresh: () => ref.read(budgetListProvider.notifier).loadBudgets(),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(
+              18,
+              16,
+              18,
+              MediaQuery.of(context).padding.bottom + 130,
             ),
-            const SizedBox(height: 16),
-
-            // Segmented Period Selector
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.surface2Dark : AppColors.surface2Light,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                children: ['Weekly', 'Monthly', 'Yearly', 'Custom'].map((period) {
-                  final isSelected = _selectedPeriod == period;
-                  return Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _selectedPeriod = period),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(vertical: 9),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? (isDark ? AppColors.surfaceDark : AppColors.surfaceLight)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(11),
-                          boxShadow: isSelected
-                              ? [
-                                  isDark ? AppColors.cardShadowDark : AppColors.cardShadowLight,
-                                ]
-                              : null,
-                        ),
-                        child: Center(
-                          child: Text(
-                            period,
-                            style: GoogleFonts.sora(
-                              fontSize: 12,
-                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                              color: isSelected
-                                  ? (isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight)
-                                  : (isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Big Circular Donut Card
-            budgetsAsync.when(
-              data: (budgets) {
-                final totalSpent = budgets.fold<double>(0.0, (sum, b) => sum + b.spentAmount);
-                final totalLimit = budgets.fold<double>(0.0, (sum, b) => sum + b.amount);
-                final totalLeft = math.max(0.0, totalLimit - totalSpent);
-                final overallPercent = totalLimit > 0 ? (totalSpent / totalLimit).clamp(0.0, 1.0) : 0.0;
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              FadeSlideIn(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          isDark ? AppColors.cardShadowDark : AppColors.cardShadowLight,
-                        ],
-                        border: Border.all(
-                          color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                          width: 1.0,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          // Circular Donut Progress
-                          SizedBox(
-                            width: 100,
-                            height: 100,
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                SizedBox(
-                                  width: 90,
-                                  height: 90,
-                                  child: CircularProgressIndicator(
-                                    value: 1.0,
-                                    strokeWidth: 10,
-                                    color: isDark ? AppColors.surface2Dark : AppColors.surface2Light,
-                                  ),
-                                ),
-                                SizedBox(
-                                  width: 90,
-                                  height: 90,
-                                  child: CircularProgressIndicator(
-                                    value: overallPercent,
-                                    strokeWidth: 10,
-                                    strokeCap: StrokeCap.round,
-                                    color: overallPercent >= 1.0
-                                        ? AppColors.expense
-                                        : (isDark ? AppColors.primaryDark : AppColors.primary),
-                                  ),
-                                ),
-                                Text(
-                                  '${(overallPercent * 100).round()}%',
-                                  style: GoogleFonts.sora(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                    color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                                  ),
-                                ),
-                              ],
-                            ),
+                    Text('Budgets', style: AppText.display(p.ink)),
+                    Pressable(
+                      onTap: () => _createBudget(all),
+                      child: Semantics(
+                        button: true,
+                        label: 'Create budget',
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: p.surface,
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [p.cardShadow],
+                            border: Border.all(color: p.border),
                           ),
-                          const SizedBox(width: 20),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Left this month',
-                                  style: GoogleFonts.sora(
-                                    fontSize: 12,
-                                    color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  CurrencyFormatter.format(totalLeft),
-                                  style: GoogleFonts.sora(
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.5,
-                                    color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'of ${CurrencyFormatter.format(totalLimit)} budgeted',
-                                  style: GoogleFonts.sora(
-                                    fontSize: 12,
-                                    color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // Categories Header
-                    Text(
-                      'Categories',
-                      style: GoogleFonts.sora(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Category Budgets Card
-                    if (budgets.isEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                          ),
+                          child: Icon(Icons.add, size: 22, color: p.ink),
                         ),
-                        child: Center(
-                          child: Text(
-                            'No budgets yet. Create a budget to start tracking spending.',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.sora(
-                              fontSize: 12.5,
-                              color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                            ),
-                          ),
-                        ),
-                      )
-                    else
-                      Container(
-                        decoration: BoxDecoration(
-                          color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            isDark ? AppColors.cardShadowDark : AppColors.cardShadowLight,
-                          ],
-                          border: Border.all(
-                            color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                            width: 1.0,
-                          ),
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                        child: Column(
-                          children: List.generate(budgets.length, (index) {
-                            final b = budgets[index];
-                            final isLast = index == budgets.length - 1;
-                            final percent = (b.percentage * 100).round();
-                            Color barColor = isDark ? AppColors.primaryDark : AppColors.primary;
-                            if (b.percentage >= 1.0) {
-                              barColor = AppColors.expense;
-                            } else if (b.percentage >= 0.75) {
-                              barColor = AppColors.secondary;
-                            }
-
-                            return Column(
-                              children: [
-                                InkWell(
-                                  onTap: () => _showBudgetDetail(context, b, b.percentage),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Text(
-                                              '${AppColors.getCategoryEmoji(b.categoryName)} ${b.categoryName ?? 'Budget'}',
-                                              style: GoogleFonts.sora(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w600,
-                                                color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                                              ),
-                                            ),
-                                            Text(
-                                              '${CurrencyFormatter.format(b.spentAmount)} / ${CurrencyFormatter.format(b.amount)}',
-                                              style: GoogleFonts.sora(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w600,
-                                                color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 8),
-                                        ClipRRect(
-                                          borderRadius: BorderRadius.circular(5),
-                                          child: LinearProgressIndicator(
-                                            value: b.percentage.clamp(0.0, 1.0),
-                                            backgroundColor: isDark ? AppColors.surface2Dark : AppColors.surface2Light,
-                                            valueColor: AlwaysStoppedAnimation<Color>(barColor),
-                                            minHeight: 8,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          b.percentage >= 1.0
-                                              ? 'Limit reached · $percent% used'
-                                              : '${CurrencyFormatter.format(b.remainingAmount)} left · $percent% used',
-                                          style: GoogleFonts.sora(
-                                            fontSize: 12,
-                                            color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                if (!isLast)
-                                  Divider(
-                                    color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                                    height: 1,
-                                  ),
-                              ],
-                            );
-                          }),
-                        ),
-                      ),
-
-                    const SizedBox(height: 14),
-                    Text(
-                      'Alerts fire at 75%, 90% and 100%, once per period.',
-                      style: GoogleFonts.sora(
-                        fontSize: 12,
-                        color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
                       ),
                     ),
                   ],
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, _) => Center(child: Text('Error: $err')),
-            ),
-          ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              FadeSlideIn(
+                index: 1,
+                child: SegmentedButton<String>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(value: 'weekly', label: Text('Weekly')),
+                    ButtonSegment(value: 'monthly', label: Text('Monthly')),
+                    ButtonSegment(value: 'yearly', label: Text('Yearly')),
+                  ],
+                  selected: {_period},
+                  onSelectionChanged: (s) => setState(() => _period = s.first),
+                ),
+              ),
+              const SizedBox(height: 16),
+              FadeSlideIn(
+                index: 2,
+                child: AsyncSection<List<BudgetModel>>(
+                  value: budgetsAsync,
+                  skeletonHeight: 150,
+                  errorLabel: 'Could not load budgets',
+                  onRetry: () =>
+                      ref.read(budgetListProvider.notifier).loadBudgets(),
+                  builder: (budgets) {
+                    final list =
+                        budgets.where((b) => b.period == _period).toList();
+                    return _buildContent(p, list, budgets, noun);
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
-}
 
+  Widget _buildContent(
+    AppPalette p,
+    List<BudgetModel> list,
+    List<BudgetModel> all,
+    String noun,
+  ) {
+    if (list.isEmpty) {
+      return EmptyState(
+        compact: true,
+        emoji: '🎯',
+        title: 'No $_period budgets',
+        message:
+            'Set a limit for a category and get a nudge as you approach it.',
+        actionLabel: 'Create budget',
+        onAction: () => _createBudget(all),
+      );
+    }
+
+    final totalSpent = list.fold<double>(0.0, (s, b) => s + b.spentAmount);
+    final totalLimit = list.fold<double>(0.0, (s, b) => s + b.amount);
+    final totalLeft = math.max(0.0, totalLimit - totalSpent);
+    final ratio = totalLimit > 0 ? totalSpent / totalLimit : 0.0;
+    final over = totalSpent > totalLimit;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AppCard(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 100,
+                height: 100,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 90,
+                      height: 90,
+                      child: CircularProgressIndicator(
+                        value: 1.0,
+                        strokeWidth: 10,
+                        color: p.surface2,
+                      ),
+                    ),
+                    TweenAnimationBuilder<double>(
+                      tween: Tween<double>(begin: 0, end: ratio.clamp(0.0, 1.0)),
+                      duration: AppMotion.slow,
+                      curve: AppMotion.enter,
+                      builder: (context, v, _) => SizedBox(
+                        width: 90,
+                        height: 90,
+                        child: CircularProgressIndicator(
+                          value: v,
+                          strokeWidth: 10,
+                          strokeCap: StrokeCap.round,
+                          color: budgetProgressColor(p, ratio),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${(ratio * 100).round()}%',
+                      style: AppText.title(p.ink),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      over ? 'Over this $noun by' : 'Left this $noun',
+                      style: AppText.caption(p.muted),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      CurrencyFormatter.format(
+                        over ? totalSpent - totalLimit : totalLeft,
+                      ),
+                      style: AppText.display(over ? p.expense : p.ink),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'of ${CurrencyFormatter.format(totalLimit)} budgeted',
+                      style: AppText.caption(p.muted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        const SectionHeader(title: 'Categories'),
+        SettingsGroup(
+          children: [
+            for (final b in list)
+              BudgetRow(budget: b, onTap: () => _showBudgetDetail(b)),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Text(
+          'You get a notification at 75%, 90% and 100% of each limit, once per $noun.',
+          style: AppText.caption(p.muted),
+        ),
+      ],
+    );
+  }
+}

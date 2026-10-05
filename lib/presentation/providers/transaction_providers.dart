@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/logging/app_logger.dart';
 import '../../data/models/transaction_model.dart';
 import '../../data/repositories/transaction_repository.dart';
+import '../../services/notifications/budget_alert_service.dart';
 import 'account_providers.dart';
+import 'budget_providers.dart';
 import 'insights_providers.dart';
 
 final transactionRepositoryProvider = Provider(
@@ -185,20 +189,24 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
   // proper error messages, while also refreshing account balances on success.
   Future<void> createTransaction(TransactionModel tx) async {
     await _repository.createTransaction(tx);
+    if (tx.isExpense) unawaited(BudgetAlertService.evaluate());
     await fetchInitial();
     _ref.read(accountListProvider.notifier).loadAccounts();
     _ref.invalidate(recentTransactionsProvider);
     _ref.invalidate(homeInsightsProvider);
     _ref.invalidate(analyticsSummaryProvider);
+    _ref.read(budgetListProvider.notifier).loadBudgets();
   }
 
   Future<void> updateTransaction(TransactionModel tx) async {
     await _repository.updateTransaction(tx);
+    if (tx.isExpense) unawaited(BudgetAlertService.evaluate());
     await fetchInitial();
     _ref.read(accountListProvider.notifier).loadAccounts();
     _ref.invalidate(recentTransactionsProvider);
     _ref.invalidate(homeInsightsProvider);
     _ref.invalidate(analyticsSummaryProvider);
+    _ref.read(budgetListProvider.notifier).loadBudgets();
   }
 
   Future<void> softDeleteTransaction(String id) async {
@@ -219,6 +227,7 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
     _ref.invalidate(recentTransactionsProvider);
     _ref.invalidate(homeInsightsProvider);
     _ref.invalidate(analyticsSummaryProvider);
+    _ref.read(budgetListProvider.notifier).loadBudgets();
   }
 
   Future<void> restoreTransaction(String id) async {
@@ -228,6 +237,7 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
     _ref.invalidate(recentTransactionsProvider);
     _ref.invalidate(homeInsightsProvider);
     _ref.invalidate(analyticsSummaryProvider);
+    _ref.read(budgetListProvider.notifier).loadBudgets();
   }
 
   /// Permanently removes an already soft-deleted transaction. Soft-deleted

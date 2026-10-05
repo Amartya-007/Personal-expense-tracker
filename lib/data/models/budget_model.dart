@@ -30,6 +30,13 @@ class BudgetModel {
   double get percentage =>
       amount > 0 ? (spentAmount / amount).clamp(0.0, 1.0) : 0.0;
 
+  /// Unclamped spent / limit (1.3 means 130% of the limit).
+  double get usedRatio => amount > 0 ? spentAmount / amount : 0.0;
+
+  /// How far past the limit spending is (0 when within budget).
+  double get overAmount =>
+      (spentAmount - amount).clamp(0.0, double.infinity);
+
   BudgetModel copyWith({
     String? id,
     String? categoryId,

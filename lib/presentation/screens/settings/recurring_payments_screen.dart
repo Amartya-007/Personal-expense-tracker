@@ -52,7 +52,7 @@ class RecurringPaymentsScreen extends ConsumerWidget {
     final ok = await confirmDestructive(
       context,
       title: 'Delete ${rule.name}?',
-      message: 'Future reminders for this payment will stop.',
+      message: 'It will no longer appear on Home.',
     );
     if (!ok) return;
     await ref
@@ -71,7 +71,7 @@ class RecurringPaymentsScreen extends ConsumerWidget {
       emptyEmoji: '🔁',
       emptyTitle: 'Nothing recurring',
       emptyMessage:
-          'Add rent, subscriptions or EMIs and get reminded when they are due.',
+          'Add rent, subscriptions or EMIs and mark them paid from Home when due.',
       addLabel: 'Add payment',
       onAdd: () => _add(context, ref),
       rowBuilder: (context, r) => ListRowTile(
