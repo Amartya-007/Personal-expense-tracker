@@ -1,720 +1,570 @@
 import 'dart:math' as math;
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+
 import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_motion.dart';
+import '../../../core/theme/app_palette.dart';
+import '../../../core/theme/app_text.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../../data/models/analytics_summary_model.dart';
 import '../../providers/budget_providers.dart';
 import '../../providers/insights_providers.dart';
+import '../../providers/settings_providers.dart';
+import '../../widgets/animated_progress_bar.dart';
+import '../../widgets/app_card.dart';
+import '../../widgets/async_section.dart';
+import '../../widgets/budget_row.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/fade_slide_in.dart';
+import '../../widgets/list_widgets.dart';
+import '../../widgets/pill_chips.dart';
+import '../../widgets/section_header.dart';
+import '../../widgets/skeleton.dart';
+
+const Map<DateTimeRangeType, String> _rangeLabels = {
+  DateTimeRangeType.today: 'Today',
+  DateTimeRangeType.thisWeek: 'This Week',
+  DateTimeRangeType.thisMonth: 'This Month',
+  DateTimeRangeType.lastMonth: 'Last Month',
+};
+
+/// How many categories get their own legend row before the rest are folded
+/// into "Other" (the legend used to overflow with many categories).
+const int _maxLegendRows = 5;
 
 class InsightsScreen extends ConsumerWidget {
   const InsightsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
     final rangeType = ref.watch(selectedDateRangeProvider);
     final analyticsAsync = ref.watch(analyticsSummaryProvider);
-    final spendingTrendAsync = ref.watch(spendingTrendProvider);
     final budgetsAsync = ref.watch(budgetListProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
+      backgroundColor: p.background,
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: EdgeInsets.fromLTRB(18, 16, 18, MediaQuery.of(context).padding.bottom + 130),
-          children: [
-            // Title
-            Text(
-              'Insights',
-              style: GoogleFonts.sora(
-                fontSize: 26,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.5,
-                color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-              ),
+        child: RefreshIndicator(
+          color: p.primary,
+          onRefresh: () async {
+            ref.invalidate(analyticsSummaryProvider);
+            ref.invalidate(spendingTrendProvider);
+            await ref.read(budgetListProvider.notifier).loadBudgets();
+          },
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(
+              18,
+              16,
+              18,
+              MediaQuery.of(context).padding.bottom + 130,
             ),
-            const SizedBox(height: 16),
-
-            // Date Range Filter Chips
-            SizedBox(
-              height: 40,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  _buildChip('Today', rangeType == DateTimeRangeType.today, () {
-                    ref.read(selectedDateRangeProvider.notifier).state = DateTimeRangeType.today;
-                  }, isDark),
-                  _buildChip('This Week', rangeType == DateTimeRangeType.thisWeek, () {
-                    ref.read(selectedDateRangeProvider.notifier).state = DateTimeRangeType.thisWeek;
-                  }, isDark),
-                  _buildChip('This Month', rangeType == DateTimeRangeType.thisMonth, () {
-                    ref.read(selectedDateRangeProvider.notifier).state = DateTimeRangeType.thisMonth;
-                  }, isDark),
-                  _buildChip('Last Month', rangeType == DateTimeRangeType.lastMonth, () {
-                    ref.read(selectedDateRangeProvider.notifier).state = DateTimeRangeType.lastMonth;
-                  }, isDark),
-                ],
+            children: [
+              FadeSlideIn(child: Text('Insights', style: AppText.display(p.ink))),
+              const SizedBox(height: 16),
+              FadeSlideIn(
+                index: 1,
+                child: PillChips(
+                  options: _rangeLabels.values.toList(),
+                  selected: _rangeLabels[rangeType]!,
+                  onSelected: (label) {
+                    ref.read(selectedDateRangeProvider.notifier).state =
+                        _rangeLabels.entries
+                            .firstWhere((e) => e.value == label)
+                            .key;
+                  },
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-
-            analyticsAsync.when(
-              data: (data) {
-                final categoryBreakdown = data.categoryBreakdown;
-                final totalExpense = data.totalExpense;
-                final totalIncome = data.totalIncome;
-
-                return Column(
+              const SizedBox(height: 16),
+              AsyncSection<AnalyticsSummaryModel>(
+                value: analyticsAsync,
+                skeletonHeight: 180,
+                errorLabel: 'Could not load insights',
+                onRetry: () => ref.invalidate(analyticsSummaryProvider),
+                builder: (data) => _AnalyticsBody(data: data),
+              ),
+              const SizedBox(height: 24),
+              FadeSlideIn(
+                index: 5,
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 1. Spending by Category Card
-                    Container(
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          isDark ? AppColors.cardShadowDark : AppColors.cardShadowLight,
-                        ],
-                        border: Border.all(
-                          color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                          width: 1.0,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Spending by category',
-                            style: GoogleFonts.sora(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-
-                          if (categoryBreakdown.isEmpty)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 24.0),
-                              child: Center(
-                                child: Text(
-                                  'No expenses for this period.',
-                                  style: GoogleFonts.sora(
-                                    fontSize: 12.5,
-                                    color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                  ),
-                                ),
-                              ),
-                            )
-                          else
-                            Row(
-                              children: [
-                                // Donut Chart with center label
-                                SizedBox(
-                                  width: 130,
-                                  height: 130,
-                                  child: Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      PieChart(
-                                        PieChartData(
-                                          sectionsSpace: 2,
-                                          centerSpaceRadius: 40,
-                                          startDegreeOffset: -90,
-                                          sections: categoryBreakdown.asMap().entries.map((entry) {
-                                            final idx = entry.key;
-                                            final item = entry.value;
-                                            final color = idx < AppColors.categoryPalette.length
-                                                ? AppColors.categoryPalette[idx]
-                                                : Color(item.categoryColor);
-
-                                            return PieChartSectionData(
-                                              value: item.totalAmount,
-                                              color: color,
-                                              radius: 20,
-                                              showTitle: false,
-                                            );
-                                          }).toList(),
-                                        ),
-                                      ),
-                                      Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            'Spent',
-                                            style: GoogleFonts.sora(
-                                              fontSize: 10,
-                                              color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                            ),
-                                          ),
-                                          Text(
-                                            CurrencyFormatter.format(totalExpense),
-                                            style: GoogleFonts.sora(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w800,
-                                              color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-
-                                // Category Legend
-                                Expanded(
-                                  child: Column(
-                                    children: categoryBreakdown.asMap().entries.map((entry) {
-                                      final idx = entry.key;
-                                      final item = entry.value;
-                                      final color = idx < AppColors.categoryPalette.length
-                                          ? AppColors.categoryPalette[idx]
-                                          : Color(item.categoryColor);
-
-                                      return Padding(
-                                        padding: const EdgeInsets.symmetric(vertical: 4),
-                                        child: Row(
-                                          children: [
-                                            Container(
-                                              width: 9,
-                                              height: 9,
-                                              decoration: BoxDecoration(
-                                                color: color,
-                                                borderRadius: BorderRadius.circular(3),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Expanded(
-                                              child: Text(
-                                                item.categoryName,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: GoogleFonts.sora(
-                                                  fontSize: 12,
-                                                  color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                                                ),
-                                              ),
-                                            ),
-                                            Text(
-                                              CurrencyFormatter.format(item.totalAmount),
-                                              style: GoogleFonts.sora(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w700,
-                                                color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    }).toList(),
-                                  ),
-                                ),
-                              ],
-                            ),
-                        ],
-                      ),
+                    SectionHeader(
+                      title: 'Budget progress',
+                      actionLabel: 'See all',
+                      onAction: () =>
+                          ref.read(mainTabProvider.notifier).state = 2,
                     ),
-
-                    const SizedBox(height: 24),
-
-                    // 2. Income vs Expense Card
-                    _buildSectionHeader('Income vs expense', isDark),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          isDark ? AppColors.cardShadowDark : AppColors.cardShadowLight,
-                        ],
-                        border: Border.all(
-                          color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                          width: 1.0,
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          // Income
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Income',
-                                style: GoogleFonts.sora(fontSize: 13, fontWeight: FontWeight.w600),
-                              ),
-                              Text(
-                                CurrencyFormatter.format(totalIncome),
-                                style: GoogleFonts.sora(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: isDark ? AppColors.incomeDark : AppColors.income,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(5),
-                            child: LinearProgressIndicator(
-                              value: totalIncome > 0 ? 1.0 : 0.0,
-                              backgroundColor: isDark ? AppColors.surface2Dark : AppColors.surface2Light,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                isDark ? AppColors.incomeDark : AppColors.income,
-                              ),
-                              minHeight: 8,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Expense
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Expense',
-                                style: GoogleFonts.sora(fontSize: 13, fontWeight: FontWeight.w600),
-                              ),
-                              Text(
-                                CurrencyFormatter.format(totalExpense),
-                                style: GoogleFonts.sora(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: isDark ? AppColors.expenseDark : AppColors.expense,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(5),
-                            child: LinearProgressIndicator(
-                              value: totalIncome > 0
-                                  ? (totalExpense / totalIncome).clamp(0.0, 1.0)
-                                  : (totalExpense > 0 ? 1.0 : 0.0),
-                              backgroundColor: isDark ? AppColors.surface2Dark : AppColors.surface2Light,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                isDark ? AppColors.expenseDark : AppColors.expense,
-                              ),
-                              minHeight: 8,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // 3. Spending Trend Sparkline Chart (Real Data)
-                    _buildSectionHeader('Spending trend', isDark),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 14),
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          isDark ? AppColors.cardShadowDark : AppColors.cardShadowLight,
-                        ],
-                        border: Border.all(
-                          color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                          width: 1.0,
-                        ),
-                      ),
-                      child: spendingTrendAsync.when(
-                        data: (spots) {
-                          final maxY = spots.isEmpty ? 100.0 : spots.map((s) => s.y).reduce(math.max);
-                          return Column(
-                            children: [
-                              SizedBox(
-                                height: 100,
-                                child: LineChart(
-                                  LineChartData(
-                                    gridData: const FlGridData(show: false),
-                                    titlesData: const FlTitlesData(show: false),
-                                    borderData: FlBorderData(show: false),
-                                    minX: 0,
-                                    maxX: spots.isNotEmpty ? (spots.length - 1).toDouble() : 7.0,
-                                    minY: 0,
-                                    maxY: maxY > 0 ? maxY * 1.2 : 100.0,
-                                    lineBarsData: [
-                                      LineChartBarData(
-                                        spots: spots.isEmpty ? [const FlSpot(0, 0)] : spots,
-                                        isCurved: true,
-                                        color: isDark ? AppColors.primaryDark : AppColors.primary,
-                                        barWidth: 3.5,
-                                        isStrokeCapRound: true,
-                                        dotData: const FlDotData(show: false),
-                                        belowBarData: BarAreaData(
-                                          show: true,
-                                          color: (isDark ? AppColors.primaryDark : AppColors.primary).withValues(alpha: 0.1),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Start',
-                                    style: GoogleFonts.sora(
-                                      fontSize: 11,
-                                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                    ),
-                                  ),
-                                  Text(
-                                    'End',
-                                    style: GoogleFonts.sora(
-                                      fontSize: 11,
-                                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          );
-                        },
-                        loading: () => const SizedBox(height: 100, child: Center(child: CircularProgressIndicator())),
-                        error: (_, __) => const SizedBox(height: 100, child: Center(child: Text('Could not load trend'))),
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // 4. By Payment Method Vertical Columns
-                    _buildSectionHeader('By payment method', isDark),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          isDark ? AppColors.cardShadowDark : AppColors.cardShadowLight,
-                        ],
-                        border: Border.all(
-                          color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                          width: 1.0,
-                        ),
-                      ),
-                      child: data.paymentMethodBreakdown.isEmpty
-                          ? Center(
-                              child: Text(
-                                'No payment method records.',
-                                style: GoogleFonts.sora(
-                                  fontSize: 12,
-                                  color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                ),
-                              ),
-                            )
-                          : SizedBox(
-                              height: 120,
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: data.paymentMethodBreakdown.map((pm) {
-                                  final double total = data.paymentMethodBreakdown.fold(0.0, (s, e) => s + e.totalAmount);
-                                  final double pct = total > 0 ? (pm.totalAmount / total) : 0.3;
-                                  final barHeight = (pct * 80).clamp(16.0, 80.0);
-
-                                  return Expanded(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.end,
-                                      children: [
-                                        Container(
-                                          width: 32,
-                                          height: barHeight,
-                                          decoration: BoxDecoration(
-                                            color: isDark ? AppColors.primaryDark : AppColors.primary,
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          pm.paymentMethod,
-                                          style: GoogleFonts.sora(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600,
-                                            color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                          ),
-                                        ),
-                                        Text(
-                                          '${(pct * 100).round()}%',
-                                          style: GoogleFonts.sora(
-                                            fontSize: 10,
-                                            color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                            ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // 5. By Account Breakdown
-                    _buildSectionHeader('By account', isDark),
-                    const SizedBox(height: 8),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          isDark ? AppColors.cardShadowDark : AppColors.cardShadowLight,
-                        ],
-                        border: Border.all(
-                          color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                          width: 1.0,
-                        ),
-                      ),
-                      child: data.accountBreakdown.isEmpty
-                          ? Padding(
-                              padding: const EdgeInsets.all(18.0),
-                              child: Center(
-                                child: Text(
-                                  'No account records.',
-                                  style: GoogleFonts.sora(
-                                    fontSize: 12,
-                                    color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                  ),
-                                ),
-                              ),
-                            )
-                          : Column(
-                              children: List.generate(data.accountBreakdown.length, (index) {
-                                final acc = data.accountBreakdown[index];
-                                final isLast = index == data.accountBreakdown.length - 1;
-
-                                return Column(
-                                  children: [
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            acc.accountName,
-                                            style: GoogleFonts.sora(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                              color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                                            ),
-                                          ),
-                                          Text(
-                                            CurrencyFormatter.format(acc.totalAmount),
-                                            style: GoogleFonts.sora(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w700,
-                                              color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    if (!isLast)
-                                      Divider(
-                                        color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                                        height: 1,
-                                      ),
-                                  ],
-                                );
-                              }),
-                            ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // 6. Budget Utilization Card
-                    _buildSectionHeader('Budget utilization', isDark),
-                    const SizedBox(height: 8),
-                    budgetsAsync.when(
-                      data: (budgets) {
+                    AsyncSection(
+                      value: budgetsAsync,
+                      errorLabel: 'Could not load budgets',
+                      onRetry: () =>
+                          ref.read(budgetListProvider.notifier).loadBudgets(),
+                      builder: (budgets) {
                         if (budgets.isEmpty) {
-                          return Container(
-                            padding: const EdgeInsets.all(18),
-                            decoration: BoxDecoration(
-                              color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                'No budgets active.',
-                                style: GoogleFonts.sora(
-                                  fontSize: 12,
-                                  color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                ),
-                              ),
-                            ),
+                          return const EmptyState(
+                            compact: true,
+                            emoji: '🎯',
+                            title: 'No budgets yet',
+                            message: 'Create one from the Budgets tab.',
                           );
                         }
-
-                        return Container(
-                          decoration: BoxDecoration(
-                            color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              isDark ? AppColors.cardShadowDark : AppColors.cardShadowLight,
-                            ],
-                            border: Border.all(
-                              color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                              width: 1.0,
-                            ),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                          child: Column(
-                            children: List.generate(budgets.length, (index) {
-                              final b = budgets[index];
-                              final isLast = index == budgets.length - 1;
-                              final percent = (b.percentage * 100).round();
-                              Color barColor = isDark ? AppColors.primaryDark : AppColors.primary;
-                              if (b.percentage >= 1.0) {
-                                barColor = AppColors.expense;
-                              } else if (b.percentage >= 0.75) {
-                                barColor = AppColors.secondary;
-                              }
-
-                              return Column(
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Text(
-                                              '${AppColors.getCategoryEmoji(b.categoryName)} ${b.categoryName ?? 'Budget'}',
-                                              style: GoogleFonts.sora(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w600,
-                                                color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                                              ),
-                                            ),
-                                            Text(
-                                              '${CurrencyFormatter.format(b.spentAmount)} / ${CurrencyFormatter.format(b.amount)}',
-                                              style: GoogleFonts.sora(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w600,
-                                                color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 8),
-                                        ClipRRect(
-                                          borderRadius: BorderRadius.circular(5),
-                                          child: LinearProgressIndicator(
-                                            value: b.percentage.clamp(0.0, 1.0),
-                                            backgroundColor: isDark ? AppColors.surface2Dark : AppColors.surface2Light,
-                                            valueColor: AlwaysStoppedAnimation<Color>(barColor),
-                                            minHeight: 8,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          b.percentage >= 1.0
-                                              ? 'Limit reached · $percent% used'
-                                              : '${CurrencyFormatter.format(b.remainingAmount)} left · $percent% used',
-                                          style: GoogleFonts.sora(
-                                            fontSize: 12,
-                                            color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  if (!isLast)
-                                    Divider(
-                                      color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                                      height: 1,
-                                    ),
-                                ],
-                              );
-                            }),
-                          ),
+                        return SettingsGroup(
+                          children: [
+                            for (final b in budgets.take(4)) BudgetRow(budget: b),
+                          ],
                         );
                       },
-                      loading: () => const SizedBox.shrink(),
-                      error: (_, __) => const SizedBox.shrink(),
                     ),
                   ],
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, _) => Center(child: Text('Error: $err')),
-            ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnalyticsBody extends ConsumerWidget {
+  final AnalyticsSummaryModel data;
+
+  const _AnalyticsBody({required this.data});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FadeSlideIn(index: 2, child: _CategoryCard(data: data)),
+        const SizedBox(height: 24),
+        FadeSlideIn(
+          index: 3,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SectionHeader(title: 'Income vs expense'),
+              _IncomeExpenseCard(data: data),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        FadeSlideIn(
+          index: 4,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SectionHeader(title: 'Spending trend'),
+              const _TrendCard(),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SectionHeader(title: 'By payment method'),
+            if (data.paymentMethodBreakdown.isEmpty)
+              const EmptyState(
+                compact: true,
+                emoji: '💳',
+                title: 'No payments in this period',
+              )
+            else
+              _PaymentBars(items: data.paymentMethodBreakdown),
           ],
         ),
+        const SizedBox(height: 24),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SectionHeader(title: 'By account'),
+            if (data.accountBreakdown.isEmpty)
+              const EmptyState(
+                compact: true,
+                emoji: '🏦',
+                title: 'No account activity in this period',
+              )
+            else
+              SettingsGroup(
+                children: [
+                  for (final acc in data.accountBreakdown)
+                    ListRowTile(
+                      emoji: '🏦',
+                      title: acc.accountName,
+                      trailing: Text(
+                        CurrencyFormatter.format(acc.totalAmount),
+                        style: AppText.bodyStrong(p.ink),
+                      ),
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _CategoryCard extends StatelessWidget {
+  final AnalyticsSummaryModel data;
+
+  const _CategoryCard({required this.data});
+
+  Color _color(int idx, CategorySpending item) => idx < AppColors.categoryPalette.length
+      ? AppColors.categoryPalette[idx]
+      : Color(item.categoryColor);
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final items = data.categoryBreakdown;
+
+    if (items.isEmpty) {
+      return const EmptyState(
+        compact: true,
+        emoji: '🧾',
+        title: 'No expenses in this period',
+        message: 'Spending by category will appear here.',
+      );
+    }
+
+    final shown = items.take(_maxLegendRows).toList();
+    final rest = items.skip(_maxLegendRows).toList();
+    final otherTotal = rest.fold<double>(0.0, (s, e) => s + e.totalAmount);
+    final total = data.totalExpense;
+
+    return AppCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Spending by category', style: AppText.bodyStrong(p.ink)),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              SizedBox(
+                width: 130,
+                height: 130,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    PieChart(
+                      PieChartData(
+                        sectionsSpace: 2,
+                        centerSpaceRadius: 40,
+                        startDegreeOffset: -90,
+                        sections: [
+                          for (var i = 0; i < items.length; i++)
+                            PieChartSectionData(
+                              value: items[i].totalAmount,
+                              color: _color(i, items[i]),
+                              radius: 20,
+                              showTitle: false,
+                            ),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Spent', style: AppText.caption(p.muted).copyWith(fontSize: 10)),
+                        Text(
+                          CurrencyFormatter.format(total),
+                          style: AppText.bodyStrong(p.ink),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  children: [
+                    for (var i = 0; i < shown.length; i++)
+                      _LegendRow(
+                        color: _color(i, shown[i]),
+                        name: shown[i].categoryName,
+                        amount: shown[i].totalAmount,
+                        share: total > 0 ? shown[i].totalAmount / total : 0,
+                      ),
+                    if (rest.isNotEmpty)
+                      _LegendRow(
+                        color: p.muted,
+                        name: 'Other (${rest.length})',
+                        amount: otherTotal,
+                        share: total > 0 ? otherTotal / total : 0,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
+}
 
-  Widget _buildChip(String label, bool isSelected, VoidCallback onTap, bool isDark) {
+class _LegendRow extends StatelessWidget {
+  final Color color;
+  final String name;
+  final double amount;
+  final double share;
+
+  const _LegendRow({
+    required this.color,
+    required this.name,
+    required this.amount,
+    required this.share,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
     return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? (isDark ? AppColors.primaryDark : AppColors.primary)
-                : (isDark ? AppColors.surfaceDark : AppColors.surfaceLight),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isSelected
-                  ? Colors.transparent
-                  : (isDark ? AppColors.borderDark : AppColors.borderLight),
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Container(
+            width: 9,
+            height: 9,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(3),
             ),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: (isDark ? AppColors.primaryDark : AppColors.primary).withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
           ),
-          child: Center(
+          const SizedBox(width: 8),
+          Expanded(
             child: Text(
-              label,
-              style: GoogleFonts.sora(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-                color: isSelected
-                    ? (isDark ? const Color(0xFF12102E) : Colors.white)
-                    : (isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight),
-              ),
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.caption(p.ink),
             ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '${(share * 100).round()}%',
+            style: AppText.caption(p.muted).copyWith(fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IncomeExpenseCard extends StatelessWidget {
+  final AnalyticsSummaryModel data;
+
+  const _IncomeExpenseCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final income = data.totalIncome;
+    final expense = data.totalExpense;
+    final net = income - expense;
+
+    Widget line(String label, double value, double fill, Color color) => Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(label, style: AppText.body(p.ink)),
+                Text(CurrencyFormatter.format(value), style: AppText.bodyStrong(color)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            AnimatedProgressBar(value: fill, color: color),
+          ],
+        );
+
+    return AppCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        children: [
+          line('Income', income, income > 0 ? 1.0 : 0.0, p.income),
+          const SizedBox(height: 16),
+          line(
+            'Expense',
+            expense,
+            income > 0 ? (expense / income).clamp(0.0, 1.0) : (expense > 0 ? 1.0 : 0.0),
+            p.expense,
+          ),
+          const SizedBox(height: 14),
+          Divider(color: p.border, height: 1),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(net >= 0 ? 'Saved' : 'Overspent', style: AppText.body(p.muted)),
+              Text(
+                CurrencyFormatter.format(net.abs()),
+                style: AppText.bodyStrong(net >= 0 ? p.income : p.expense),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrendCard extends ConsumerWidget {
+  const _TrendCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+    final trendAsync = ref.watch(spendingTrendProvider);
+    final range = insightsRange(ref.watch(selectedDateRangeProvider));
+    final fmt = DateFormat('d MMM');
+
+    return AppCard(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 14),
+      child: trendAsync.when(
+        skipLoadingOnReload: true,
+        loading: () => const SizedBox(
+          height: 120,
+          child: Center(child: Skeleton(height: 90)),
+        ),
+        error: (_, __) => SizedBox(
+          height: 100,
+          child: Center(
+            child: Text('Could not load trend', style: AppText.caption(p.muted)),
           ),
         ),
+        data: (spots) {
+          // A single point has no width to draw a line across (Today).
+          if (spots.length < 2) {
+            return SizedBox(
+              height: 100,
+              child: Center(
+                child: Text(
+                  'A trend appears once the period spans more than one day.',
+                  textAlign: TextAlign.center,
+                  style: AppText.caption(p.muted),
+                ),
+              ),
+            );
+          }
+          final maxY = spots.map((s) => s.y).reduce(math.max);
+          return Column(
+            children: [
+              SizedBox(
+                height: 100,
+                child: LineChart(
+                  LineChartData(
+                    gridData: const FlGridData(show: false),
+                    titlesData: const FlTitlesData(show: false),
+                    borderData: FlBorderData(show: false),
+                    lineTouchData: const LineTouchData(enabled: false),
+                    minX: 0,
+                    maxX: (spots.length - 1).toDouble(),
+                    minY: 0,
+                    maxY: maxY > 0 ? maxY * 1.2 : 100.0,
+                    lineBarsData: [
+                      LineChartBarData(
+                        spots: spots,
+                        isCurved: true,
+                        color: p.primary,
+                        barWidth: 3.5,
+                        isStrokeCapRound: true,
+                        dotData: const FlDotData(show: false),
+                        belowBarData: BarAreaData(
+                          show: true,
+                          color: p.primary.withValues(alpha: 0.1),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Real dates instead of the old "Start" / "End" placeholders.
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(fmt.format(range.start), style: AppText.caption(p.muted).copyWith(fontSize: 11)),
+                  Text(fmt.format(range.end), style: AppText.caption(p.muted).copyWith(fontSize: 11)),
+                ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }
+}
 
-  Widget _buildSectionHeader(String title, bool isDark) {
-    return Text(
-      title,
-      style: GoogleFonts.sora(
-        fontSize: 15,
-        fontWeight: FontWeight.w800,
-        color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+class _PaymentBars extends StatelessWidget {
+  final List<PaymentMethodSpending> items;
+
+  const _PaymentBars({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final total = items.fold<double>(0.0, (s, e) => s + e.totalAmount);
+
+    return AppCard(
+      padding: const EdgeInsets.all(18),
+      child: SizedBox(
+        height: 130,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            for (final pm in items)
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TweenAnimationBuilder<double>(
+                      tween: Tween<double>(
+                        begin: 0,
+                        end: total > 0
+                            ? ((pm.totalAmount / total) * 80).clamp(16.0, 80.0)
+                            : 16.0,
+                      ),
+                      duration: AppMotion.slow,
+                      curve: AppMotion.enter,
+                      builder: (context, h, _) => Container(
+                        width: 32,
+                        height: h,
+                        decoration: BoxDecoration(
+                          color: p.primary,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      pm.paymentMethod,
+                      style: AppText.caption(p.muted).copyWith(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      '${total > 0 ? (pm.totalAmount / total * 100).round() : 0}%',
+                      style: AppText.caption(p.muted).copyWith(fontSize: 10),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
