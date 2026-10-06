@@ -186,6 +186,43 @@ class BackupService {
     }
   }
 
+  /// Creates a complete backup silently, in private app storage
+  /// (`safety_backups/`), and verifies it. Used right before destructive
+  /// operations. There is no dialog and no user step.
+  ///
+  /// Throws if the backup cannot be created or fails verification, so the
+  /// caller can abort instead of proceeding without a safety net. Safety
+  /// backups are never pruned automatically: after "delete all data" a newer
+  /// (empty) backup must not replace the only copy of the real data.
+  Future<File> createSafetyBackup() async {
+    final created = await createFullBackupPackage();
+    try {
+      await verifyBackupArchive(created);
+
+      final docsDir = await _getDocsDirectory();
+      final dir = Directory(p.join(docsDir.path, 'safety_backups'));
+      await dir.create(recursive: true);
+
+      final target = File(
+        p.join(dir.path, 'MyKhata_PreDelete_${DateTime.now().millisecondsSinceEpoch}.zip'),
+      );
+      await created.copy(target.path);
+      if (!await target.exists() || await target.length() == 0) {
+        throw Exception('The safety backup could not be stored.');
+      }
+
+      await created.delete();
+      await AppLogger.i('Created safety backup before a destructive operation');
+      return target;
+    } catch (_) {
+      // Leave nothing half-made behind.
+      try {
+        if (await created.exists()) await created.delete();
+      } catch (_) {}
+      rethrow;
+    }
+  }
+
   /// A readable location for the path returned by [exportBackupForUser].
   /// Android returns a document path such as `/document/primary:Download/x.zip`.
   static String describeSavedLocation(String savedPath) {

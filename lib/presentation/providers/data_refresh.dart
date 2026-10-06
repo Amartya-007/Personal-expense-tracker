@@ -6,6 +6,7 @@ import 'category_providers.dart';
 import 'insights_providers.dart';
 import 'receipt_providers.dart';
 import 'recurring_providers.dart';
+import 'sms_review_providers.dart';
 import 'tag_providers.dart';
 import 'transaction_providers.dart';
 
@@ -23,6 +24,9 @@ Future<void> refreshAllAppData(WidgetRef ref) async {
   ref.invalidate(incomeCategoriesProvider);
   ref.invalidate(tagsListProvider);
   ref.invalidate(receiptGalleryProvider);
+  // The SMS review queue is stored in the same database. Invalidating the
+  // whole family only drops the in-memory copies; they reload on next use.
+  ref.invalidate(smsQueueProvider);
 
   await Future.wait([
     ref.read(transactionListProvider.notifier).fetchInitial(),

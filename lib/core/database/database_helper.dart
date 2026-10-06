@@ -15,6 +15,83 @@ class DatabaseHelper {
   static final String _dbName = AppConstants.dbFileName;
   static const int _dbVersion = 1;
 
+  // Seed data created on first run. Shared with [deleteAllUserData] so that a
+  // reset returns to exactly this state.
+  static const List<Map<String, String>> _defaultTags = [
+    {'id': 'tag_college', 'name': 'College'},
+    {'id': 'tag_personal', 'name': 'Personal'},
+    {'id': 'tag_important', 'name': 'Important'},
+    {'id': 'tag_travel', 'name': 'Travel'},
+    {'id': 'tag_monthly', 'name': 'Monthly'},
+    {'id': 'tag_office', 'name': 'Office'},
+    {'id': 'tag_family', 'name': 'Family'},
+    {'id': 'tag_tea','name':'Tea'}
+  ];
+
+  static const List<Map<String, String>> _defaultRules = [
+    {'id': 'rule_momos', 'keyword': 'momos', 'category_id': 'cat_food'},
+    {'id': 'rule_swiggy', 'keyword': 'swiggy', 'category_id': 'cat_food'},
+    {'id': 'rule_zomato', 'keyword': 'zomato', 'category_id': 'cat_food'},
+    {'id': 'rule_pizza', 'keyword': 'pizza', 'category_id': 'cat_food'},
+    {'id': 'rule_burger', 'keyword': 'burger', 'category_id': 'cat_food'},
+    {'id': 'rule_chinese', 'keyword': 'chinese', 'category_id': 'cat_food'},
+    {'id': 'rule_pen', 'keyword': 'pen', 'category_id': 'cat_stationery'},
+    {
+      'id': 'rule_notebook',
+      'keyword': 'notebook',
+      'category_id': 'cat_stationery',
+    },
+    {'id': 'rule_books', 'keyword': 'books', 'category_id': 'cat_stationery'},
+    {
+      'id': 'rule_screenguard',
+      'keyword': 'screen guard',
+      'category_id': 'cat_electronics',
+    },
+    {
+      'id': 'rule_screenprot',
+      'keyword': 'screen protector',
+      'category_id': 'cat_electronics',
+    },
+    {
+      'id': 'rule_charger',
+      'keyword': 'charger',
+      'category_id': 'cat_electronics',
+    },
+    {
+      'id': 'rule_earphones',
+      'keyword': 'earphones',
+      'category_id': 'cat_electronics',
+    },
+    {
+      'id': 'rule_recharge',
+      'keyword': 'recharge',
+      'category_id': 'cat_bills',
+    },
+    {
+      'id': 'rule_electricity',
+      'keyword': 'electricity',
+      'category_id': 'cat_bills',
+    },
+    {'id': 'rule_uber', 'keyword': 'uber', 'category_id': 'cat_transport'},
+    {'id': 'rule_ola', 'keyword': 'ola', 'category_id': 'cat_transport'},
+    {
+      'id': 'rule_rapido',
+      'keyword': 'rapido',
+      'category_id': 'cat_transport',
+    },
+    {
+      'id': 'rule_petrol',
+      'keyword': 'petrol',
+      'category_id': 'cat_transport',
+    },
+    {'id': 'rule_amazon', 'keyword': 'amazon', 'category_id': 'cat_shopping'},
+    {
+      'id': 'rule_flipkart',
+      'keyword': 'flipkart',
+      'category_id': 'cat_shopping',
+    },
+  ];
+
   static final DatabaseHelper instance = DatabaseHelper._internal();
   static Database? _database;
 
@@ -140,88 +217,15 @@ class DatabaseHelper {
       });
     }
 
-    const defaultTags = [
-      {'id': 'tag_college', 'name': 'College'},
-      {'id': 'tag_personal', 'name': 'Personal'},
-      {'id': 'tag_important', 'name': 'Important'},
-      {'id': 'tag_travel', 'name': 'Travel'},
-      {'id': 'tag_monthly', 'name': 'Monthly'},
-      {'id': 'tag_office', 'name': 'Office'},
-      {'id': 'tag_family', 'name': 'Family'},
-      {'id': 'tag_tea','name':'Tea'}
-    ];
-    for (final tag in defaultTags) {
+    for (final tag in _defaultTags) {
       seedBatch.insert('tags', {
         'id': tag['id'],
         'name': tag['name'],
       });
     }
 
-    const defaultRules = [
-      {'id': 'rule_momos', 'keyword': 'momos', 'category_id': 'cat_food'},
-      {'id': 'rule_swiggy', 'keyword': 'swiggy', 'category_id': 'cat_food'},
-      {'id': 'rule_zomato', 'keyword': 'zomato', 'category_id': 'cat_food'},
-      {'id': 'rule_pizza', 'keyword': 'pizza', 'category_id': 'cat_food'},
-      {'id': 'rule_burger', 'keyword': 'burger', 'category_id': 'cat_food'},
-      {'id': 'rule_chinese', 'keyword': 'chinese', 'category_id': 'cat_food'},
-      {'id': 'rule_pen', 'keyword': 'pen', 'category_id': 'cat_stationery'},
-      {
-        'id': 'rule_notebook',
-        'keyword': 'notebook',
-        'category_id': 'cat_stationery',
-      },
-      {'id': 'rule_books', 'keyword': 'books', 'category_id': 'cat_stationery'},
-      {
-        'id': 'rule_screenguard',
-        'keyword': 'screen guard',
-        'category_id': 'cat_electronics',
-      },
-      {
-        'id': 'rule_screenprot',
-        'keyword': 'screen protector',
-        'category_id': 'cat_electronics',
-      },
-      {
-        'id': 'rule_charger',
-        'keyword': 'charger',
-        'category_id': 'cat_electronics',
-      },
-      {
-        'id': 'rule_earphones',
-        'keyword': 'earphones',
-        'category_id': 'cat_electronics',
-      },
-      {
-        'id': 'rule_recharge',
-        'keyword': 'recharge',
-        'category_id': 'cat_bills',
-      },
-      {
-        'id': 'rule_electricity',
-        'keyword': 'electricity',
-        'category_id': 'cat_bills',
-      },
-      {'id': 'rule_uber', 'keyword': 'uber', 'category_id': 'cat_transport'},
-      {'id': 'rule_ola', 'keyword': 'ola', 'category_id': 'cat_transport'},
-      {
-        'id': 'rule_rapido',
-        'keyword': 'rapido',
-        'category_id': 'cat_transport',
-      },
-      {
-        'id': 'rule_petrol',
-        'keyword': 'petrol',
-        'category_id': 'cat_transport',
-      },
-      {'id': 'rule_amazon', 'keyword': 'amazon', 'category_id': 'cat_shopping'},
-      {
-        'id': 'rule_flipkart',
-        'keyword': 'flipkart',
-        'category_id': 'cat_shopping',
-      },
-    ];
 
-    for (final rule in defaultRules) {
+    for (final rule in _defaultRules) {
       seedBatch.insert('category_rules', {
         'id': rule['id'],
         'keyword': rule['keyword'],
@@ -231,6 +235,85 @@ class DatabaseHelper {
     }
 
     await seedBatch.commit(noResult: true);
+  }
+
+  /// Permanently deletes everything the user created, in ONE transaction:
+  /// either all of it is removed or, if anything fails, none of it is.
+  ///
+  /// Kept: the schema, default categories, and the default tags and
+  /// categorisation rules (any of those the user had deleted are put back), so
+  /// the database ends up in the same state as a fresh install.
+  ///
+  /// No logging inside the transaction: [AppLogger] writes to this same
+  /// database and would wait for the transaction to finish.
+  Future<void> deleteAllUserData() async {
+    final db = await database;
+
+    await db.transaction((txn) async {
+      // Children before parents: foreign keys are enforced.
+      const userTables = [
+        'transaction_tags',
+        'receipts',
+        'transactions',
+        'balance_adjustments',
+        'recurring_payments',
+        'budgets',
+        'sms_review_queue',
+        'app_logs',
+        'accounts',
+      ];
+      for (final table in userTables) {
+        await txn.delete(table);
+      }
+
+      // User-created categories only. Their rules go with them (ON DELETE CASCADE).
+      await txn.delete('categories', where: 'is_default = 0');
+
+      // Tags and rules the app does not seed.
+      final tagIds = [for (final t in _defaultTags) t['id']!];
+      await txn.delete(
+        'tags',
+        where: 'id NOT IN (${List.filled(tagIds.length, '?').join(',')})',
+        whereArgs: tagIds,
+      );
+      final ruleIds = [for (final r in _defaultRules) r['id']!];
+      await txn.delete(
+        'category_rules',
+        where: 'id NOT IN (${List.filled(ruleIds.length, '?').join(',')})',
+        whereArgs: ruleIds,
+      );
+
+      // Put back any default tag/rule the user had removed.
+      final now = DateTime.now().millisecondsSinceEpoch;
+      for (final tag in _defaultTags) {
+        await txn.insert(
+          'tags',
+          {'id': tag['id'], 'name': tag['name']},
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+      }
+      for (final rule in _defaultRules) {
+        await txn.insert(
+          'category_rules',
+          {
+            'id': rule['id'],
+            'keyword': rule['keyword'],
+            'category_id': rule['category_id'],
+            'created_at': now,
+          },
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+      }
+    });
+
+    // Deleted rows otherwise linger in free pages and the WAL file. Not part of
+    // the transaction (VACUUM cannot run inside one); failure is harmless.
+    try {
+      await db.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+    } catch (_) {}
+    try {
+      await db.execute('VACUUM');
+    } catch (_) {}
   }
 
   Future<void> close() async {

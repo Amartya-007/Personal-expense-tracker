@@ -5,9 +5,12 @@ import '../../../core/navigation/app_routes.dart';
 import '../../../core/permissions/permission_service.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/theme/app_text.dart';
+import '../../../services/backup/data_reset_service.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/data_refresh.dart';
 import '../../providers/settings_providers.dart';
 import '../../providers/sms_review_providers.dart';
+import '../../providers/transaction_providers.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_sheets.dart';
 import '../../widgets/fade_slide_in.dart';
@@ -15,6 +18,7 @@ import '../../widgets/list_widgets.dart';
 import '../../widgets/pressable.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/sms_permission_help.dart';
+import '../onboarding/onboarding_screen.dart';
 import '../sms_review/sms_review_screen.dart';
 import 'accounts_management_screen.dart';
 import 'backup_restore_screen.dart';
@@ -154,6 +158,74 @@ class SettingsScreen extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+
+  /// Deletes all app data after confirmation. A safety backup is made first
+  /// (silently); if it cannot be made, or the deletion fails, nothing changes.
+  Future<void> _deleteAllData(BuildContext context, WidgetRef ref) async {
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'Delete all data?',
+      message:
+          'This permanently erases every transaction, account, budget, recurring payment, tag, receipt and log on this phone, and MyKhata starts fresh.\n\nA safety backup is created automatically first. If it cannot be created, nothing is deleted.',
+      confirmLabel: 'Delete everything',
+    );
+    if (!confirmed || !context.mounted) return;
+
+    // Block the screen while the backup and deletion run.
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const PopScope(
+        canPop: false,
+        child: AlertDialog(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
+              SizedBox(width: 20),
+              Expanded(child: Text('Backing up, then deleting…')),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    String? failure;
+    try {
+      await DataResetService().deleteAllData();
+    } on DataResetException catch (e) {
+      failure = e.message;
+    } catch (_) {
+      failure = 'Something went wrong. Please check your data before trying again.';
+    }
+
+    navigator.pop(); // close the progress dialog
+    if (failure != null) {
+      messenger.showSnackBar(SnackBar(content: Text(failure)));
+      return;
+    }
+
+    // Bring in-memory state in line with the now-empty database.
+    ref.read(transactionListProvider.notifier).clearFilters();
+    ref.invalidate(userNameProvider);
+    ref.invalidate(defaultUpiAccountProvider);
+    ref.read(mainTabProvider.notifier).state = 0;
+    await refreshAllAppData(ref);
+
+    // Back to the first-run flow (it creates the first account).
+    AppRoutes.fadeResetTo(navigator, const OnboardingScreen());
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('All data deleted. A safety backup was kept in private app storage.'),
+      ),
     );
   }
 
@@ -384,6 +456,45 @@ class SettingsScreen extends ConsumerWidget {
                 onTap: () => _showAbout(context),
               ),
             ]),
+            const SizedBox(height: 22),
+
+            FadeSlideIn(
+              index: 6,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SectionHeader(title: 'Danger zone'),
+                  AppCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Erases everything on this phone and starts MyKhata fresh. A safety backup is made automatically first; if that fails, nothing is deleted.',
+                          style: AppText.caption(p.muted),
+                        ),
+                        const SizedBox(height: 14),
+                        OutlinedButton.icon(
+                          onPressed: () => _deleteAllData(context, ref),
+                          icon: const Icon(Icons.delete_forever_rounded),
+                          label: const Text('Delete All Data'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: p.expense,
+                            side: BorderSide(
+                              color: p.expense.withValues(alpha: 0.5),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),

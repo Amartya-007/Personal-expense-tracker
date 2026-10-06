@@ -69,6 +69,13 @@ class AppRoutes {
     return Navigator.of(context).pushReplacement<T, R>(_fade<T>(page));
   }
 
+  /// Replace the whole navigation stack with [page] using a cross-fade (used
+  /// to return to onboarding after "delete all data"). Takes the navigator
+  /// itself so it can be called after awaiting.
+  static Future<T?> fadeResetTo<T>(NavigatorState navigator, Widget page) {
+    return navigator.pushAndRemoveUntil<T>(_fade<T>(page), (route) => false);
+  }
+
   static Route<T> _fade<T>(Widget page) {
     return PageRouteBuilder<T>(
       pageBuilder: (_, __, ___) => page,
