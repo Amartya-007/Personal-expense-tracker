@@ -4,14 +4,9 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/theme/app_palette.dart';
 import '../../../data/models/tag_model.dart';
-import '../../../data/repositories/tag_repository.dart';
+import '../../providers/tag_providers.dart';
 import '../../widgets/app_sheets.dart';
 import '../../widgets/list_widgets.dart';
-
-final tagRepositoryProvider = Provider((ref) => TagRepository());
-final tagsListProvider = FutureProvider<List<TagModel>>((ref) async {
-  return await ref.watch(tagRepositoryProvider).getAllTags();
-});
 
 class TagsManagementScreen extends ConsumerWidget {
   const TagsManagementScreen({super.key});

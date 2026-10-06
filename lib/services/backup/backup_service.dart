@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
@@ -112,6 +113,85 @@ class BackupService {
       await AppLogger.e('Backup creation failed', error: e, stackTrace: stack);
       rethrow;
     }
+  }
+
+  /// Confirms a backup ZIP is complete and readable: it must contain the
+  /// manifest and the database, and the database must match the checksum
+  /// recorded in the manifest. Throws if anything is wrong.
+  Future<void> verifyBackupArchive(File zipFile) async {
+    final bytes = await zipFile.readAsBytes();
+    if (bytes.isEmpty) throw Exception('The backup file is empty.');
+
+    final archive = ZipDecoder().decodeBytes(bytes);
+    ArchiveFile? manifestEntry;
+    ArchiveFile? dbEntry;
+    for (final file in archive) {
+      if (!file.isFile) continue;
+      if (file.name == 'manifest.json') manifestEntry = file;
+      if (file.name == AppConstants.dbFileName) dbEntry = file;
+    }
+    if (manifestEntry == null || dbEntry == null) {
+      throw Exception('The backup is missing its manifest or database.');
+    }
+
+    final manifest =
+        jsonDecode(utf8.decode(manifestEntry.content as List<int>))
+            as Map<String, dynamic>;
+    final expectedChecksum = manifest['dbChecksum'] as String?;
+    if (expectedChecksum != null && expectedChecksum.isNotEmpty) {
+      final actual = sha256.convert(dbEntry.content as List<int>).toString();
+      if (actual != expectedChecksum) {
+        throw Exception('The backup database failed its integrity check.');
+      }
+    }
+  }
+
+  /// Creates a backup and lets the user save it somewhere they can find it
+  /// (Downloads, Drive, an SD card...) through Android's system "save file"
+  /// dialog (Storage Access Framework). No storage permission is needed.
+  ///
+  /// Returns where the file was saved, or `null` if the user cancelled the
+  /// dialog. Throws if the backup could not be created, verified or saved.
+  ///
+  /// The ZIP is exactly what [createFullBackupPackage] produces, so
+  /// [restoreFullBackupPackage] restores it unchanged.
+  Future<String?> exportBackupForUser() async {
+    final zipFile = await createFullBackupPackage();
+    try {
+      // Never hand the user a backup that cannot be restored.
+      await verifyBackupArchive(zipFile);
+
+      final savedPath = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save MyKhata backup',
+        fileName: p.basename(zipFile.path),
+        type: FileType.any,
+        bytes: await zipFile.readAsBytes(),
+      );
+
+      if (savedPath == null) {
+        await AppLogger.i('Backup export cancelled by the user');
+        return null;
+      }
+      await AppLogger.i('Backup exported to a user-selected location');
+      return savedPath;
+    } catch (e, stack) {
+      await AppLogger.e('Backup export failed', error: e, stackTrace: stack);
+      rethrow;
+    } finally {
+      // The copy in app storage was only a staging file; the user now has
+      // their own copy (or cancelled).
+      try {
+        if (await zipFile.exists()) await zipFile.delete();
+      } catch (_) {}
+    }
+  }
+
+  /// A readable location for the path returned by [exportBackupForUser].
+  /// Android returns a document path such as `/document/primary:Download/x.zip`.
+  static String describeSavedLocation(String savedPath) {
+    final match = RegExp(r'primary:(.+)$').firstMatch(savedPath);
+    if (match != null) return 'Internal storage/${match.group(1)}';
+    return savedPath;
   }
 
   /// Restores a full backup with 5-stage safety, integrity validation, and automatic rollback.

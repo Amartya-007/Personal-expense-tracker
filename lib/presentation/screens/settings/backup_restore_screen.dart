@@ -9,9 +9,7 @@ import '../../../core/theme/app_text.dart';
 import '../../../services/backup/backup_service.dart';
 import '../../../services/export/export_service.dart';
 import '../../../services/import/import_service.dart';
-import '../../providers/account_providers.dart';
-import '../../providers/insights_providers.dart';
-import '../../providers/transaction_providers.dart';
+import '../../providers/data_refresh.dart';
 import '../../widgets/app_sheets.dart';
 import '../../widgets/fade_slide_in.dart';
 import '../../widgets/list_widgets.dart';
@@ -60,8 +58,14 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
   }
 
   Future<void> _createBackup() => _run(() async {
-        final file = await _backupService.createFullBackupPackage();
-        _toast('Backup saved to ${file.path}');
+        // Opens Android's "save file" dialog so the backup lands somewhere
+        // the user can find it (e.g. Downloads), not in private app storage.
+        final savedPath = await _backupService.exportBackupForUser();
+        if (savedPath == null) {
+          _toast('Backup cancelled. Nothing was saved.');
+          return;
+        }
+        _toast('Backup saved to ${BackupService.describeSavedLocation(savedPath)}');
       }, 'Backup failed');
 
   Future<void> _restoreBackup() async {
@@ -84,11 +88,14 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
 
     await _run(() async {
       final success = await _backupService.restoreFullBackupPackage(File(path));
-      _toast(
-        success
-            ? 'Backup restored. Please restart the app to finish.'
-            : 'Restore failed. The file may be corrupt.',
-      );
+      if (success) {
+        // The database file was replaced underneath the app: reload every
+        // screen's data from it.
+        await refreshAllAppData(ref);
+        _toast('Backup restored successfully.');
+      } else {
+        _toast('Restore failed. The file may be damaged or not a MyKhata backup.');
+      }
     }, 'Restore failed');
   }
 
@@ -134,12 +141,7 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
         preview.validTransactions,
       );
       if (ok) {
-        // Refresh everything that shows transactions or balances.
-        await ref.read(transactionListProvider.notifier).fetchInitial();
-        ref.read(accountListProvider.notifier).loadAccounts();
-        ref.invalidate(recentTransactionsProvider);
-        ref.invalidate(homeInsightsProvider);
-        ref.invalidate(analyticsSummaryProvider);
+        await refreshAllAppData(ref);
         _toast('Imported ${preview.validTransactions.length} transactions.');
       } else {
         _toast('Import failed and nothing was changed.');
@@ -193,7 +195,7 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
                       ListRowTile(
                         emoji: '💾',
                         title: 'Create full backup',
-                        subtitle: 'ZIP with your database and receipt photos',
+                        subtitle: 'ZIP of your data and receipts. You choose where to save it (e.g. Downloads)',
                         onTap: _createBackup,
                       ),
                       ListRowTile(
