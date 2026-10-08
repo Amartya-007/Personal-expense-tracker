@@ -59,6 +59,27 @@ class AccountListNotifier
     }
   }
 
+  /// Makes [accountId] the primary account (any previous primary is cleared).
+  Future<void> setPrimaryAccount(String accountId) async {
+    try {
+      await _repository.setPrimaryAccount(accountId);
+      await loadAccounts();
+    } catch (e, st) {
+      await AppLogger.e('setPrimaryAccount failed', error: e, stackTrace: st);
+      rethrow;
+    }
+  }
+
+  Future<void> clearPrimaryAccount() async {
+    try {
+      await _repository.clearPrimaryAccount();
+      await loadAccounts();
+    } catch (e, st) {
+      await AppLogger.e('clearPrimaryAccount failed', error: e, stackTrace: st);
+      rethrow;
+    }
+  }
+
   Future<void> deleteAccount(String accountId) async {
     try {
       await _repository.deleteAccount(accountId);

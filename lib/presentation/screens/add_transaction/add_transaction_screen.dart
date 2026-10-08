@@ -201,6 +201,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     final defaultUpiAccId = ref.read(defaultUpiAccountProvider);
     final account =
         _selectedAccount ??
+        _primaryDefault(accounts) ??
         (accounts.isNotEmpty
             ? accounts.firstWhere(
                 (a) => a.id == defaultUpiAccId,
@@ -522,6 +523,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                                         ? accounts.first
                                         : null)),
                           accounts: accounts,
+                          slot: 'destination',
                           onChanged: (acc) =>
                               setState(() => _selectedDestinationAccount = acc),
                         )
@@ -645,6 +647,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   _buildAccountDropdown(
                     value:
                         _selectedAccount ??
+                        _primaryDefault(accounts) ??
                         (accounts.isNotEmpty ? accounts.first : null),
                     accounts: accounts,
                     onChanged: (acc) => setState(() => _selectedAccount = acc),
@@ -1053,10 +1056,29 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     );
   }
 
+  /// The account a brand-new expense should start on: the primary account, if
+  /// one is set. `null` means "no primary account, keep the usual behaviour".
+  ///
+  /// Deliberately not used for transfers (the source/destination must be
+  /// chosen), income, Cash (no account involved) or when editing an existing
+  /// transaction (which must keep its own account).
+  AccountModel? _primaryDefault(List<AccountModel> accounts) {
+    if (widget.editTransaction != null ||
+        _type != 'expense' ||
+        _selectedPaymentMethod == 'Cash') {
+      return null;
+    }
+    for (final account in accounts) {
+      if (account.isPrimary) return account;
+    }
+    return null;
+  }
+
   Widget _buildAccountDropdown({
     required AccountModel? value,
     required List<AccountModel> accounts,
     required ValueChanged<AccountModel?> onChanged,
+    String slot = 'account',
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
@@ -1071,6 +1093,9 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     }
 
     return DropdownButtonFormField<AccountModel>(
+      // initialValue is only read when the field is created, so re-create it
+      // whenever the account shown changes (e.g. switching Income/Expense).
+      key: ValueKey<String>('$slot:${(value ?? accounts.first).id}'),
       initialValue: value ?? accounts.first,
       dropdownColor: surfaceColor,
       style: TextStyle(

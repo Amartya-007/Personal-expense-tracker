@@ -6,6 +6,7 @@ import '../../../core/permissions/permission_service.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../services/backup/data_reset_service.dart';
+import '../../providers/account_providers.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/data_refresh.dart';
 import '../../providers/settings_providers.dart';
@@ -238,6 +239,9 @@ class SettingsScreen extends ConsumerWidget {
     final locationOn = ref.watch(autoLocationCaptureProvider);
     final themeMode = ref.watch(themeModeProvider);
     final waiting = ref.watch(smsQueueProvider('detected')).value?.length ?? 0;
+    final primaryAccount = (ref.watch(accountListProvider).value ?? const [])
+        .where((a) => a.isPrimary)
+        .firstOrNull;
 
     Widget section(int index, String title, List<Widget> rows) => FadeSlideIn(
           index: index,
@@ -332,6 +336,9 @@ class SettingsScreen extends ConsumerWidget {
               ListRowTile(
                 emoji: '🏦',
                 title: 'Accounts',
+                subtitle: primaryAccount == null
+                    ? null
+                    : 'Primary: ${primaryAccount.name}',
                 onTap: () =>
                     AppRoutes.push(context, const AccountsManagementScreen()),
               ),

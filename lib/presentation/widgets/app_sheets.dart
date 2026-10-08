@@ -88,24 +88,41 @@ class FieldSpec {
 /// Shows a sheet with the given fields and resolves to the trimmed values (in
 /// order), or null if dismissed. Controllers are owned and disposed by the
 /// sheet, so callers no longer leak `TextEditingController`s.
+///
+/// Optionally shows an on/off switch under the fields: pass [switchLabel] and a
+/// [switchValue] notifier (owned by the caller) and read its value afterwards.
 Future<List<String>?> showFieldsSheet(
   BuildContext context, {
   required String title,
   required List<FieldSpec> fields,
   String submitLabel = 'Save',
+  String? switchLabel,
+  ValueNotifier<bool>? switchValue,
 }) {
   return AppBottomSheet.show<List<String>>(
     context,
     title: title,
-    builder: (_) => _FieldsForm(fields: fields, submitLabel: submitLabel),
+    builder: (_) => _FieldsForm(
+      fields: fields,
+      submitLabel: submitLabel,
+      switchLabel: switchLabel,
+      switchValue: switchValue,
+    ),
   );
 }
 
 class _FieldsForm extends StatefulWidget {
   final List<FieldSpec> fields;
   final String submitLabel;
+  final String? switchLabel;
+  final ValueNotifier<bool>? switchValue;
 
-  const _FieldsForm({required this.fields, required this.submitLabel});
+  const _FieldsForm({
+    required this.fields,
+    required this.submitLabel,
+    this.switchLabel,
+    this.switchValue,
+  });
 
   @override
   State<_FieldsForm> createState() => _FieldsFormState();
@@ -170,6 +187,16 @@ class _FieldsFormState extends State<_FieldsForm> {
           ),
           const SizedBox(height: 12),
         ],
+        if (widget.switchValue != null)
+          ValueListenableBuilder<bool>(
+            valueListenable: widget.switchValue!,
+            builder: (context, on, _) => SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(widget.switchLabel ?? ''),
+              value: on,
+              onChanged: (v) => widget.switchValue!.value = v,
+            ),
+          ),
         const SizedBox(height: 4),
         ElevatedButton(onPressed: _submit, child: Text(widget.submitLabel)),
       ],
