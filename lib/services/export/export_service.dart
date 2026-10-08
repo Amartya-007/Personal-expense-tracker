@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:csv/csv.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
@@ -20,6 +21,36 @@ class ExportService {
       return await getApplicationDocumentsDirectory();
     } catch (_) {
       return Directory.systemTemp;
+    }
+  }
+
+  /// Exports all transactions to CSV and lets the user choose where to save it
+  /// (Android's system save dialog; no storage permission needed). Resolves to
+  /// where it was saved, or `null` if the user cancelled.
+  Future<String?> exportCsvForUser() async =>
+      _saveForUser(await exportToCsv(), 'Save transactions CSV');
+
+  /// Same as [exportCsvForUser], for the PDF report.
+  Future<String?> exportPdfForUser() async =>
+      _saveForUser(await generatePdfReport(), 'Save PDF report');
+
+  /// Hands [staged] (created in private app storage, where the user cannot
+  /// reach it) to the system save dialog, then removes the private copy.
+  Future<String?> _saveForUser(File staged, String dialogTitle) async {
+    try {
+      return await FilePicker.platform.saveFile(
+        dialogTitle: dialogTitle,
+        fileName: p.basename(staged.path),
+        type: FileType.any,
+        bytes: await staged.readAsBytes(),
+      );
+    } catch (e, st) {
+      await AppLogger.e('Saving export for the user failed', error: e, stackTrace: st);
+      rethrow;
+    } finally {
+      try {
+        if (await staged.exists()) await staged.delete();
+      } catch (_) {}
     }
   }
 

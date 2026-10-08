@@ -57,6 +57,37 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
     }
   }
 
+  /// Stays on screen until dismissed (a snackbar vanished before people could
+  /// read where the file went) and says how to find the file whatever Android
+  /// reports as its location.
+  void _announceSaved(String what, String savedPath) {
+    if (!mounted) return;
+    final readable = BackupService.describeSavedLocation(savedPath);
+    // Android often reports an internal document id (like "/document/msf:123")
+    // that means nothing to a person: only show a path when it is a real one.
+    final isRealPath = readable.startsWith('Internal storage/') ||
+        readable.startsWith('/storage/') ||
+        readable.startsWith('/sdcard');
+    final where = isRealPath
+        ? 'Saved to: $readable'
+        : 'Saved in the folder you chose in the save dialog.';
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('$what saved'),
+        content: Text(
+          '$where\n\nCan\'t find it? Open your phone\'s Files app, tap search and type "MyKhata". Every export is named MyKhata_…',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _createBackup() => _run(() async {
         // Opens Android's "save file" dialog so the backup lands somewhere
         // the user can find it (e.g. Downloads), not in private app storage.
@@ -65,7 +96,7 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
           _toast('Backup cancelled. Nothing was saved.');
           return;
         }
-        _toast('Backup saved to ${BackupService.describeSavedLocation(savedPath)}');
+        _announceSaved('Backup', savedPath);
       }, 'Backup failed');
 
   Future<void> _restoreBackup() async {
@@ -100,13 +131,21 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
   }
 
   Future<void> _exportCsv() => _run(() async {
-        final file = await _exportService.exportToCsv();
-        _toast('CSV saved to ${file.path}');
+        final savedPath = await _exportService.exportCsvForUser();
+        if (savedPath == null) {
+          _toast('Export cancelled. Nothing was saved.');
+          return;
+        }
+        _announceSaved('CSV', savedPath);
       }, 'Export failed');
 
   Future<void> _exportPdf() => _run(() async {
-        final file = await _exportService.generatePdfReport();
-        _toast('PDF report saved to ${file.path}');
+        final savedPath = await _exportService.exportPdfForUser();
+        if (savedPath == null) {
+          _toast('Export cancelled. Nothing was saved.');
+          return;
+        }
+        _announceSaved('PDF report', savedPath);
       }, 'PDF export failed');
 
   Future<void> _importCsv() async {
