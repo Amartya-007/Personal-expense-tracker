@@ -6,10 +6,17 @@ class DatabaseTables {
       current_balance REAL NOT NULL,
       initial_balance REAL NOT NULL,
       is_active INTEGER NOT NULL DEFAULT 1,
+      is_primary INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
   ''';
+
+  /// At most one account can have is_primary = 1 (enforced by the database,
+  /// not just by app code).
+  static const String createPrimaryAccountIndex =
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_single_primary '
+      'ON accounts(is_primary) WHERE is_primary = 1;';
 
   static const String createCategoriesTable = '''
     CREATE TABLE categories (
@@ -221,5 +228,6 @@ class DatabaseTables {
     'CREATE INDEX IF NOT EXISTS idx_sms_status ON sms_review_queue(status, date DESC);',
     'CREATE INDEX IF NOT EXISTS idx_cat_rules_kw ON category_rules(keyword);',
     'CREATE INDEX IF NOT EXISTS idx_receipts_tx ON receipts(transaction_id);',
+    createPrimaryAccountIndex,
   ];
 }

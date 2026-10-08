@@ -13,7 +13,7 @@ import 'database_tables.dart';
 
 class DatabaseHelper {
   static final String _dbName = AppConstants.dbFileName;
-  static const int _dbVersion = 1;
+  static const int _dbVersion = 2;
 
   // Seed data created on first run. Shared with [deleteAllUserData] so that a
   // reset returns to exactly this state.

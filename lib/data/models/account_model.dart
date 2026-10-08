@@ -4,6 +4,7 @@ class AccountModel {
   final double currentBalance;
   final double initialBalance;
   final bool isActive;
+  final bool isPrimary;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -13,6 +14,7 @@ class AccountModel {
     required this.currentBalance,
     required this.initialBalance,
     this.isActive = true,
+    this.isPrimary = false,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -23,6 +25,7 @@ class AccountModel {
     double? currentBalance,
     double? initialBalance,
     bool? isActive,
+    bool? isPrimary,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -32,6 +35,7 @@ class AccountModel {
       currentBalance: currentBalance ?? this.currentBalance,
       initialBalance: initialBalance ?? this.initialBalance,
       isActive: isActive ?? this.isActive,
+      isPrimary: isPrimary ?? this.isPrimary,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -44,6 +48,7 @@ class AccountModel {
       'current_balance': currentBalance,
       'initial_balance': initialBalance,
       'is_active': isActive ? 1 : 0,
+      'is_primary': isPrimary ? 1 : 0,
       'created_at': createdAt.millisecondsSinceEpoch,
       'updated_at': updatedAt.millisecondsSinceEpoch,
     };
@@ -56,6 +61,7 @@ class AccountModel {
       currentBalance: (map['current_balance'] as num).toDouble(),
       initialBalance: (map['initial_balance'] as num).toDouble(),
       isActive: ((map['is_active'] as int?) ?? 1) == 1,
+      isPrimary: ((map['is_primary'] as int?) ?? 0) == 1,
       createdAt: DateTime.fromMillisecondsSinceEpoch(
         (map['created_at'] as num).toInt(),
       ),
