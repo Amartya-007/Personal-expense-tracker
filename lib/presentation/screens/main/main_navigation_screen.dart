@@ -141,7 +141,7 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen>
       if (!_fabTabs.contains(next)) _closeFab();
     });
 
-    return PopScope(
+    final shell = PopScope(
       // Back: close the speed-dial first, then go to Home, then leave the app.
       canPop: currentIndex == 0 && !_isFabOpen,
       onPopInvokedWithResult: (didPop, _) {
@@ -253,6 +253,24 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen>
           ],
         ),
       ),
+    );
+
+    // The nav pill and add button float inside the body, so a snackbar would
+    // otherwise be drawn right on top of them. Lift snackbars shown on this
+    // screen above the nav pill (and above the add button while it is
+    // visible). Screens pushed over this one have no nav pill and keep the
+    // default position.
+    final theme = Theme.of(context);
+    final snackBottom = showFab
+        ? fabBottom + _fabSize + 10
+        : navBottom + _navHeight + 10;
+    return Theme(
+      data: theme.copyWith(
+        snackBarTheme: theme.snackBarTheme.copyWith(
+          insetPadding: EdgeInsets.fromLTRB(14, 0, 14, snackBottom),
+        ),
+      ),
+      child: shell,
     );
   }
 
