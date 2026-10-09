@@ -18,7 +18,7 @@ import '../../../services/receipts/receipt_storage_service.dart';
 import '../../providers/account_providers.dart';
 import '../../providers/category_providers.dart';
 import '../../providers/tag_providers.dart';
-import '../../widgets/pill_chips.dart';
+import '../../widgets/multi_select_field.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/segmented_tabs.dart';
 import '../../providers/settings_providers.dart';
@@ -478,7 +478,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                             fontWeight: FontWeight.w600,
                             color: inkColor,
                           ),
-                          decoration: _fieldDecoration(p, hint: _type == 'income' ? 'Salary, freelance…' : 'Momos, charger, pen…'),
+                          decoration: appFieldDecoration(p, hint: _type == 'income' ? 'Salary, freelance…' : 'Momos, charger, pen…'),
                           onChanged: (val) =>
                               _onDescriptionChanged(val, categories),
                         ),
@@ -542,7 +542,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                               fontWeight: FontWeight.w600,
                               color: inkColor,
                             ),
-                            decoration: _fieldDecoration(p),
+                            decoration: appFieldDecoration(p),
                             items: categories.map((c) {
                               final emoji = AppColors.getCategoryEmoji(c.name);
                               return DropdownMenuItem<CategoryModel>(
@@ -682,7 +682,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                 TextField(
                   controller: _noteController,
                   style: TextStyle(fontSize: 15, color: inkColor),
-                  decoration: _fieldDecoration(p, hint: 'Optional'),
+                  decoration: appFieldDecoration(p, hint: 'Optional'),
                 ),
 
                 const SizedBox(height: 18),
@@ -695,24 +695,17 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                if (tagNames.isEmpty)
-                  Text(
-                    'No tags yet. Add some in Settings → Tags.',
-                    style: TextStyle(fontSize: 12.5, color: mutedColor),
-                  )
-                else
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final name in tagNames)
-                        PillChip(
-                          label: name,
-                          selected: _hasTag(name),
-                          onTap: () => _toggleTag(name, savedTags),
-                        ),
-                    ],
-                  ),
+                MultiSelectField(
+                  hint: 'Select tags',
+                  sheetTitle: 'Tags',
+                  emptyMessage: 'No tags yet. Add some in Settings → Tags.',
+                  options: tagNames,
+                  selected: [
+                    for (final name in tagNames)
+                      if (_hasTag(name)) name,
+                  ],
+                  onChanged: (names) => _setTags(names, savedTags),
+                ),
 
                 const SizedBox(height: 18),
                 Text(
@@ -917,43 +910,27 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     return categories.isEmpty ? null : categories.first;
   }
 
-  /// One look for every text field and dropdown on this screen (it used to be
-  /// copy-pasted five times).
-  InputDecoration _fieldDecoration(AppPalette p, {String? hint}) {
-    OutlineInputBorder border(BorderSide side) => OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: side,
-        );
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: TextStyle(color: p.muted.withValues(alpha: 0.7)),
-      filled: true,
-      fillColor: p.surface,
-      border: border(BorderSide.none),
-      enabledBorder: border(BorderSide(color: p.border)),
-      focusedBorder: border(BorderSide(color: p.primary, width: 2)),
-      contentPadding: const EdgeInsets.all(14),
-    );
-  }
-
   bool _hasTag(String name) => _selectedTags.any(
         (t) => t.name.toLowerCase() == name.toLowerCase(),
       );
 
-  /// Selecting reuses the saved tag (same id); unknown names become new tags.
-  void _toggleTag(String name, List<TagModel> saved) {
+  /// Applies the chosen tag names. Tags the transaction already has keep
+  /// their identity, a saved tag is reused (same id), and unknown names become
+  /// new tags.
+  void _setTags(List<String> names, List<TagModel> saved) {
+    TagModel? find(Iterable<TagModel> tags, String lower) =>
+        tags.where((t) => t.name.toLowerCase() == lower).firstOrNull;
+
     setState(() {
-      final index = _selectedTags.indexWhere(
-        (t) => t.name.toLowerCase() == name.toLowerCase(),
-      );
-      if (index >= 0) {
-        _selectedTags.removeAt(index);
-        return;
-      }
-      final existing = saved
-          .where((t) => t.name.toLowerCase() == name.toLowerCase())
-          .firstOrNull;
-      _selectedTags.add(existing ?? TagModel(id: _uuid.v4(), name: name));
+      final next = <TagModel>[
+        for (final name in names)
+          find(_selectedTags, name.toLowerCase()) ??
+              find(saved, name.toLowerCase()) ??
+              TagModel(id: _uuid.v4(), name: name),
+      ];
+      _selectedTags
+        ..clear()
+        ..addAll(next);
     });
   }
 
@@ -990,7 +967,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
         fontWeight: FontWeight.w600,
         color: inkColor,
       ),
-      decoration: _fieldDecoration(p),
+      decoration: appFieldDecoration(p),
       items: accounts.map((a) {
         return DropdownMenuItem<AccountModel>(
           value: a,
