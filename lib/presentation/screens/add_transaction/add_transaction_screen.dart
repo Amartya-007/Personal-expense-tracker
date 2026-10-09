@@ -102,7 +102,9 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
 
     _captureLocation();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _amountFocusNode.requestFocus();
+      if (widget.editTransaction == null) {
+        _amountFocusNode.requestFocus();
+      }
     });
   }
 
@@ -382,7 +384,9 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                     _type = label.toLowerCase();
                     _suggestedCategoryName = null;
                   });
-                  _amountFocusNode.requestFocus();
+                  if (widget.editTransaction == null) {
+                    _amountFocusNode.requestFocus();
+                  }
                 },
               ),
 

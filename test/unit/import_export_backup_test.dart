@@ -3,6 +3,7 @@ library;
 
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mykhata/core/database/database_helper.dart';
 import 'package:mykhata/data/models/transaction_model.dart';
@@ -100,14 +101,19 @@ void main() {
       expect(preview.transactionCount, greaterThan(0));
 
       final text = await jsonFile.readAsString();
-      final Map<String, dynamic> data = Map<String, dynamic>.from(jsonDecode(text));
+      final Map<String, dynamic> data = Map<String, dynamic>.from(
+        jsonDecode(text),
+      );
       final success = await ImportService().executeJsonImport(data);
       expect(success, isTrue);
 
       final restoredTxs = await txRepo.getTransactionsPaged(limit: 10);
       expect(restoredTxs.length, equals(1));
       expect(restoredTxs.first.amount, equals(1450.75));
-      expect(restoredTxs.first.description, equals('JSON Integration Test Expense'));
+      expect(
+        restoredTxs.first.description,
+        equals('JSON Integration Test Expense'),
+      );
 
       if (await jsonFile.exists()) await jsonFile.delete();
     });
@@ -143,18 +149,25 @@ void main() {
 
       final preview = await ImportService().previewCsvImport(csvFile);
       for (final err in preview.errors) {
-        print('IMPORT PREVIEW ERROR [Row ${err.rowIndex}]: ${err.message}');
+        debugPrint(
+          'IMPORT PREVIEW ERROR [Row ${err.rowIndex}]: ${err.message}',
+        );
       }
       expect(preview.totalRows, greaterThan(0));
       expect(preview.validCount, greaterThan(0));
 
-      final success = await ImportService().executeCsvImport(preview.validTransactions);
+      final success = await ImportService().executeCsvImport(
+        preview.validTransactions,
+      );
       expect(success, isTrue);
 
       final importedTxs = await txRepo.getTransactionsPaged(limit: 10);
       expect(importedTxs.length, equals(1));
       expect(importedTxs.first.amount, equals(890.0));
-      expect(importedTxs.first.description, equals('CSV Export Test Transaction'));
+      expect(
+        importedTxs.first.description,
+        equals('CSV Export Test Transaction'),
+      );
 
       if (await csvFile.exists()) await csvFile.delete();
     });
@@ -184,11 +197,16 @@ void main() {
       final backupZip = await BackupService().createFullBackupPackage();
       expect(await backupZip.exists(), isTrue);
 
-      final restoreSuccess = await BackupService().restoreFullBackupPackage(backupZip);
+      final restoreSuccess = await BackupService().restoreFullBackupPackage(
+        backupZip,
+      );
       expect(restoreSuccess, isTrue);
 
       final checkTxs = await txRepo.getTransactionsPaged(limit: 10);
-      expect(checkTxs.any((t) => t.description == 'Salary Backup Test'), isTrue);
+      expect(
+        checkTxs.any((t) => t.description == 'Salary Backup Test'),
+        isTrue,
+      );
 
       if (await backupZip.exists()) await backupZip.delete();
     });

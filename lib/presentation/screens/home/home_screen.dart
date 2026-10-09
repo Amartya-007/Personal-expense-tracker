@@ -556,11 +556,15 @@ class _HeroCard extends StatelessWidget {
                   tween: Tween<double>(begin: 0, end: total),
                   duration: const Duration(milliseconds: 900),
                   curve: AppMotion.enter,
-                  builder: (context, value, _) => Text(
-                    CurrencyFormatter.format(value),
-                    style: AppText.display(Colors.white).copyWith(
-                      fontSize: 36,
-                      letterSpacing: -1.0,
+                  builder: (context, value, _) => FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      CurrencyFormatter.format(value),
+                      style: AppText.display(Colors.white).copyWith(
+                        fontSize: 36,
+                        letterSpacing: -1.0,
+                      ),
                     ),
                   ),
                 ),

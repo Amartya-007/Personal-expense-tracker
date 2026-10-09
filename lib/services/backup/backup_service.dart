@@ -39,7 +39,12 @@ class BackupService {
         await db.execute('PRAGMA wal_checkpoint(TRUNCATE)');
       } catch (_) {}
 
-      final zipPrepDir = Directory(p.join(docsDir.path, 'zip_prep_${DateTime.now().millisecondsSinceEpoch}'));
+      final zipPrepDir = Directory(
+        p.join(
+          docsDir.path,
+          'zip_prep_${DateTime.now().millisecondsSinceEpoch}',
+        ),
+      );
       if (await zipPrepDir.exists()) await zipPrepDir.delete(recursive: true);
       await zipPrepDir.create(recursive: true);
 
@@ -48,19 +53,36 @@ class BackupService {
       await db.execute('VACUUM INTO ?', [stagedDb.path]);
 
       if (!await stagedDb.exists()) {
-        throw Exception('Failed to generate backup database snapshot via VACUUM INTO');
+        throw Exception(
+          'Failed to generate backup database snapshot via VACUUM INTO',
+        );
       }
 
       final dbChecksum = await _computeFileSha256(stagedDb);
 
       // Collect table row counts for manifest
-      final txCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM transactions')) ?? 0;
-      final accCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM accounts')) ?? 0;
-      final catCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM categories')) ?? 0;
+      final txCount =
+          Sqflite.firstIntValue(
+            await db.rawQuery('SELECT COUNT(*) FROM transactions'),
+          ) ??
+          0;
+      final accCount =
+          Sqflite.firstIntValue(
+            await db.rawQuery('SELECT COUNT(*) FROM accounts'),
+          ) ??
+          0;
+      final catCount =
+          Sqflite.firstIntValue(
+            await db.rawQuery('SELECT COUNT(*) FROM categories'),
+          ) ??
+          0;
 
       int receiptFileCount = 0;
       if (await receiptsDir.exists()) {
-        receiptFileCount = await receiptsDir.list(recursive: true).where((e) => e is File).length;
+        receiptFileCount = await receiptsDir
+            .list(recursive: true)
+            .where((e) => e is File)
+            .length;
       }
 
       final archive = Archive();
@@ -79,11 +101,15 @@ class BackupService {
         'receiptCount': receiptFileCount,
       };
       final manifestBytes = utf8.encode(jsonEncode(manifest));
-      archive.addFile(ArchiveFile('manifest.json', manifestBytes.length, manifestBytes));
+      archive.addFile(
+        ArchiveFile('manifest.json', manifestBytes.length, manifestBytes),
+      );
 
       // 2. Add DB
       final dbBytes = await stagedDb.readAsBytes();
-      archive.addFile(ArchiveFile(AppConstants.dbFileName, dbBytes.length, dbBytes));
+      archive.addFile(
+        ArchiveFile(AppConstants.dbFileName, dbBytes.length, dbBytes),
+      );
 
       // 3. Add receipts
       if (await receiptsDir.exists()) {
@@ -91,16 +117,18 @@ class BackupService {
           if (entity is File) {
             final relPath = p.relative(entity.path, from: receiptsDir.path);
             final bytes = await entity.readAsBytes();
-            archive.addFile(ArchiveFile('receipts/$relPath', bytes.length, bytes));
+            archive.addFile(
+              ArchiveFile('receipts/$relPath', bytes.length, bytes),
+            );
           }
         }
       }
 
       final encoder = ZipEncoder();
       final encoded = encoder.encode(archive);
-      if (encoded == null) throw Exception('Failed to encode zip archive');
 
-      final backupFileName = 'MyKhata_Backup_${DateTime.now().millisecondsSinceEpoch}.zip';
+      final backupFileName =
+          'MyKhata_Backup_${DateTime.now().millisecondsSinceEpoch}.zip';
       final zipPath = p.join(docsDir.path, backupFileName);
       final zipFile = File(zipPath);
       await zipFile.writeAsBytes(encoded);
@@ -134,9 +162,9 @@ class BackupService {
       throw Exception('The backup is missing its manifest or database.');
     }
 
-    final manifest =
-        jsonDecode(utf8.decode(manifestEntry.content as List<int>))
-            as Map<String, dynamic>;
+    final manifest = jsonDecode(
+      utf8.decode(manifestEntry.content as List<int>),
+    ) as Map<String, dynamic>;
     final expectedChecksum = manifest['dbChecksum'] as String?;
     if (expectedChecksum != null && expectedChecksum.isNotEmpty) {
       final actual = sha256.convert(dbEntry.content as List<int>).toString();
@@ -204,7 +232,10 @@ class BackupService {
       await dir.create(recursive: true);
 
       final target = File(
-        p.join(dir.path, 'MyKhata_PreDelete_${DateTime.now().millisecondsSinceEpoch}.zip'),
+        p.join(
+          dir.path,
+          'MyKhata_PreDelete_${DateTime.now().millisecondsSinceEpoch}.zip',
+        ),
       );
       await created.copy(target.path);
       if (!await target.exists() || await target.length() == 0) {
@@ -256,7 +287,9 @@ class BackupService {
 
       final manifestFile = File(p.join(tempDir.path, 'manifest.json'));
       if (!await manifestFile.exists()) {
-        await AppLogger.w('Restore rejected: manifest.json missing in backup archive.');
+        await AppLogger.w(
+          'Restore rejected: manifest.json missing in backup archive.',
+        );
         await tempDir.delete(recursive: true);
         return false;
       }
@@ -266,7 +299,9 @@ class BackupService {
 
       final stagedDbFile = File(p.join(tempDir.path, AppConstants.dbFileName));
       if (!await stagedDbFile.exists()) {
-        await AppLogger.w('Restore rejected: ${AppConstants.dbFileName} missing in backup package.');
+        await AppLogger.w(
+          'Restore rejected: ${AppConstants.dbFileName} missing in backup package.',
+        );
         await tempDir.delete(recursive: true);
         return false;
       }
@@ -275,7 +310,9 @@ class BackupService {
       if (expectedChecksum != null && expectedChecksum.isNotEmpty) {
         final actualChecksum = await _computeFileSha256(stagedDbFile);
         if (actualChecksum != expectedChecksum) {
-          await AppLogger.w('Restore rejected: Database checksum mismatch (expected $expectedChecksum, got $actualChecksum).');
+          await AppLogger.w(
+            'Restore rejected: Database checksum mismatch (expected $expectedChecksum, got $actualChecksum).',
+          );
           await tempDir.delete(recursive: true);
           return false;
         }
@@ -288,7 +325,9 @@ class BackupService {
         if (checkRes.isEmpty || checkRes.first.values.first != 'ok') {
           await testDb.close();
           await tempDir.delete(recursive: true);
-          await AppLogger.w('Restore rejected: SQLite PRAGMA quick_check failed.');
+          await AppLogger.w(
+            'Restore rejected: SQLite PRAGMA quick_check failed.',
+          );
           return false;
         }
         await testDb.close();
@@ -306,7 +345,9 @@ class BackupService {
       final activeDbPath = db.path;
       final activeDbFile = File(activeDbPath);
       if (await activeDbFile.exists() && activeDbPath != ':memory:') {
-        await activeDbFile.copy(p.join(safetyDir.path, AppConstants.dbFileName));
+        await activeDbFile.copy(
+          p.join(safetyDir.path, AppConstants.dbFileName),
+        );
       }
 
       final activeReceiptsDir = Directory(p.join(docsDir.path, 'receipts'));
@@ -323,9 +364,15 @@ class BackupService {
         }
       }
 
-      await DatabaseHelper.instance.close();
-
       if (activeDbPath != ':memory:') {
+        await DatabaseHelper.instance.close();
+        try {
+          await databaseFactory.deleteDatabase(activeDbPath);
+        } catch (_) {}
+        final activeFile = File(activeDbPath);
+        if (await activeFile.exists()) {
+          await activeFile.delete();
+        }
         await stagedDbFile.copy(activeDbPath);
       } else {
         final activeDb = await DatabaseHelper.instance.database;
@@ -340,7 +387,10 @@ class BackupService {
 
         await for (final entity in stagedReceipts.list(recursive: true)) {
           if (entity is File) {
-            final relativePath = p.relative(entity.path, from: stagedReceipts.path);
+            final relativePath = p.relative(
+              entity.path,
+              from: stagedReceipts.path,
+            );
             final targetPath = p.join(activeReceiptsDir.path, relativePath);
             final targetFile = File(targetPath);
             await targetFile.parent.create(recursive: true);
@@ -352,13 +402,17 @@ class BackupService {
       await tempDir.delete(recursive: true);
       if (await safetyDir.exists()) await safetyDir.delete(recursive: true);
 
-      await AppLogger.i('Successfully restored full backup package from ${zipFile.path}');
+      await AppLogger.i(
+        'Successfully restored full backup package from ${zipFile.path}',
+      );
       return true;
     } catch (e, stack) {
       try {
         final db = await DatabaseHelper.instance.database;
         final activeDbPath = db.path;
-        final safetyDbFile = File(p.join(safetyDir.path, AppConstants.dbFileName));
+        final safetyDbFile = File(
+          p.join(safetyDir.path, AppConstants.dbFileName),
+        );
         if (await safetyDbFile.exists() && activeDbPath != ':memory:') {
           await DatabaseHelper.instance.close();
           await safetyDbFile.copy(activeDbPath);
@@ -368,7 +422,11 @@ class BackupService {
       if (await tempDir.exists()) await tempDir.delete(recursive: true);
       if (await safetyDir.exists()) await safetyDir.delete(recursive: true);
 
-      await AppLogger.e('Backup restore failed and rolled back safely', error: e, stackTrace: stack);
+      await AppLogger.e(
+        'Backup restore failed and rolled back safely',
+        error: e,
+        stackTrace: stack,
+      );
       return false;
     }
   }

@@ -9,6 +9,7 @@ import 'package:mykhata/core/database/database_helper.dart';
 import 'package:mykhata/services/backup/backup_service.dart';
 import 'package:mykhata/services/backup/data_reset_service.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -121,19 +122,22 @@ Future<void> _seedUserData(Database db) async {
 }
 
 void main() {
-  late String dbPath;
-
   setUpAll(() {
     TestWidgetsFlutterBinding.ensureInitialized();
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
-    // Without path_provider (tests) the app falls back to the system temp dir.
-    dbPath = p.join(Directory.systemTemp.path, AppConstants.dbFileName);
   });
 
   setUp(() async {
     // Start from a pristine, freshly seeded database.
     await DatabaseHelper.instance.close();
+    String dbPath;
+    try {
+      final docsDir = await getApplicationDocumentsDirectory();
+      dbPath = p.join(docsDir.path, AppConstants.dbFileName);
+    } catch (_) {
+      dbPath = p.join(Directory.systemTemp.path, AppConstants.dbFileName);
+    }
     await databaseFactory.deleteDatabase(dbPath);
     await DatabaseHelper.instance.database;
     SharedPreferences.setMockInitialValues({});

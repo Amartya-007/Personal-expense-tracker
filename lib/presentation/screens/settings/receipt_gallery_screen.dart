@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/navigation/app_routes.dart';
 import '../../../core/theme/app_palette.dart';
-import '../../../data/models/receipt_model.dart';
 import '../../providers/receipt_providers.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/fade_slide_in.dart';

@@ -53,9 +53,10 @@ class TransactionDetailScreen extends ConsumerWidget {
       );
       return;
     }
+    if (!context.mounted) return;
     navigator.pop();
     UndoSnackbar.show(
-      navigator.context,
+      context,
       message: 'Transaction deleted',
       onUndo: () => notifier.restoreTransaction(transactionId),
     );
@@ -68,7 +69,9 @@ class TransactionDetailScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: p.background,
       appBar: AppBar(title: Text('Details', style: AppText.title(p.ink))),
-      body: ref.watch(transactionDetailProvider(transactionId)).when(
+      body: ref
+          .watch(transactionDetailProvider(transactionId))
+          .when(
             skipLoadingOnReload: true,
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(
@@ -113,10 +116,13 @@ class _DetailBody extends StatelessWidget {
     final p = context.palette;
     final bottom = MediaQuery.of(context).padding.bottom;
     final isTransfer = tx.isTransfer;
-    final categoryName = tx.categoryName ??
+    final categoryName =
+        tx.categoryName ??
         (isTransfer ? 'Transfer' : (tx.isIncome ? 'Income' : 'General'));
     final prefix = tx.isIncome ? '+' : (isTransfer ? '' : '−');
-    final typeLabel = tx.isIncome ? 'Income' : (isTransfer ? 'Transfer' : 'Expense');
+    final typeLabel = tx.isIncome
+        ? 'Income'
+        : (isTransfer ? 'Transfer' : 'Expense');
     final amountColor = isTransfer
         ? p.ink
         : p.amount(isIncome: tx.isIncome, isExpense: tx.isExpense);
@@ -133,36 +139,41 @@ class _DetailBody extends StatelessWidget {
               child: Column(
                 children: [
                   Container(
-                    width: 68,
-                    height: 68,
+                    width: 60,
+                    height: 60,
                     decoration: BoxDecoration(
                       color: p.surface2,
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(20),
                     ),
                     alignment: Alignment.center,
                     child: Text(
                       AppColors.getCategoryEmoji(categoryName),
-                      style: const TextStyle(fontSize: 32),
+                      style: const TextStyle(fontSize: 28),
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  Text(
-                    '$prefix${CurrencyFormatter.format(tx.amount)}',
-                    style: AppText.display(amountColor).copyWith(fontSize: 40),
+                  const SizedBox(height: 10),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '$prefix${CurrencyFormatter.format(tx.amount)}',
+                      style: AppText.display(amountColor).copyWith(fontSize: 36),
+                    ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Text(
                     tx.description,
                     textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                     style: AppText.title(p.ink),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   _Pill(label: typeLabel, color: amountColor),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 18),
           FadeSlideIn(
             index: 1,
             child: AppCard(
@@ -240,8 +251,10 @@ class _DetailBody extends StatelessWidget {
               children: [
                 for (final receipt in tx.receipts)
                   GestureDetector(
-                    onTap: () =>
-                        AppRoutes.push(context, ReceiptViewer(receipt: receipt)),
+                    onTap: () => AppRoutes.push(
+                      context,
+                      ReceiptViewer(receipt: receipt),
+                    ),
                     child: Hero(
                       tag: 'receipt-${receipt.id}',
                       child: ClipRRect(
@@ -268,7 +281,11 @@ class _DetailBody extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 28),
-          PrimaryButton(label: 'Edit', icon: Icons.edit_rounded, onPressed: onEdit),
+          PrimaryButton(
+            label: 'Edit',
+            icon: Icons.edit_rounded,
+            onPressed: onEdit,
+          ),
           const SizedBox(height: 6),
           SizedBox(
             width: double.infinity,
@@ -306,14 +323,17 @@ class _InfoRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 13),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
         border: isLast ? null : Border(bottom: BorderSide(color: p.border)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 120, child: Text(label, style: AppText.caption(p.muted))),
+          SizedBox(
+            width: 120,
+            child: Text(label, style: AppText.caption(p.muted)),
+          ),
           Expanded(
             child: Text(
               value,
@@ -341,7 +361,10 @@ class _Pill extends StatelessWidget {
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(label, style: AppText.caption(color).copyWith(fontWeight: FontWeight.w700)),
+      child: Text(
+        label,
+        style: AppText.caption(color).copyWith(fontWeight: FontWeight.w700),
+      ),
     );
   }
 }
