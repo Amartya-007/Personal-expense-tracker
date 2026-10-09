@@ -1,482 +1,347 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+
 import '../../../core/constants/app_colors.dart';
+import '../../../core/navigation/app_routes.dart';
+import '../../../core/theme/app_palette.dart';
+import '../../../core/theme/app_text.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/transaction_model.dart';
 import '../../providers/transaction_providers.dart';
+import '../../widgets/app_card.dart';
+import '../../widgets/app_sheets.dart';
+import '../../widgets/fade_slide_in.dart';
+import '../../widgets/primary_button.dart';
+import '../../widgets/receipt_viewer.dart';
+import '../../widgets/section_header.dart';
+import '../../widgets/undo_snackbar.dart';
 import '../add_transaction/add_transaction_screen.dart';
 
 class TransactionDetailScreen extends ConsumerWidget {
   final String transactionId;
 
-  const TransactionDetailScreen({
-    super.key,
-    required this.transactionId,
-  });
+  const TransactionDetailScreen({super.key, required this.transactionId});
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
-    final surface2Color = isDark ? AppColors.darkSurface2 : AppColors.surface2;
-    final linesColor = isDark ? AppColors.darkLines : AppColors.lines;
-    final inkColor = isDark ? AppColors.darkInk : AppColors.ink;
-    final mutedColor = isDark ? AppColors.darkMuted : AppColors.muted;
-
-    return Scaffold(
-      appBar: AppBar(
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 12),
-          child: Center(
-            child: InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: () => Navigator.pop(context),
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: surfaceColor,
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
-                ),
-                child: Icon(Icons.arrow_back_ios_new, size: 18, color: inkColor),
-              ),
-            ),
-          ),
-        ),
-        title: Text('Details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: inkColor)),
-        centerTitle: false,
-      ),
-      body: ref.watch(transactionDetailProvider(transactionId)).when(
-        skipLoadingOnReload: true,
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(
-          child: Text('Could not load this transaction.', style: TextStyle(color: mutedColor)),
-        ),
-        data: (tx) {
-          if (tx == null) {
-            return Center(
-              child: Text('Transaction not found.', style: TextStyle(color: mutedColor)),
-            );
-          }
-
-          final isIncome = tx.isIncome;
-          final isTransfer = tx.isTransfer;
-          final categoryName = tx.categoryName ?? (isTransfer ? 'Transfer' : (isIncome ? 'Income' : 'General'));
-          final emoji = AppColors.getCategoryEmoji(categoryName);
-          final amountColor = isIncome
-              ? AppColors.income
-              : (isTransfer ? (isDark ? AppColors.darkInk : AppColors.ink) : AppColors.expense);
-
-          return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(18, 10, 18, 40),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Top Hero Squircle + Amount
-                Center(
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          color: surface2Color,
-                          borderRadius: BorderRadius.circular(22),
-                        ),
-                        child: Center(
-                          child: Text(emoji, style: const TextStyle(fontSize: 30)),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        '${isIncome ? '+' : (isTransfer ? '' : '−')}${CurrencyFormatter.format(tx.amount)}',
-                        style: TextStyle(
-                          fontSize: 40,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -1,
-                          color: amountColor,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        tx.description,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: inkColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // Metadata Card
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: surfaceColor,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      _buildRow(
-                        label: 'Category',
-                        value: categoryName,
-                        linesColor: linesColor,
-                        mutedColor: mutedColor,
-                        inkColor: inkColor,
-                      ),
-                      _buildRow(
-                        label: 'Payment method',
-                        value: tx.paymentMethod,
-                        linesColor: linesColor,
-                        mutedColor: mutedColor,
-                        inkColor: inkColor,
-                      ),
-                      _buildRow(
-                        label: isTransfer ? 'From Account' : 'Account',
-                        value: tx.accountName ?? tx.accountId,
-                        linesColor: linesColor,
-                        mutedColor: mutedColor,
-                        inkColor: inkColor,
-                      ),
-                      if (isTransfer && tx.destinationAccountName != null)
-                        _buildRow(
-                          label: 'To Account',
-                          value: tx.destinationAccountName!,
-                          linesColor: linesColor,
-                          mutedColor: mutedColor,
-                          inkColor: inkColor,
-                        ),
-                      _buildRow(
-                        label: 'Date',
-                        value: '${tx.date.day} ${_getMonthName(tx.date.month)} ${tx.date.year}',
-                        linesColor: linesColor,
-                        mutedColor: mutedColor,
-                        inkColor: inkColor,
-                      ),
-                      _buildRow(
-                        label: 'Source',
-                        value: (tx.smsMessageId != null || tx.source == 'sms') ? 'Detected from SMS' : 'Added manually',
-                        linesColor: linesColor,
-                        mutedColor: mutedColor,
-                        inkColor: inkColor,
-                      ),
-                      if (tx.note != null && tx.note!.isNotEmpty)
-                        _buildRow(
-                          label: 'Note',
-                          value: tx.note!,
-                          linesColor: linesColor,
-                          mutedColor: mutedColor,
-                          inkColor: inkColor,
-                        ),
-                      _buildRow(
-                        label: 'Created',
-                        value: '${tx.createdAt.day} ${_getMonthName(tx.createdAt.month)}, ${_formatTime(tx.createdAt)}',
-                        linesColor: linesColor,
-                        mutedColor: mutedColor,
-                        inkColor: inkColor,
-                        isLast: true,
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // Location Header & Map Preview
-                Text(
-                  'Location',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: inkColor),
-                ),
-                const SizedBox(height: 10),
-                GestureDetector(
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          tx.locationName != null
-                              ? 'Location: ${tx.locationName}'
-                              : (tx.latitude != null
-                                  ? 'Coordinates: ${tx.latitude!.toStringAsFixed(4)}, ${tx.longitude!.toStringAsFixed(4)}'
-                                  : 'Opening your maps app'),
-                        ),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    height: 110,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: surface2Color,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: linesColor),
-                    ),
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text('📍', style: TextStyle(fontSize: 28)),
-                          const SizedBox(height: 6),
-                          Text(
-                            tx.locationName ??
-                                (tx.latitude != null
-                                    ? '${tx.latitude!.toStringAsFixed(4)}, ${tx.longitude!.toStringAsFixed(4)}'
-                                    : 'Saved location'),
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: mutedColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Receipts (if any)
-                if (tx.receipts.isNotEmpty) ...[
-                  const SizedBox(height: 24),
-                  Text(
-                    'Receipts',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: inkColor),
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: tx.receipts.map((r) {
-                      return GestureDetector(
-                        onTap: () => _showReceiptViewer(context, r.filePath),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: Image.file(
-                            File(r.filePath),
-                            width: 68,
-                            height: 68,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-
-                const SizedBox(height: 28),
-
-                // Action Buttons: Edit and Delete
-                Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            // push (not replace) so saving returns to this page,
-                            // which reloads and shows the change.
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => AddTransactionScreen(
-                                  initialType: tx.type,
-                                  editTransaction: tx,
-                                ),
-                              ),
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: surface2Color,
-                            foregroundColor: inkColor,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                          ),
-                          child: const Text('Edit', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: SizedBox(
-                        height: 50,
-                        child: TextButton(
-                          onPressed: () async {
-                            final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                title: const Text('Delete Transaction', style: TextStyle(fontWeight: FontWeight.w800)),
-                                content: const Text('Move this transaction to Recently Deleted?'),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx, false),
-                                    child: Text('Cancel', style: TextStyle(color: mutedColor)),
-                                  ),
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.expense,
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    ),
-                                    onPressed: () => Navigator.pop(ctx, true),
-                                    child: const Text('Delete'),
-                                  ),
-                                ],
-                              ),
-                            );
-
-                            if (confirm == true) {
-                              await ref.read(transactionListProvider.notifier).softDeleteTransaction(transactionId);
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: const Text('Transaction deleted'),
-                                    behavior: SnackBarBehavior.floating,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                    action: SnackBarAction(
-                                      label: 'UNDO',
-                                      textColor: AppColors.secondary,
-                                      onPressed: () {
-                                        ref.read(transactionListProvider.notifier).restoreTransaction(transactionId);
-                                      },
-                                    ),
-                                  ),
-                                );
-                                Navigator.pop(context);
-                              }
-                            }
-                          },
-                          style: TextButton.styleFrom(
-                            foregroundColor: AppColors.expense,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                          ),
-                          child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          );
-        },
-      ),
+  Future<void> _edit(BuildContext context, TransactionModel tx) {
+    // push (not replace) so saving returns to this page, which reloads and
+    // shows the change.
+    return AppRoutes.push(
+      context,
+      AddTransactionScreen(initialType: tx.type, editTransaction: tx),
     );
   }
 
-  Widget _buildRow({
-    required String label,
-    required String value,
-    required Color linesColor,
-    required Color mutedColor,
-    required Color inkColor,
-    bool isLast = false,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 13),
-      decoration: BoxDecoration(
-        border: isLast ? null : Border(bottom: BorderSide(color: linesColor)),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(label, style: TextStyle(fontSize: 12.5, color: mutedColor, fontWeight: FontWeight.w500)),
+  Future<void> _delete(BuildContext context, WidgetRef ref) async {
+    final ok = await confirmDestructive(
+      context,
+      title: 'Delete transaction?',
+      message: 'It moves to Recently Deleted, where you can restore it.',
+    );
+    if (!ok || !context.mounted) return;
+
+    final notifier = ref.read(transactionListProvider.notifier);
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    try {
+      await notifier.softDeleteTransaction(transactionId);
+    } catch (e) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not delete that transaction.')),
+      );
+      return;
+    }
+    navigator.pop();
+    UndoSnackbar.show(
+      navigator.context,
+      message: 'Transaction deleted',
+      onUndo: () => notifier.restoreTransaction(transactionId),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+
+    return Scaffold(
+      backgroundColor: p.background,
+      appBar: AppBar(title: Text('Details', style: AppText.title(p.ink))),
+      body: ref.watch(transactionDetailProvider(transactionId)).when(
+            skipLoadingOnReload: true,
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Center(
+              child: Text(
+                'Could not load this transaction.',
+                style: AppText.body(p.muted),
+              ),
+            ),
+            data: (tx) {
+              if (tx == null) {
+                return Center(
+                  child: Text(
+                    'Transaction not found.',
+                    style: AppText.body(p.muted),
+                  ),
+                );
+              }
+              return _DetailBody(
+                tx: tx,
+                onEdit: () => _edit(context, tx),
+                onDelete: () => _delete(context, ref),
+              );
+            },
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: inkColor),
-              textAlign: TextAlign.right,
+    );
+  }
+}
+
+class _DetailBody extends StatelessWidget {
+  final TransactionModel tx;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _DetailBody({
+    required this.tx,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final bottom = MediaQuery.of(context).padding.bottom;
+    final isTransfer = tx.isTransfer;
+    final categoryName = tx.categoryName ??
+        (isTransfer ? 'Transfer' : (tx.isIncome ? 'Income' : 'General'));
+    final prefix = tx.isIncome ? '+' : (isTransfer ? '' : '−');
+    final typeLabel = tx.isIncome ? 'Income' : (isTransfer ? 'Transfer' : 'Expense');
+    final amountColor = isTransfer
+        ? p.ink
+        : p.amount(isIncome: tx.isIncome, isExpense: tx.isExpense);
+    final hasLocation = tx.locationName != null || tx.latitude != null;
+    final fromSms = tx.smsMessageId != null || tx.source == 'sms';
+
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(18, 8, 18, bottom + 28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FadeSlideIn(
+            child: Center(
+              child: Column(
+                children: [
+                  Container(
+                    width: 68,
+                    height: 68,
+                    decoration: BoxDecoration(
+                      color: p.surface2,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      AppColors.getCategoryEmoji(categoryName),
+                      style: const TextStyle(fontSize: 32),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    '$prefix${CurrencyFormatter.format(tx.amount)}',
+                    style: AppText.display(amountColor).copyWith(fontSize: 40),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    tx.description,
+                    textAlign: TextAlign.center,
+                    style: AppText.title(p.ink),
+                  ),
+                  const SizedBox(height: 10),
+                  _Pill(label: typeLabel, color: amountColor),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          FadeSlideIn(
+            index: 1,
+            child: AppCard(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Column(
+                children: [
+                  _InfoRow(label: 'Category', value: categoryName),
+                  _InfoRow(label: 'Payment method', value: tx.paymentMethod),
+                  _InfoRow(
+                    label: isTransfer ? 'From account' : 'Account',
+                    value: tx.accountName ?? tx.accountId,
+                  ),
+                  if (isTransfer && tx.destinationAccountName != null)
+                    _InfoRow(
+                      label: 'To account',
+                      value: tx.destinationAccountName!,
+                    ),
+                  _InfoRow(
+                    label: 'Date',
+                    value: DateFormat('d MMM yyyy').format(tx.date),
+                  ),
+                  _InfoRow(
+                    label: 'Source',
+                    value: fromSms ? 'Detected from SMS' : 'Added manually',
+                  ),
+                  if (tx.note != null && tx.note!.isNotEmpty)
+                    _InfoRow(label: 'Note', value: tx.note!),
+                  _InfoRow(
+                    label: 'Created',
+                    value: DateFormat('d MMM, h:mm a').format(tx.createdAt),
+                    isLast: true,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (tx.tags.isNotEmpty) ...[
+            const SizedBox(height: 22),
+            const SectionHeader(title: 'Tags'),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final tag in tx.tags)
+                  _Pill(label: '#${tag.name}', color: p.primary),
+              ],
+            ),
+          ],
+          if (hasLocation) ...[
+            const SizedBox(height: 22),
+            const SectionHeader(title: 'Location'),
+            AppCard(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  const Text('📍', style: TextStyle(fontSize: 22)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      tx.locationName ??
+                          '${tx.latitude!.toStringAsFixed(4)}, ${tx.longitude!.toStringAsFixed(4)}',
+                      style: AppText.body(p.ink),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (tx.receipts.isNotEmpty) ...[
+            const SizedBox(height: 22),
+            const SectionHeader(title: 'Receipts'),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final receipt in tx.receipts)
+                  GestureDetector(
+                    onTap: () =>
+                        AppRoutes.push(context, ReceiptViewer(receipt: receipt)),
+                    child: Hero(
+                      tag: 'receipt-${receipt.id}',
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.file(
+                          File(receipt.filePath),
+                          width: 76,
+                          height: 76,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            width: 76,
+                            height: 76,
+                            color: p.surface2,
+                            child: Icon(
+                              Icons.broken_image_outlined,
+                              color: p.muted,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 28),
+          PrimaryButton(label: 'Edit', icon: Icons.edit_rounded, onPressed: onEdit),
+          const SizedBox(height: 6),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: TextButton.icon(
+              onPressed: onDelete,
+              icon: const Icon(Icons.delete_outline_rounded),
+              label: Text('Delete', style: AppText.button(p.expense)),
+              style: TextButton.styleFrom(
+                foregroundColor: p.expense,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  void _showReceiptViewer(BuildContext context, String path) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool isLast;
+
+  const _InfoRow({
+    required this.label,
+    required this.value,
+    this.isLast = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 13),
+      decoration: BoxDecoration(
+        border: isLast ? null : Border(bottom: BorderSide(color: p.border)),
       ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 40,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
-                  child: Image.file(
-                    File(path),
-                    fit: BoxFit.contain,
-                    width: double.infinity,
-                    height: 360,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    child: const Text('Close', style: TextStyle(fontWeight: FontWeight.w700)),
-                  ),
-                ),
-              ],
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 120, child: Text(label, style: AppText.caption(p.muted))),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: AppText.bodyStrong(p.ink),
             ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
+}
 
-  String _getMonthName(int month) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return months[month - 1];
-  }
+class _Pill extends StatelessWidget {
+  final String label;
+  final Color color;
 
-  String _formatTime(DateTime dt) {
-    final hour = dt.hour == 0 ? 12 : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
-    final period = dt.hour >= 12 ? 'pm' : 'am';
-    final minute = dt.minute.toString().padLeft(2, '0');
-    return '$hour:$minute $period';
+  const _Pill({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(label, style: AppText.caption(color).copyWith(fontWeight: FontWeight.w700)),
+    );
   }
 }

@@ -9,6 +9,7 @@ import '../../../data/models/receipt_model.dart';
 import '../../providers/receipt_providers.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/fade_slide_in.dart';
+import '../../widgets/receipt_viewer.dart';
 
 class ReceiptGalleryScreen extends ConsumerWidget {
   const ReceiptGalleryScreen({super.key});
@@ -55,7 +56,7 @@ class ReceiptGalleryScreen extends ConsumerWidget {
                 index: index,
                 offsetY: 12,
                 child: GestureDetector(
-                  onTap: () => AppRoutes.push(context, _ReceiptViewer(receipt: r)),
+                  onTap: () => AppRoutes.push(context, ReceiptViewer(receipt: r)),
                   child: Hero(
                     tag: 'receipt-${r.id}',
                     child: ClipRRect(
@@ -79,40 +80,6 @@ class ReceiptGalleryScreen extends ConsumerWidget {
             },
           );
         },
-      ),
-    );
-  }
-}
-
-class _ReceiptViewer extends StatelessWidget {
-  final ReceiptModel receipt;
-
-  const _ReceiptViewer({required this.receipt});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-      ),
-      body: Center(
-        child: Hero(
-          tag: 'receipt-${receipt.id}',
-          child: InteractiveViewer(
-            minScale: 1,
-            maxScale: 5,
-            child: Image.file(
-              File(receipt.filePath),
-              errorBuilder: (_, __, ___) => const Icon(
-                Icons.broken_image_outlined,
-                color: Colors.white54,
-                size: 48,
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }

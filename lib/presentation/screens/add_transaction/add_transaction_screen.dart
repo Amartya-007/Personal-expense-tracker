@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/account_model.dart';
 import '../../../data/models/category_model.dart';
@@ -16,6 +17,10 @@ import '../../../services/location/location_service.dart';
 import '../../../services/receipts/receipt_storage_service.dart';
 import '../../providers/account_providers.dart';
 import '../../providers/category_providers.dart';
+import '../../providers/tag_providers.dart';
+import '../../widgets/pill_chips.dart';
+import '../../widgets/primary_button.dart';
+import '../../widgets/segmented_tabs.dart';
 import '../../providers/settings_providers.dart';
 import '../../providers/transaction_providers.dart';
 
@@ -295,14 +300,28 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
-    final surface2Color = isDark ? AppColors.darkSurface2 : AppColors.surface2;
-    final linesColor = isDark ? AppColors.darkLines : AppColors.lines;
-    final inkColor = isDark ? AppColors.darkInk : AppColors.ink;
-    final mutedColor = isDark ? AppColors.darkMuted : AppColors.muted;
+    final p = context.palette;
+    final isDark = p.isDark;
+    final surfaceColor = p.surface;
+    final linesColor = p.border;
+    final inkColor = p.ink;
+    final mutedColor = p.muted;
+    final amountColor = _type == 'expense'
+        ? p.expense
+        : _type == 'income'
+        ? p.income
+        : p.primary;
 
     final accounts = ref.watch(accountListProvider).value ?? [];
+    final savedTags = ref.watch(tagsListProvider).value ?? const <TagModel>[];
+    // Every saved tag, plus any tag this transaction already carries that is
+    // not in the list, so nothing it has is hidden or impossible to remove.
+    final tagNames = <String>[
+      for (final tag in savedTags) tag.name,
+      for (final tag in _selectedTags)
+        if (!savedTags.any((s) => s.name.toLowerCase() == tag.name.toLowerCase()))
+          tag.name,
+    ];
     final categoriesAsync = ref.watch(
       _type == 'income' ? incomeCategoriesProvider : expenseCategoriesProvider,
     );
@@ -354,22 +373,17 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Segmented Type Selector
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: surface2Color,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  children: [
-                    _buildSegmentTab('Expense', 'expense', isDark),
-                    const SizedBox(width: 4),
-                    _buildSegmentTab('Income', 'income', isDark),
-                    const SizedBox(width: 4),
-                    _buildSegmentTab('Transfer', 'transfer', isDark),
-                  ],
-                ),
+              // Transaction type
+              SegmentedTabs(
+                options: const ['Expense', 'Income', 'Transfer'],
+                selected: _type[0].toUpperCase() + _type.substring(1),
+                onSelected: (label) {
+                  setState(() {
+                    _type = label.toLowerCase();
+                    _suggestedCategoryName = null;
+                  });
+                  _amountFocusNode.requestFocus();
+                },
               ),
 
               const SizedBox(height: 24),
@@ -394,22 +408,14 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   fontSize: 44,
                   fontWeight: FontWeight.w800,
                   letterSpacing: -1,
-                  color: _type == 'expense'
-                      ? AppColors.expense
-                      : _type == 'income'
-                      ? AppColors.income
-                      : AppColors.primary,
+                  color: amountColor,
                 ),
                 decoration: InputDecoration(
                   prefixText: '₹',
                   prefixStyle: TextStyle(
                     fontSize: 44,
                     fontWeight: FontWeight.w800,
-                    color: _type == 'expense'
-                        ? AppColors.expense
-                        : _type == 'income'
-                        ? AppColors.income
-                        : AppColors.primary,
+                    color: amountColor,
                   ),
                   hintText: '0',
                   hintStyle: TextStyle(
@@ -424,8 +430,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   enabledBorder: UnderlineInputBorder(
                     borderSide: BorderSide(color: linesColor, width: 3),
                   ),
-                  focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: AppColors.primary, width: 3),
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: p.primary, width: 3),
                   ),
                   contentPadding: const EdgeInsets.symmetric(vertical: 6),
                 ),
@@ -472,35 +478,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                             fontWeight: FontWeight.w600,
                             color: inkColor,
                           ),
-                          decoration: InputDecoration(
-                            hintText: _type == 'income'
-                                ? 'Salary, freelance…'
-                                : 'Momos, charger, pen…',
-                            hintStyle: TextStyle(
-                              color: mutedColor.withValues(alpha: 0.7),
-                            ),
-                            fillColor: surfaceColor,
-                            filled: true,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide.none,
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide(
-                                color: linesColor,
-                                width: 1,
-                              ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(
-                                color: AppColors.primary,
-                                width: 2,
-                              ),
-                            ),
-                            contentPadding: const EdgeInsets.all(14),
-                          ),
+                          decoration: _fieldDecoration(p, hint: _type == 'income' ? 'Salary, freelance…' : 'Momos, charger, pen…'),
                           onChanged: (val) =>
                               _onDescriptionChanged(val, categories),
                         ),
@@ -510,10 +488,10 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                             padding: const EdgeInsets.only(top: 6, left: 4),
                             child: Text(
                               '✨ Suggested: $_suggestedCategoryName · tap category to change',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: AppColors.primary,
+                                color: p.primary,
                               ),
                             ),
                           ),
@@ -564,32 +542,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                               fontWeight: FontWeight.w600,
                               color: inkColor,
                             ),
-                            decoration: InputDecoration(
-                              fillColor: surfaceColor,
-                              filled: true,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: BorderSide.none,
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: BorderSide(
-                                  color: linesColor,
-                                  width: 1,
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: const BorderSide(
-                                  color: AppColors.primary,
-                                  width: 2,
-                                ),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 14,
-                              ),
-                            ),
+                            decoration: _fieldDecoration(p),
                             items: categories.map((c) {
                               final emoji = AppColors.getCategoryEmoji(c.name);
                               return DropdownMenuItem<CategoryModel>(
@@ -637,21 +590,11 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: surface2Color,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Row(
-                    children: [
-                      _buildPaymentChip('UPI', isDark),
-                      const SizedBox(width: 4),
-                      _buildPaymentChip('Cash', isDark),
-                      const SizedBox(width: 4),
-                      _buildPaymentChip('Debit Card', isDark),
-                    ],
-                  ),
+                SegmentedTabs(
+                  options: const ['UPI', 'Cash', 'Debit Card'],
+                  selected: _selectedPaymentMethod,
+                  onSelected: (method) =>
+                      setState(() => _selectedPaymentMethod = method),
                 ),
                 const SizedBox(height: 18),
 
@@ -739,30 +682,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                 TextField(
                   controller: _noteController,
                   style: TextStyle(fontSize: 15, color: inkColor),
-                  decoration: InputDecoration(
-                    hintText: 'Optional',
-                    hintStyle: TextStyle(
-                      color: mutedColor.withValues(alpha: 0.7),
-                    ),
-                    fillColor: surfaceColor,
-                    filled: true,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: linesColor, width: 1),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(
-                        color: AppColors.primary,
-                        width: 2,
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.all(14),
-                  ),
+                  decoration: _fieldDecoration(p, hint: 'Optional'),
                 ),
 
                 const SizedBox(height: 18),
@@ -775,65 +695,24 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children:
-                      [
-                        'Personal',
-                        'College',
-                        'Important',
-                        'Travel',
-                        'Monthly',
-                      ].map((tagName) {
-                        final isSelected = _selectedTags.any(
-                          (t) => t.name == tagName,
-                        );
-                        return InkWell(
-                          borderRadius: BorderRadius.circular(20),
-                          onTap: () {
-                            setState(() {
-                              if (isSelected) {
-                                _selectedTags.removeWhere(
-                                  (t) => t.name == tagName,
-                                );
-                              } else {
-                                _selectedTags.add(
-                                  TagModel(id: _uuid.v4(), name: tagName),
-                                );
-                              }
-                            });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? AppColors.primary
-                                  : surfaceColor,
-                              borderRadius: BorderRadius.circular(20),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.04),
-                                  blurRadius: 2,
-                                  offset: const Offset(0, 1),
-                                ),
-                              ],
-                            ),
-                            child: Text(
-                              tagName,
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
-                                color: isSelected ? Colors.white : inkColor,
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                ),
+                if (tagNames.isEmpty)
+                  Text(
+                    'No tags yet. Add some in Settings → Tags.',
+                    style: TextStyle(fontSize: 12.5, color: mutedColor),
+                  )
+                else
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final name in tagNames)
+                        PillChip(
+                          label: name,
+                          selected: _hasTag(name),
+                          onTap: () => _toggleTag(name, savedTags),
+                        ),
+                    ],
+                  ),
 
                 const SizedBox(height: 18),
                 Text(
@@ -949,126 +828,14 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
               const SizedBox(height: 32),
 
               // Save Button
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _isSaving ? null : _saveTransaction,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: _isSaving
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2.5,
-                          ),
-                        )
-                      : Text(
-                          'Save ${_type.toLowerCase()}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                          ),
-                        ),
-                ),
+              PrimaryButton(
+                label: widget.editTransaction != null
+                    ? 'Save changes'
+                    : 'Save $_type',
+                loading: _isSaving,
+                onPressed: _saveTransaction,
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSegmentTab(String title, String typeValue, bool isDark) {
-    final isSelected = _type == typeValue;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _type = typeValue;
-            _suggestedCategoryName = null;
-          });
-          _amountFocusNode.requestFocus();
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 9),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? (isDark ? AppColors.darkSurface : AppColors.surface)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(11),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(
-                        alpha: isDark ? 0.3 : 0.08,
-                      ),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Center(
-            child: Text(
-              title,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-                color: isSelected
-                    ? (isDark ? AppColors.darkInk : AppColors.ink)
-                    : (isDark ? AppColors.darkMuted : AppColors.muted),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPaymentChip(String method, bool isDark) {
-    final isSelected = _selectedPaymentMethod == method;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedPaymentMethod = method),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 9),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? (isDark ? AppColors.darkSurface : AppColors.surface)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(11),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(
-                        alpha: isDark ? 0.3 : 0.08,
-                      ),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Center(
-            child: Text(
-              method,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-                color: isSelected
-                    ? (isDark ? AppColors.darkInk : AppColors.ink)
-                    : (isDark ? AppColors.darkMuted : AppColors.muted),
-              ),
-            ),
           ),
         ),
       ),
@@ -1150,21 +917,60 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     return categories.isEmpty ? null : categories.first;
   }
 
+  /// One look for every text field and dropdown on this screen (it used to be
+  /// copy-pasted five times).
+  InputDecoration _fieldDecoration(AppPalette p, {String? hint}) {
+    OutlineInputBorder border(BorderSide side) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: side,
+        );
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: p.muted.withValues(alpha: 0.7)),
+      filled: true,
+      fillColor: p.surface,
+      border: border(BorderSide.none),
+      enabledBorder: border(BorderSide(color: p.border)),
+      focusedBorder: border(BorderSide(color: p.primary, width: 2)),
+      contentPadding: const EdgeInsets.all(14),
+    );
+  }
+
+  bool _hasTag(String name) => _selectedTags.any(
+        (t) => t.name.toLowerCase() == name.toLowerCase(),
+      );
+
+  /// Selecting reuses the saved tag (same id); unknown names become new tags.
+  void _toggleTag(String name, List<TagModel> saved) {
+    setState(() {
+      final index = _selectedTags.indexWhere(
+        (t) => t.name.toLowerCase() == name.toLowerCase(),
+      );
+      if (index >= 0) {
+        _selectedTags.removeAt(index);
+        return;
+      }
+      final existing = saved
+          .where((t) => t.name.toLowerCase() == name.toLowerCase())
+          .firstOrNull;
+      _selectedTags.add(existing ?? TagModel(id: _uuid.v4(), name: name));
+    });
+  }
+
   Widget _buildAccountDropdown({
     required AccountModel? value,
     required List<AccountModel> accounts,
     required ValueChanged<AccountModel?> onChanged,
     String slot = 'account',
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
-    final linesColor = isDark ? AppColors.darkLines : AppColors.lines;
-    final inkColor = isDark ? AppColors.darkInk : AppColors.ink;
+    final p = context.palette;
+    final surfaceColor = p.surface;
+    final inkColor = p.ink;
 
     if (accounts.isEmpty) {
       return Text(
         'No accounts created.',
-        style: TextStyle(color: isDark ? AppColors.darkMuted : AppColors.muted),
+        style: TextStyle(color: p.muted),
       );
     }
 
@@ -1176,7 +982,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       // Only shown when editing a transaction whose account was removed.
       hint: Text(
         'Account removed - pick one',
-        style: TextStyle(color: isDark ? AppColors.darkMuted : AppColors.muted),
+        style: TextStyle(color: p.muted),
       ),
       dropdownColor: surfaceColor,
       style: TextStyle(
@@ -1184,26 +990,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
         fontWeight: FontWeight.w600,
         color: inkColor,
       ),
-      decoration: InputDecoration(
-        fillColor: surfaceColor,
-        filled: true,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: linesColor, width: 1),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 14,
-        ),
-      ),
+      decoration: _fieldDecoration(p),
       items: accounts.map((a) {
         return DropdownMenuItem<AccountModel>(
           value: a,
@@ -1244,9 +1031,9 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                 ),
                 const SizedBox(height: 16),
                 ListTile(
-                  leading: const Icon(
-                    Icons.camera_alt,
-                    color: AppColors.primary,
+                  leading: Icon(
+                    Icons.camera_alt_rounded,
+                    color: ctx.palette.primary,
                   ),
                   title: const Text(
                     'Take Photo',
@@ -1258,9 +1045,9 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   },
                 ),
                 ListTile(
-                  leading: const Icon(
-                    Icons.photo_library,
-                    color: AppColors.primary,
+                  leading: Icon(
+                    Icons.photo_library_rounded,
+                    color: ctx.palette.primary,
                   ),
                   title: const Text(
                     'Choose from Gallery',

@@ -28,7 +28,7 @@ class PillChips extends StatelessWidget {
   Widget build(BuildContext context) {
     final chips = [
       for (final opt in options)
-        _Pill(
+        PillChip(
           label: opt,
           selected: opt == selected,
           onTap: () => onSelected(opt),
@@ -52,12 +52,15 @@ class PillChips extends StatelessWidget {
   }
 }
 
-class _Pill extends StatelessWidget {
+/// One selectable pill. Used by [PillChips] (single choice) and directly for
+/// multi-select groups such as transaction tags.
+class PillChip extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
-  const _Pill({
+  const PillChip({
+    super.key,
     required this.label,
     required this.selected,
     required this.onTap,
