@@ -24,8 +24,6 @@ class TransactionDetailScreen extends ConsumerWidget {
     final inkColor = isDark ? AppColors.darkInk : AppColors.ink;
     final mutedColor = isDark ? AppColors.darkMuted : AppColors.muted;
 
-    final repo = ref.watch(transactionRepositoryProvider);
-
     return Scaffold(
       appBar: AppBar(
         leading: Padding(
@@ -56,13 +54,13 @@ class TransactionDetailScreen extends ConsumerWidget {
         title: Text('Details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: inkColor)),
         centerTitle: false,
       ),
-      body: FutureBuilder<TransactionModel?>(
-        future: repo.getTransactionById(transactionId),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final tx = snapshot.data;
+      body: ref.watch(transactionDetailProvider(transactionId)).when(
+        skipLoadingOnReload: true,
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(
+          child: Text('Could not load this transaction.', style: TextStyle(color: mutedColor)),
+        ),
+        data: (tx) {
           if (tx == null) {
             return Center(
               child: Text('Transaction not found.', style: TextStyle(color: mutedColor)),
@@ -294,7 +292,9 @@ class TransactionDetailScreen extends ConsumerWidget {
                         height: 50,
                         child: ElevatedButton(
                           onPressed: () {
-                            Navigator.pushReplacement(
+                            // push (not replace) so saving returns to this page,
+                            // which reloads and shows the change.
+                            Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (_) => AddTransactionScreen(

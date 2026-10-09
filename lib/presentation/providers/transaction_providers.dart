@@ -10,6 +10,8 @@ import '../../services/notifications/budget_alert_service.dart';
 import 'account_providers.dart';
 import 'budget_providers.dart';
 import 'insights_providers.dart';
+import 'receipt_providers.dart';
+import 'tag_providers.dart';
 
 final transactionRepositoryProvider = Provider(
   (ref) => TransactionRepository(),
@@ -185,28 +187,44 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
     fetchInitial();
   }
 
+  /// Everything that is derived from transactions. Kept in one place so a
+  /// screen can't be forgotten: before, the tag list, receipt gallery, trend
+  /// chart, "recently deleted" list and detail page all stayed stale after an
+  /// edit until they were refreshed by hand.
+  void _refreshDependents() {
+    _ref.read(accountListProvider.notifier).loadAccounts();
+    _ref.read(budgetListProvider.notifier).loadBudgets();
+    _ref.invalidate(recentTransactionsProvider);
+    _ref.invalidate(recentlyDeletedTransactionsProvider);
+    _ref.invalidate(transactionDetailProvider);
+    _ref.invalidate(homeInsightsProvider);
+    _ref.invalidate(analyticsSummaryProvider);
+    _ref.invalidate(spendingTrendProvider);
+    _ref.invalidate(tagsListProvider);
+    _ref.invalidate(receiptGalleryProvider);
+  }
+
+  /// For changes made outside this notifier that alter how transactions
+  /// look (renaming/deleting a tag, deleting a category).
+  Future<void> reloadAll() async {
+    await fetchInitial();
+    _refreshDependents();
+  }
+
   // BUG FIX: all mutation methods now rethrow so the UI can catch and show
   // proper error messages, while also refreshing account balances on success.
   Future<void> createTransaction(TransactionModel tx) async {
     await _repository.createTransaction(tx);
     if (tx.isExpense) unawaited(BudgetAlertService.evaluate());
     await fetchInitial();
-    _ref.read(accountListProvider.notifier).loadAccounts();
-    _ref.invalidate(recentTransactionsProvider);
-    _ref.invalidate(homeInsightsProvider);
-    _ref.invalidate(analyticsSummaryProvider);
-    _ref.read(budgetListProvider.notifier).loadBudgets();
+    _refreshDependents();
   }
 
   Future<void> updateTransaction(TransactionModel tx) async {
     await _repository.updateTransaction(tx);
     if (tx.isExpense) unawaited(BudgetAlertService.evaluate());
     await fetchInitial();
-    _ref.read(accountListProvider.notifier).loadAccounts();
-    _ref.invalidate(recentTransactionsProvider);
-    _ref.invalidate(homeInsightsProvider);
-    _ref.invalidate(analyticsSummaryProvider);
-    _ref.read(budgetListProvider.notifier).loadBudgets();
+    _refreshDependents();
   }
 
   Future<void> softDeleteTransaction(String id) async {
@@ -223,21 +241,13 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
       rethrow;
     }
     await fetchInitial();
-    _ref.read(accountListProvider.notifier).loadAccounts();
-    _ref.invalidate(recentTransactionsProvider);
-    _ref.invalidate(homeInsightsProvider);
-    _ref.invalidate(analyticsSummaryProvider);
-    _ref.read(budgetListProvider.notifier).loadBudgets();
+    _refreshDependents();
   }
 
   Future<void> restoreTransaction(String id) async {
     await _repository.restoreTransaction(id);
     await fetchInitial();
-    _ref.read(accountListProvider.notifier).loadAccounts();
-    _ref.invalidate(recentTransactionsProvider);
-    _ref.invalidate(homeInsightsProvider);
-    _ref.invalidate(analyticsSummaryProvider);
-    _ref.read(budgetListProvider.notifier).loadBudgets();
+    _refreshDependents();
   }
 
   /// Permanently removes an already soft-deleted transaction. Soft-deleted
@@ -253,6 +263,14 @@ final transactionListProvider =
     StateNotifierProvider<TransactionListNotifier, TransactionState>((ref) {
       final repo = ref.watch(transactionRepositoryProvider);
       return TransactionListNotifier(repo, ref);
+    });
+
+/// One transaction for the detail page. Invalidated by [_refreshDependents],
+/// so the page shows the latest data after an edit.
+final transactionDetailProvider = FutureProvider.autoDispose
+    .family<TransactionModel?, String>((ref, id) async {
+      final repo = ref.watch(transactionRepositoryProvider);
+      return await repo.getTransactionById(id);
     });
 
 final recentTransactionsProvider = FutureProvider<List<TransactionModel>>((

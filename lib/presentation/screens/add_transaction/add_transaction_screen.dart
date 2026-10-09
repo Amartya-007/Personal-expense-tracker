@@ -198,22 +198,41 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       return;
     }
 
-    final defaultUpiAccId = ref.read(defaultUpiAccountProvider);
-    final account =
-        _selectedAccount ??
-        _primaryDefault(accounts) ??
-        (accounts.isNotEmpty
-            ? accounts.firstWhere(
-                (a) => a.id == defaultUpiAccId,
-                orElse: () => accounts.first,
-              )
-            : null);
+    final account = _effectiveAccount(accounts);
+    final destination = _effectiveDestination(accounts);
+    if (_type == 'transfer') {
+      if (account == null || destination == null || account.id == destination.id) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Choose two different accounts.')),
+        );
+        return;
+      }
+    }
+
+    final categories = ref
+            .read(
+              _type == 'income'
+                  ? incomeCategoriesProvider
+                  : expenseCategoriesProvider,
+            )
+            .value ??
+        const <CategoryModel>[];
+    final original = widget.editTransaction;
+    final category = _effectiveCategory(categories);
+    // An edited transaction keeps its own category unless the user picked
+    // another one (even if that category is no longer in the list).
+    final categoryId = _type == 'transfer'
+        ? null
+        : (category?.id ??
+            (original != null && original.type.toLowerCase() == _type
+                ? original.categoryId
+                : null));
 
     setState(() => _isSaving = true);
 
     final txId = widget.editTransaction?.id ?? _uuid.v4();
     final finalDesc = _type == 'transfer'
-        ? '${_selectedAccount?.name ?? "Account"} → ${_selectedDestinationAccount?.name ?? "Account"}'
+        ? '${account?.name ?? "Account"} → ${destination?.name ?? "Account"}'
         : descriptionStr;
 
     final tx = TransactionModel(
@@ -221,12 +240,13 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       type: _type,
       amount: amount,
       description: finalDesc,
-      categoryId: _type == 'transfer' ? null : _selectedCategory?.id,
+      categoryId: categoryId,
       paymentMethod: _type == 'transfer' ? 'Bank' : _selectedPaymentMethod,
-      accountId: account?.id ?? (accounts.isNotEmpty ? accounts.first.id : ''),
-      destinationAccountId: _type == 'transfer'
-          ? _selectedDestinationAccount?.id
-          : null,
+      accountId:
+          account?.id ??
+          original?.accountId ??
+          (accounts.isNotEmpty ? accounts.first.id : ''),
+      destinationAccountId: _type == 'transfer' ? destination?.id : null,
       date: _selectedDate,
       note: _noteController.text.trim().isNotEmpty
           ? _noteController.text.trim()
@@ -437,9 +457,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                       const SizedBox(height: 6),
                       if (_type == 'transfer')
                         _buildAccountDropdown(
-                          value:
-                              _selectedAccount ??
-                              (accounts.isNotEmpty ? accounts.first : null),
+                          value: _effectiveAccount(accounts),
                           accounts: accounts,
                           onChanged: (acc) =>
                               setState(() => _selectedAccount = acc),
@@ -515,13 +533,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                       const SizedBox(height: 6),
                       if (_type == 'transfer')
                         _buildAccountDropdown(
-                          value:
-                              _selectedDestinationAccount ??
-                              (accounts.length > 1
-                                  ? accounts[1]
-                                  : (accounts.isNotEmpty
-                                        ? accounts.first
-                                        : null)),
+                          value: _effectiveDestination(accounts),
                           accounts: accounts,
                           slot: 'destination',
                           onChanged: (acc) =>
@@ -535,7 +547,17 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                           )
                         else ...[
                           DropdownButtonFormField<CategoryModel>(
-                            initialValue: _selectedCategory ?? categories.first,
+                            // initialValue is only read when the field is
+                            // created: re-create it when the type or the
+                            // shown category changes.
+                            key: ValueKey<String>(
+                              'category:$_type:${_effectiveCategory(categories)?.id}',
+                            ),
+                            initialValue: _effectiveCategory(categories),
+                            hint: Text(
+                              'Uncategorized',
+                              style: TextStyle(color: mutedColor),
+                            ),
                             dropdownColor: surfaceColor,
                             style: TextStyle(
                               fontSize: 15,
@@ -645,10 +667,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   ),
                   const SizedBox(height: 6),
                   _buildAccountDropdown(
-                    value:
-                        _selectedAccount ??
-                        _primaryDefault(accounts) ??
-                        (accounts.isNotEmpty ? accounts.first : null),
+                    value: _effectiveAccount(accounts),
                     accounts: accounts,
                     onChanged: (acc) => setState(() => _selectedAccount = acc),
                   ),
@@ -1074,6 +1093,63 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     return null;
   }
 
+  AccountModel? _accountById(List<AccountModel> accounts, String? id) {
+    if (id == null) return null;
+    for (final account in accounts) {
+      if (account.id == id) return account;
+    }
+    return null;
+  }
+
+  /// The account the screen shows AND the one that gets saved, so the two can
+  /// never disagree. Order: what the user picked; when editing, the
+  /// transaction's own account (`null` if that account was removed); primary
+  /// account (new expense only); default UPI account; first account.
+  AccountModel? _effectiveAccount(List<AccountModel> accounts) {
+    final picked = _accountById(accounts, _selectedAccount?.id);
+    if (picked != null) return picked;
+    final original = widget.editTransaction;
+    if (original != null) return _accountById(accounts, original.accountId);
+    if (accounts.isEmpty) return null;
+    return _primaryDefault(accounts) ??
+        _accountById(accounts, ref.read(defaultUpiAccountProvider)) ??
+        accounts.first;
+  }
+
+  /// Transfer destination, resolved the same way as [_effectiveAccount]. New
+  /// transfers default to the first account that is not the source.
+  AccountModel? _effectiveDestination(List<AccountModel> accounts) {
+    final picked = _accountById(accounts, _selectedDestinationAccount?.id);
+    if (picked != null) return picked;
+    final original = widget.editTransaction;
+    if (original != null && original.isTransfer) {
+      return _accountById(accounts, original.destinationAccountId);
+    }
+    if (accounts.isEmpty) return null;
+    final sourceId = _effectiveAccount(accounts)?.id;
+    for (final account in accounts) {
+      if (account.id != sourceId) return account;
+    }
+    return accounts.first;
+  }
+
+  /// Category shown and saved. When editing a transaction of the same type it
+  /// is the transaction's own category (`null` if it had none), so saving
+  /// without touching the dropdown no longer wipes or swaps it.
+  CategoryModel? _effectiveCategory(List<CategoryModel> categories) {
+    for (final category in categories) {
+      if (category.id == _selectedCategory?.id) return category;
+    }
+    final original = widget.editTransaction;
+    if (original != null && original.type.toLowerCase() == _type) {
+      for (final category in categories) {
+        if (category.id == original.categoryId) return category;
+      }
+      return null;
+    }
+    return categories.isEmpty ? null : categories.first;
+  }
+
   Widget _buildAccountDropdown({
     required AccountModel? value,
     required List<AccountModel> accounts,
@@ -1095,8 +1171,13 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     return DropdownButtonFormField<AccountModel>(
       // initialValue is only read when the field is created, so re-create it
       // whenever the account shown changes (e.g. switching Income/Expense).
-      key: ValueKey<String>('$slot:${(value ?? accounts.first).id}'),
-      initialValue: value ?? accounts.first,
+      key: ValueKey<String>('$slot:${value?.id}'),
+      initialValue: value,
+      // Only shown when editing a transaction whose account was removed.
+      hint: Text(
+        'Account removed - pick one',
+        style: TextStyle(color: isDark ? AppColors.darkMuted : AppColors.muted),
+      ),
       dropdownColor: surfaceColor,
       style: TextStyle(
         fontSize: 15,

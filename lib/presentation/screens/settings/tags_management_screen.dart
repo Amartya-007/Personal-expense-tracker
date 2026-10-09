@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../data/models/tag_model.dart';
 import '../../providers/tag_providers.dart';
+import '../../providers/transaction_providers.dart';
 import '../../widgets/app_sheets.dart';
 import '../../widgets/list_widgets.dart';
 
@@ -45,6 +46,8 @@ class TagsManagementScreen extends ConsumerWidget {
     if (!ok) return;
     await ref.read(tagRepositoryProvider).deleteTag(tag.id);
     ref.invalidate(tagsListProvider);
+    // The tag disappears from every transaction that used it.
+    await ref.read(transactionListProvider.notifier).reloadAll();
   }
 
   @override

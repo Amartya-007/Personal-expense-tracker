@@ -7,6 +7,7 @@ import '../../../core/theme/app_palette.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../data/models/category_model.dart';
 import '../../providers/category_providers.dart';
+import '../../providers/transaction_providers.dart';
 import '../../widgets/app_sheets.dart';
 import '../../widgets/list_widgets.dart';
 
@@ -36,7 +37,15 @@ class CategoriesManagementScreen extends ConsumerWidget {
     );
 
     await ref.read(categoryRepositoryProvider).createCategory(cat);
+    _refreshCategories(ref);
+  }
+
+  /// The Add Transaction screen reads the expense/income lists, so those must
+  /// reload too, otherwise a new category is missing there until restart.
+  void _refreshCategories(WidgetRef ref) {
     ref.invalidate(categoriesListProvider);
+    ref.invalidate(expenseCategoriesProvider);
+    ref.invalidate(incomeCategoriesProvider);
   }
 
   Future<void> _delete(
@@ -54,7 +63,8 @@ class CategoriesManagementScreen extends ConsumerWidget {
 
     try {
       await ref.read(categoryRepositoryProvider).deleteCategory(category.id);
-      ref.invalidate(categoriesListProvider);
+      _refreshCategories(ref);
+      await ref.read(transactionListProvider.notifier).reloadAll();
     } catch (_) {
       // The repository refuses to delete a category that still has
       // transactions (it would orphan them), so explain instead of failing
