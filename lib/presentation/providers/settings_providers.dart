@@ -121,6 +121,12 @@ final mainTabProvider = StateProvider<int>((ref) => 0);
 final hapticsEnabledProvider =
     StateNotifierProvider<HapticsNotifier, bool>((ref) => HapticsNotifier());
 
+/// Privacy mode (hide sensitive amounts across screens).
+final privacyModeProvider =
+    StateNotifierProvider<BoolPrefNotifier, bool>((ref) {
+      return BoolPrefNotifier(AppConstants.prefPrivacyMode, defaultValue: false);
+    });
+
 /// Haptic feedback on/off. Mirrors the value into [AppHaptics.enabled], which
 /// the shared widgets read, so a change takes effect everywhere at once.
 class HapticsNotifier extends StateNotifier<bool> {

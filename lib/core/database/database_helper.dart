@@ -13,7 +13,7 @@ import 'database_tables.dart';
 
 class DatabaseHelper {
   static final String _dbName = AppConstants.dbFileName;
-  static const int _dbVersion = 2;
+  static const int _dbVersion = 3;
 
   // Seed data created on first run. Shared with [deleteAllUserData] so that a
   // reset returns to exactly this state.
@@ -148,6 +148,7 @@ class DatabaseHelper {
       'recurring_payments',
       'budgets',
       'receipts',
+      'transaction_splits',
       'transaction_tags',
       'transactions',
       'category_rules',
@@ -171,6 +172,7 @@ class DatabaseHelper {
     schemaBatch.execute(DatabaseTables.createTagsTable);
     schemaBatch.execute(DatabaseTables.createTransactionsTable);
     schemaBatch.execute(DatabaseTables.createTransactionTagsTable);
+    schemaBatch.execute(DatabaseTables.createTransactionSplitsTable);
     schemaBatch.execute(DatabaseTables.createReceiptsTable);
     schemaBatch.execute(DatabaseTables.createBudgetsTable);
     schemaBatch.execute(DatabaseTables.createRecurringPaymentsTable);
@@ -252,6 +254,7 @@ class DatabaseHelper {
     await db.transaction((txn) async {
       // Children before parents: foreign keys are enforced.
       const userTables = [
+        'transaction_splits',
         'transaction_tags',
         'receipts',
         'transactions',

@@ -67,16 +67,25 @@ class BudgetRepository {
       // rather than the dates the budget was created with.
       final window = currentWindow(period, storedStart, storedEnd, now: now);
 
-      // Aggregated spent amount query
+      // Aggregated spent amount query including transaction splits
       final spentRes = await db.rawQuery('''
-        SELECT SUM(amount) as total
-        FROM transactions
-        WHERE category_id = ?
-          AND date >= ?
-          AND date <= ?
-          AND type = 'expense'
-          AND deleted_at IS NULL
+        SELECT SUM(amt) as total FROM (
+          SELECT amount as amt FROM transactions
+          WHERE category_id = ?
+            AND id NOT IN (SELECT transaction_id FROM transaction_splits)
+            AND date >= ? AND date <= ?
+            AND type = 'expense' AND deleted_at IS NULL
+          UNION ALL
+          SELECT s.amount as amt FROM transaction_splits s
+          INNER JOIN transactions t ON s.transaction_id = t.id
+          WHERE s.category_id = ?
+            AND t.date >= ? AND t.date <= ?
+            AND t.type = 'expense' AND t.deleted_at IS NULL
+        )
       ''', [
+        catId,
+        window.start.millisecondsSinceEpoch,
+        window.end.millisecondsSinceEpoch,
         catId,
         window.start.millisecondsSinceEpoch,
         window.end.millisecondsSinceEpoch,

@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_palette.dart';
 import '../../core/theme/app_text.dart';
 import '../../core/utils/currency_formatter.dart';
 import '../../data/models/transaction_model.dart';
+import '../providers/settings_providers.dart';
 import 'app_card.dart';
 
-/// One transaction line. This was copy-pasted (~70 lines) in both the Home
-/// and History screens; it now lives here once.
-class TransactionRow extends StatelessWidget {
+/// One transaction line. Consumes [privacyModeProvider] to mask amounts when enabled.
+class TransactionRow extends ConsumerWidget {
   final TransactionModel transaction;
   final VoidCallback? onTap;
   final bool showDivider;
@@ -22,8 +23,9 @@ class TransactionRow extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
+    final isMasked = ref.watch(privacyModeProvider);
     final tx = transaction;
     final prefix = tx.isIncome ? '+' : (tx.isExpense ? '−' : '');
 
@@ -56,11 +58,25 @@ class TransactionRow extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          tx.description,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppText.body(p.ink),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                tx.description,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppText.body(p.ink),
+                              ),
+                            ),
+                            if (tx.receipts.isNotEmpty) ...[
+                              const SizedBox(width: 4),
+                              const Text('🧾', style: TextStyle(fontSize: 11)),
+                            ],
+                            if (tx.note != null && tx.note!.isNotEmpty) ...[
+                              const SizedBox(width: 4),
+                              const Text('📝', style: TextStyle(fontSize: 11)),
+                            ],
+                          ],
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -74,7 +90,7 @@ class TransactionRow extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    '$prefix${CurrencyFormatter.format(tx.amount)}',
+                    isMasked ? '••••••' : '$prefix${CurrencyFormatter.format(tx.amount)}',
                     style: AppText.amount(
                       p.amount(isIncome: tx.isIncome, isExpense: tx.isExpense),
                       size: 14,

@@ -444,6 +444,15 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
               ListRowTile(
+                emoji: '👁️',
+                title: 'Hide balances & amounts',
+                subtitle: 'Mask sensitive figures across screens',
+                trailing: toggle(
+                  ref.watch(privacyModeProvider),
+                  (v) => ref.read(privacyModeProvider.notifier).set(v),
+                ),
+              ),
+              ListRowTile(
                 emoji: '📳',
                 title: 'Haptic feedback',
                 subtitle: 'Gentle vibration on taps and selections',

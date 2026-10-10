@@ -11,6 +11,7 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/budget_model.dart';
 import '../../providers/budget_providers.dart';
 import '../../providers/category_providers.dart';
+import '../../providers/settings_providers.dart';
 import '../../widgets/animated_progress_bar.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_sheets.dart';
@@ -119,6 +120,8 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
         final p = ctx.palette;
         final noun = _periodNoun[budget.period] ?? 'period';
         final percent = (budget.usedRatio * 100).round();
+        final remainingDays = (budget.endDate.difference(DateTime.now()).inDays + 1).clamp(1, 365);
+        final dailyAllowance = budget.remainingAmount > 0 ? budget.remainingAmount / remainingDays : 0.0;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -144,6 +147,13 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
                         : 'left of ${CurrencyFormatter.format(budget.amount)} this $noun',
                     style: AppText.caption(p.muted),
                   ),
+                  if (budget.overAmount <= 0) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      '💡 Pace: ${CurrencyFormatter.format(dailyAllowance, showDecimals: false)} / day for remaining $remainingDays days',
+                      style: AppText.caption(p.primary).copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   AnimatedProgressBar(
                     value: budget.percentage,
@@ -307,6 +317,7 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
       );
     }
 
+    final isMasked = ref.watch(privacyModeProvider);
     final totalSpent = list.fold<double>(0.0, (s, b) => s + b.spentAmount);
     final totalLimit = list.fold<double>(0.0, (s, b) => s + b.amount);
     final totalLeft = math.max(0.0, totalLimit - totalSpent);
@@ -370,12 +381,13 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
                     Text(
                       CurrencyFormatter.format(
                         over ? totalSpent - totalLimit : totalLeft,
+                        isMasked: isMasked,
                       ),
                       style: AppText.display(over ? p.expense : p.ink),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'of ${CurrencyFormatter.format(totalLimit)} budgeted',
+                      'of ${CurrencyFormatter.format(totalLimit, isMasked: isMasked)} budgeted',
                       style: AppText.caption(p.muted),
                     ),
                   ],

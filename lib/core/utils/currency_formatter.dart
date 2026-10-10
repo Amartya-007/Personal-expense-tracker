@@ -13,7 +13,8 @@ class CurrencyFormatter {
     decimalDigits: 0,
   );
 
-  static String format(double amount, {bool showDecimals = true}) {
+  static String format(double amount, {bool showDecimals = true, bool isMasked = false}) {
+    if (isMasked) return '••••••';
     if (showDecimals) {
       return _formatter.format(amount);
     } else {
@@ -21,7 +22,8 @@ class CurrencyFormatter {
     }
   }
 
-  static String formatCompact(double amount) {
+  static String formatCompact(double amount, {bool isMasked = false}) {
+    if (isMasked) return '••••••';
     if (amount >= 10000000) {
       return '₹${(amount / 10000000).toStringAsFixed(2)} Cr';
     } else if (amount >= 100000) {

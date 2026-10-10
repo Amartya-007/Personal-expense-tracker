@@ -215,7 +215,7 @@ class _AnalyticsBody extends ConsumerWidget {
   }
 }
 
-class _CategoryCard extends StatelessWidget {
+class _CategoryCard extends ConsumerWidget {
   final AnalyticsSummaryModel data;
 
   const _CategoryCard({required this.data});
@@ -225,8 +225,9 @@ class _CategoryCard extends StatelessWidget {
       : Color(item.categoryColor);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
+    final isMasked = ref.watch(privacyModeProvider);
     final items = data.categoryBreakdown;
 
     if (items.isEmpty) {
@@ -279,7 +280,7 @@ class _CategoryCard extends StatelessWidget {
                       children: [
                         Text('Spent', style: AppText.caption(p.muted).copyWith(fontSize: 10)),
                         Text(
-                          CurrencyFormatter.format(total),
+                          CurrencyFormatter.format(total, isMasked: isMasked),
                           style: AppText.bodyStrong(p.ink),
                         ),
                       ],
@@ -364,14 +365,15 @@ class _LegendRow extends StatelessWidget {
   }
 }
 
-class _IncomeExpenseCard extends StatelessWidget {
+class _IncomeExpenseCard extends ConsumerWidget {
   final AnalyticsSummaryModel data;
 
   const _IncomeExpenseCard({required this.data});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
+    final isMasked = ref.watch(privacyModeProvider);
     final income = data.totalIncome;
     final expense = data.totalExpense;
     final net = income - expense;
@@ -382,7 +384,7 @@ class _IncomeExpenseCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(label, style: AppText.body(p.ink)),
-                Text(CurrencyFormatter.format(value), style: AppText.bodyStrong(color)),
+                Text(CurrencyFormatter.format(value, isMasked: isMasked), style: AppText.bodyStrong(color)),
               ],
             ),
             const SizedBox(height: 8),
@@ -410,7 +412,7 @@ class _IncomeExpenseCard extends StatelessWidget {
             children: [
               Text(net >= 0 ? 'Saved' : 'Overspent', style: AppText.body(p.muted)),
               Text(
-                CurrencyFormatter.format(net.abs()),
+                CurrencyFormatter.format(net.abs(), isMasked: isMasked),
                 style: AppText.bodyStrong(net >= 0 ? p.income : p.expense),
               ),
             ],
@@ -427,6 +429,7 @@ class _TrendCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
+    final isMasked = ref.watch(privacyModeProvider);
     final trendAsync = ref.watch(spendingTrendProvider);
     final range = insightsRange(ref.watch(selectedDateRangeProvider));
     final fmt = DateFormat('d MMM');
@@ -463,13 +466,27 @@ class _TrendCard extends ConsumerWidget {
           return Column(
             children: [
               SizedBox(
-                height: 100,
+                height: 110,
                 child: LineChart(
                   LineChartData(
                     gridData: const FlGridData(show: false),
                     titlesData: const FlTitlesData(show: false),
                     borderData: FlBorderData(show: false),
-                    lineTouchData: const LineTouchData(enabled: false),
+                    lineTouchData: LineTouchData(
+                      enabled: true,
+                      touchTooltipData: LineTouchTooltipData(
+                        getTooltipColor: (touchedSpot) => p.surfaceRaised,
+                        tooltipRoundedRadius: 12,
+                        getTooltipItems: (touchedSpots) {
+                          return touchedSpots.map((spot) {
+                            return LineTooltipItem(
+                              CurrencyFormatter.format(spot.y, showDecimals: false, isMasked: isMasked),
+                              AppText.caption(p.ink).copyWith(fontWeight: FontWeight.bold),
+                            );
+                          }).toList();
+                        },
+                      ),
+                    ),
                     minX: 0,
                     maxX: (spots.length - 1).toDouble(),
                     minY: 0,

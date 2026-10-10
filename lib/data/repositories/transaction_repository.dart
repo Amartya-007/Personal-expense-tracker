@@ -8,6 +8,7 @@ import '../../core/logging/app_logger.dart';
 import '../models/receipt_model.dart';
 import '../models/tag_model.dart';
 import '../models/transaction_model.dart';
+import '../models/transaction_split_model.dart';
 
 class TransactionRepository {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
@@ -49,7 +50,8 @@ class TransactionRepository {
     }
 
     if (categoryId != null && categoryId.isNotEmpty) {
-      whereClauses.add('t.category_id = ?');
+      whereClauses.add('(t.category_id = ? OR t.id IN (SELECT transaction_id FROM transaction_splits WHERE category_id = ?))');
+      whereArgs.add(categoryId);
       whereArgs.add(categoryId);
     }
 
@@ -125,7 +127,8 @@ class TransactionRepository {
       final txId = map['id'] as String;
       final tags = await _getTagsForTransaction(db, txId);
       final receipts = await _getReceiptsForTransaction(db, txId);
-      list.add(TransactionModel.fromMap(map, tags: tags, receipts: receipts));
+      final splits = await _getSplitsForTransaction(db, txId);
+      list.add(TransactionModel.fromMap(map, tags: tags, receipts: receipts, splits: splits));
     }
     return list;
   }
@@ -152,7 +155,8 @@ class TransactionRepository {
 
     final tags = await _getTagsForTransaction(db, id);
     final receipts = await _getReceiptsForTransaction(db, id);
-    return TransactionModel.fromMap(maps.first, tags: tags, receipts: receipts);
+    final splits = await _getSplitsForTransaction(db, id);
+    return TransactionModel.fromMap(maps.first, tags: tags, receipts: receipts, splits: splits);
   }
 
   Future<void> createTransaction(TransactionModel tx) async {
@@ -202,6 +206,16 @@ class TransactionRepository {
           fixedReceipt.toMap(),
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
+      }
+
+      for (final split in tx.splits) {
+        await txn.insert('transaction_splits', {
+          'id': split.id.isEmpty ? _uuid.v4() : split.id,
+          'transaction_id': tx.id,
+          'category_id': split.categoryId,
+          'amount': split.amount,
+          'note': split.note,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
       }
     });
 
@@ -285,6 +299,21 @@ class TransactionRepository {
           fixedReceipt.toMap(),
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
+      }
+
+      await txn.delete(
+        'transaction_splits',
+        where: 'transaction_id = ?',
+        whereArgs: [newTx.id],
+      );
+      for (final split in newTx.splits) {
+        await txn.insert('transaction_splits', {
+          'id': split.id.isEmpty ? _uuid.v4() : split.id,
+          'transaction_id': newTx.id,
+          'category_id': split.categoryId,
+          'amount': split.amount,
+          'note': split.note,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
       }
     });
     await AppLogger.i('Updated transaction ${newTx.id}');
@@ -384,10 +413,15 @@ class TransactionRepository {
         where: 'transaction_id = ?',
         whereArgs: [id],
       );
+      await txn.delete(
+        'transaction_splits',
+        where: 'transaction_id = ?',
+        whereArgs: [id],
+      );
       await txn.delete('transactions', where: 'id = ?', whereArgs: [id]);
     });
     await AppLogger.i(
-      'Permanently deleted transaction $id and cleaned up receipts',
+      'Permanently deleted transaction $id and cleaned up receipts and splits',
     );
   }
 
@@ -415,7 +449,8 @@ class TransactionRepository {
       final txId = map['id'] as String;
       final tags = await _getTagsForTransaction(db, txId);
       final receipts = await _getReceiptsForTransaction(db, txId);
-      list.add(TransactionModel.fromMap(map, tags: tags, receipts: receipts));
+      final splits = await _getSplitsForTransaction(db, txId);
+      list.add(TransactionModel.fromMap(map, tags: tags, receipts: receipts, splits: splits));
     }
     return list;
   }
@@ -461,6 +496,20 @@ class TransactionRepository {
     ''';
     final maps = await db.rawQuery(sql, [txId]);
     return maps.map((m) => ReceiptModel.fromMap(m)).toList();
+  }
+
+  Future<List<TransactionSplitModel>> _getSplitsForTransaction(
+    DatabaseExecutor db,
+    String txId,
+  ) async {
+    const sql = '''
+      SELECT s.*, c.name as category_name
+      FROM transaction_splits s
+      LEFT JOIN categories c ON s.category_id = c.id
+      WHERE s.transaction_id = ?
+    ''';
+    final maps = await db.rawQuery(sql, [txId]);
+    return maps.map((m) => TransactionSplitModel.fromMap(m)).toList();
   }
 
   Future<void> _applyBalanceImpact(

@@ -1,5 +1,6 @@
 import 'receipt_model.dart';
 import 'tag_model.dart';
+import 'transaction_split_model.dart';
 
 class TransactionModel {
   final String id;
@@ -31,6 +32,7 @@ class TransactionModel {
   final String? duplicateStatus;
   final List<TagModel> tags;
   final List<ReceiptModel> receipts;
+  final List<TransactionSplitModel> splits;
 
   TransactionModel({
     required this.id,
@@ -62,12 +64,14 @@ class TransactionModel {
     this.duplicateStatus,
     this.tags = const [],
     this.receipts = const [],
+    this.splits = const [],
   });
 
   bool get isExpense => type == 'expense';
   bool get isIncome => type == 'income';
   bool get isTransfer => type == 'transfer';
   bool get isDeleted => deletedAt != null;
+  bool get isSplit => splits.isNotEmpty;
 
   TransactionModel copyWith({
     String? id,
@@ -99,6 +103,7 @@ class TransactionModel {
     String? duplicateStatus,
     List<TagModel>? tags,
     List<ReceiptModel>? receipts,
+    List<TransactionSplitModel>? splits,
   }) {
     return TransactionModel(
       id: id ?? this.id,
@@ -131,6 +136,7 @@ class TransactionModel {
       duplicateStatus: duplicateStatus ?? this.duplicateStatus,
       tags: tags ?? this.tags,
       receipts: receipts ?? this.receipts,
+      splits: splits ?? this.splits,
     );
   }
 
@@ -165,6 +171,7 @@ class TransactionModel {
     Map<String, dynamic> map, {
     List<TagModel>? tags,
     List<ReceiptModel>? receipts,
+    List<TransactionSplitModel>? splits,
   }) {
     return TransactionModel(
       id: map['id'] as String,
@@ -210,6 +217,7 @@ class TransactionModel {
       duplicateStatus: map['duplicate_status'] as String?,
       tags: tags ?? [],
       receipts: receipts ?? [],
+      splits: splits ?? [],
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:mykhata/presentation/providers/settings_providers.dart'; //do not remove by OWNER
 
 import '../../../core/navigation/app_routes.dart';
+import '../../../core/theme/app_haptics.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/theme/app_text.dart';
@@ -298,6 +299,20 @@ class HomeScreen extends ConsumerWidget {
                   ),
                 ),
               ),
+              const SizedBox(height: 14),
+
+              // 2b. Quick Action Buttons
+              FadeSlideIn(
+                index: 1,
+                child: _QuickActionsRow(smsCount: smsCount),
+              ),
+              const SizedBox(height: 14),
+
+              // 2c. Monthly Cashflow Snapshot
+              const FadeSlideIn(
+                index: 1,
+                child: _MonthlyCashflowCard(),
+              ),
               const SizedBox(height: 24),
 
               // 3. Budgets
@@ -511,17 +526,251 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-/// Gradient total-balance card. The total counts up to its value and each
-/// account chip opens the balance editor.
-class _HeroCard extends StatelessWidget {
+/// Quick action shortcuts bar right under the balance hero card.
+class _QuickActionsRow extends StatelessWidget {
+  final int smsCount;
+
+  const _QuickActionsRow({required this.smsCount});
+
+  Widget _actionPill(
+    BuildContext context, {
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+    int badgeCount = 0,
+  }) {
+    final p = context.palette;
+    return Expanded(
+      child: Pressable(
+        onTap: () {
+          AppHaptics.tap();
+          onTap();
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          decoration: BoxDecoration(
+            color: p.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: p.border),
+            boxShadow: p.shadowSm,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, size: 18, color: color),
+                  ),
+                  if (badgeCount > 0)
+                    Positioned(
+                      right: -4,
+                      top: -4,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: p.expense,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '$badgeCount',
+                          style: const TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.caption(p.ink).copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+
+    return Row(
+      children: [
+        _actionPill(
+          context,
+          label: 'Expense',
+          icon: Icons.north_east_rounded,
+          color: p.expense,
+          onTap: () => AppRoutes.pushModal(
+            context,
+            const AddTransactionScreen(initialType: 'expense'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        _actionPill(
+          context,
+          label: 'Income',
+          icon: Icons.south_west_rounded,
+          color: p.income,
+          onTap: () => AppRoutes.pushModal(
+            context,
+            const AddTransactionScreen(initialType: 'income'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        _actionPill(
+          context,
+          label: 'Transfer',
+          icon: Icons.swap_horiz_rounded,
+          color: p.primary,
+          onTap: () => AppRoutes.pushModal(
+            context,
+            const AddTransactionScreen(initialType: 'transfer'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        _actionPill(
+          context,
+          label: 'SMS Review',
+          icon: Icons.mark_chat_unread_rounded,
+          color: p.secondary,
+          badgeCount: smsCount,
+          onTap: () => AppRoutes.push(context, const SmsReviewScreen()),
+        ),
+      ],
+    );
+  }
+}
+
+/// Monthly cashflow summary widget showing Income, Expense, Net.
+class _MonthlyCashflowCard extends ConsumerWidget {
+  const _MonthlyCashflowCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+    final isMasked = ref.watch(privacyModeProvider);
+    final analyticsAsync = ref.watch(analyticsSummaryProvider);
+
+    return analyticsAsync.maybeWhen(
+      data: (data) {
+        final income = data.totalIncome;
+        final expense = data.totalExpense;
+        final net = income - expense;
+        final isNetPositive = net >= 0;
+
+        return AppCard(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.south_west_rounded, size: 13, color: p.income),
+                        const SizedBox(width: 3),
+                        Text('Income', style: AppText.caption(p.muted).copyWith(fontSize: 11)),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      CurrencyFormatter.format(income, isMasked: isMasked),
+                      style: AppText.bodyStrong(p.income).copyWith(fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+              Container(width: 1, height: 28, color: p.border),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.north_east_rounded, size: 13, color: p.expense),
+                          const SizedBox(width: 3),
+                          Text('Expense', style: AppText.caption(p.muted).copyWith(fontSize: 11)),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        CurrencyFormatter.format(expense, isMasked: isMasked),
+                        style: AppText.bodyStrong(p.expense).copyWith(fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Container(width: 1, height: 28, color: p.border),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            isNetPositive ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                            size: 13,
+                            color: isNetPositive ? p.income : p.expense,
+                          ),
+                          const SizedBox(width: 3),
+                          Text('Net', style: AppText.caption(p.muted).copyWith(fontSize: 11)),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        CurrencyFormatter.format(net.abs(), isMasked: isMasked),
+                        style: AppText.bodyStrong(isNetPositive ? p.income : p.expense).copyWith(fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
+/// Gradient total-balance card with privacy mode toggle.
+class _HeroCard extends ConsumerWidget {
   final List<AccountModel> accounts;
   final ValueChanged<AccountModel> onEditAccount;
 
   const _HeroCard({required this.accounts, required this.onEditAccount});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
+    final isMasked = ref.watch(privacyModeProvider);
     final total = accounts.fold<double>(0.0, (sum, a) => sum + a.currentBalance);
 
     return AppCard(
@@ -579,10 +828,36 @@ class _HeroCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Total tracked balance',
-                  style: AppText.caption(Colors.white.withValues(alpha: 0.9))
-                      .copyWith(fontWeight: FontWeight.w600),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Total tracked balance',
+                      style: AppText.caption(Colors.white.withValues(alpha: 0.9))
+                          .copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    Pressable(
+                      onTap: () {
+                        AppHaptics.tap();
+                        ref.read(privacyModeProvider.notifier).set(!isMasked);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                        ),
+                        child: Icon(
+                          isMasked
+                              ? Icons.visibility_off_rounded
+                              : Icons.visibility_rounded,
+                          size: 16,
+                          color: Colors.white.withValues(alpha: 0.9),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 TweenAnimationBuilder<double>(
@@ -593,7 +868,7 @@ class _HeroCard extends StatelessWidget {
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      CurrencyFormatter.format(value),
+                      CurrencyFormatter.format(value, isMasked: isMasked),
                       style: AppText.display(Colors.white).copyWith(
                         fontSize: 36,
                         letterSpacing: -1.0,
@@ -651,7 +926,7 @@ class _HeroCard extends StatelessWidget {
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      CurrencyFormatter.format(acc.currentBalance),
+                                      CurrencyFormatter.format(acc.currentBalance, isMasked: isMasked),
                                       style: AppText.amount(Colors.white),
                                     ),
                                   ],

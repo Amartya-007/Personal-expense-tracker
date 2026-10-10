@@ -1,7 +1,10 @@
+import 'dart:math' as math;
+
 import '../../core/database/database_helper.dart';
 import '../../core/logging/app_logger.dart';
 import '../../core/utils/currency_formatter.dart';
 import '../../data/models/analytics_summary_model.dart';
+import '../../data/models/spending_forecast_model.dart';
 
 class AnalyticsService {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
@@ -34,21 +37,29 @@ class AnalyticsService {
       final totalExpense = (expRes.first['total'] as num?)?.toDouble() ?? 0.0;
       final netSavings = totalIncome - totalExpense;
 
+      // Category breakdown including transaction splits
       final catRes = await db.rawQuery(
         '''
         SELECT 
-          c.id as category_id,
-          c.name as category_name,
-          c.icon as category_icon,
-          c.color as category_color,
-          SUM(t.amount) as total_amount
-        FROM transactions t
-        INNER JOIN categories c ON t.category_id = c.id
-        WHERE t.type = 'expense' AND t.date >= ? AND t.date <= ? AND t.deleted_at IS NULL
-        GROUP BY c.id
+          cat.id as category_id,
+          cat.name as category_name,
+          cat.icon as category_icon,
+          cat.color as category_color,
+          SUM(sub.amount) as total_amount
+        FROM (
+          SELECT category_id, amount FROM transactions
+          WHERE type = 'expense' AND date >= ? AND date <= ? AND deleted_at IS NULL
+            AND id NOT IN (SELECT transaction_id FROM transaction_splits)
+          UNION ALL
+          SELECT s.category_id, s.amount FROM transaction_splits s
+          INNER JOIN transactions t ON s.transaction_id = t.id
+          WHERE t.type = 'expense' AND t.date >= ? AND t.date <= ? AND t.deleted_at IS NULL
+        ) sub
+        INNER JOIN categories cat ON sub.category_id = cat.id
+        GROUP BY cat.id
         ORDER BY total_amount DESC
       ''',
-        [startMs, endMs],
+        [startMs, endMs, startMs, endMs],
       );
 
       final categoryBreakdown = <CategorySpending>[];
@@ -130,6 +141,71 @@ class AnalyticsService {
     }
   }
 
+  Future<SpendingForecastModel> calculateMonthEndForecast() async {
+    try {
+      final db = await _dbHelper.database;
+      final now = DateTime.now();
+      final monthStart = DateTime(now.year, now.month, 1);
+      final monthEnd = DateTime(now.year, now.month + 1, 0, 23, 59, 59, 999);
+      final startMs = monthStart.millisecondsSinceEpoch;
+      final endMs = monthEnd.millisecondsSinceEpoch;
+      final todayMs = now.millisecondsSinceEpoch;
+
+      final expRes = await db.rawQuery(
+        '''
+        SELECT SUM(amount) as total FROM transactions
+        WHERE type = 'expense' AND date >= ? AND date <= ? AND deleted_at IS NULL
+      ''',
+        [startMs, todayMs],
+      );
+      final actualSpentSoFar = (expRes.first['total'] as num?)?.toDouble() ?? 0.0;
+
+      final budgetRes = await db.rawQuery(
+        '''
+        SELECT SUM(amount) as total FROM budgets
+        WHERE period = 'monthly'
+      ''',
+      );
+      final monthlyBudgetLimit = (budgetRes.first['total'] as num?)?.toDouble() ?? 0.0;
+
+      final daysElapsed = math.max(1, now.day);
+      final totalDaysInMonth = monthEnd.day;
+      final dailyRunRate = actualSpentSoFar / daysElapsed;
+      final remainingDays = math.max(0, totalDaysInMonth - daysElapsed);
+
+      final recurringRes = await db.rawQuery(
+        '''
+        SELECT SUM(amount) as total FROM recurring_payments
+        WHERE is_active = 1 AND next_due_date >= ? AND next_due_date <= ?
+      ''',
+        [todayMs, endMs],
+      );
+      final remainingRecurringDue = (recurringRes.first['total'] as num?)?.toDouble() ?? 0.0;
+
+      final projectedTotalSpend = actualSpentSoFar + (dailyRunRate * remainingDays) + remainingRecurringDue;
+
+      return SpendingForecastModel(
+        actualSpentSoFar: actualSpentSoFar,
+        projectedTotalSpend: projectedTotalSpend,
+        dailyRunRate: dailyRunRate,
+        monthlyBudgetLimit: monthlyBudgetLimit,
+        daysElapsed: daysElapsed,
+        totalDaysInMonth: totalDaysInMonth,
+        remainingRecurringDue: remainingRecurringDue,
+      );
+    } catch (_) {
+      return SpendingForecastModel(
+        actualSpentSoFar: 0,
+        projectedTotalSpend: 0,
+        dailyRunRate: 0,
+        monthlyBudgetLimit: 0,
+        daysElapsed: 1,
+        totalDaysInMonth: 30,
+        remainingRecurringDue: 0,
+      );
+    }
+  }
+
   Future<List<double>> getDailySpendingTrend({
     required DateTime startDate,
     required DateTime endDate,
@@ -172,8 +248,6 @@ class AnalyticsService {
         now.month,
         now.day,
       ).subtract(Duration(days: now.weekday - 1));
-      final prevWeekStart = weekStart.subtract(const Duration(days: 7));
-      final prevWeekEnd = weekStart.subtract(const Duration(milliseconds: 1));
 
       final db = await _dbHelper.database;
 
@@ -192,42 +266,28 @@ class AnalyticsService {
 
       final foodAmt = (foodRes.first['total'] as num?)?.toDouble() ?? 0.0;
 
-      final prevFoodRes = await db.rawQuery(
-        '''
-        SELECT SUM(t.amount) as total
-        FROM transactions t
-        INNER JOIN categories c ON t.category_id = c.id
-        WHERE LOWER(c.name) LIKE '%food%'
-          AND t.type = 'expense'
-          AND t.date >= ? AND t.date <= ?
-          AND t.deleted_at IS NULL
-      ''',
-        [
-          prevWeekStart.millisecondsSinceEpoch,
-          prevWeekEnd.millisecondsSinceEpoch,
-        ],
-      );
-
-      final prevFoodAmt =
-          (prevFoodRes.first['total'] as num?)?.toDouble() ?? 0.0;
+      final forecast = await calculateMonthEndForecast();
 
       final insights = <String>[];
       if (foodAmt > 0) {
         insights.add(
           'You spent ${CurrencyFormatter.format(foodAmt)} on Food this week.',
         );
-        final diff = foodAmt - prevFoodAmt;
-        if (diff < 0) {
+      }
+      if (forecast.monthlyBudgetLimit > 0) {
+        if (forecast.isOverBudget) {
           insights.add(
-            'Food spending is ${CurrencyFormatter.format(diff.abs())} lower than last week.',
+            '⚠️ Projected to exceed monthly budget by ${CurrencyFormatter.format(forecast.varianceFromBudget)}.',
           );
-        } else if (diff > 0 && prevFoodAmt > 0) {
+        } else {
           insights.add(
-            'Food spending is ${CurrencyFormatter.format(diff)} higher than last week.',
+            '✅ On track for month-end (projected spend: ${CurrencyFormatter.format(forecast.projectedTotalSpend)}).',
           );
         }
-      } else {
-        insights.add('No food expenses recorded this week.');
+      }
+
+      if (insights.isEmpty) {
+        insights.add('Log your expenses to unlock personalized spending forecasts.');
       }
 
       return insights;

@@ -87,6 +87,18 @@ class DatabaseTables {
     );
   ''';
 
+  static const String createTransactionSplitsTable = '''
+    CREATE TABLE transaction_splits (
+      id TEXT PRIMARY KEY,
+      transaction_id TEXT NOT NULL,
+      category_id TEXT NOT NULL,
+      amount REAL NOT NULL,
+      note TEXT,
+      FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
+      FOREIGN KEY (category_id) REFERENCES categories(id)
+    );
+  ''';
+
   static const String createReceiptsTable = '''
     CREATE TABLE receipts (
       id TEXT PRIMARY KEY,
@@ -228,6 +240,7 @@ class DatabaseTables {
     'CREATE INDEX IF NOT EXISTS idx_sms_status ON sms_review_queue(status, date DESC);',
     'CREATE INDEX IF NOT EXISTS idx_cat_rules_kw ON category_rules(keyword);',
     'CREATE INDEX IF NOT EXISTS idx_receipts_tx ON receipts(transaction_id);',
+    'CREATE INDEX IF NOT EXISTS idx_tx_splits_tx ON transaction_splits(transaction_id);',
     createPrimaryAccountIndex,
   ];
 }

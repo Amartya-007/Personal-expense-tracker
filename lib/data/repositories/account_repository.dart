@@ -149,4 +149,67 @@ class AccountRepository {
     );
     await AppLogger.i('Deactivated account $accountId');
   }
+
+  /// Reconciles account ledger against transactions and balance adjustments (Improvement 3).
+  Future<({double expectedBalance, double actualBalance, bool isMatch, double drift})> reconcileAccount(String accountId) async {
+    final db = await _dbHelper.database;
+    final accMap = await db.query('accounts', where: 'id = ?', whereArgs: [accountId]);
+    if (accMap.isEmpty) throw Exception('Account not found');
+
+    final account = AccountModel.fromMap(accMap.first);
+    final initial = account.initialBalance;
+
+    final incRes = await db.rawQuery(
+      'SELECT SUM(amount) as total FROM transactions WHERE account_id = ? AND type = \'income\' AND deleted_at IS NULL',
+      [accountId],
+    );
+    final totalIncome = (incRes.first['total'] as num?)?.toDouble() ?? 0.0;
+
+    final expRes = await db.rawQuery(
+      'SELECT SUM(amount) as total FROM transactions WHERE account_id = ? AND type = \'expense\' AND payment_method != \'Cash\' AND deleted_at IS NULL',
+      [accountId],
+    );
+    final totalExpense = (expRes.first['total'] as num?)?.toDouble() ?? 0.0;
+
+    final transOutRes = await db.rawQuery(
+      'SELECT SUM(amount) as total FROM transactions WHERE account_id = ? AND type = \'transfer\' AND deleted_at IS NULL',
+      [accountId],
+    );
+    final totalTransOut = (transOutRes.first['total'] as num?)?.toDouble() ?? 0.0;
+
+    final transInRes = await db.rawQuery(
+      'SELECT SUM(amount) as total FROM transactions WHERE destination_account_id = ? AND type = \'transfer\' AND deleted_at IS NULL',
+      [accountId],
+    );
+    final totalTransIn = (transInRes.first['total'] as num?)?.toDouble() ?? 0.0;
+
+    final adjRes = await db.rawQuery(
+      'SELECT SUM(adjustment_amount) as total FROM balance_adjustments WHERE account_id = ?',
+      [accountId],
+    );
+    final totalAdjustments = (adjRes.first['total'] as num?)?.toDouble() ?? 0.0;
+
+    final expectedBalance = initial + totalIncome - totalExpense - totalTransOut + totalTransIn + totalAdjustments;
+    final actualBalance = account.currentBalance;
+    final drift = (actualBalance - expectedBalance).abs();
+    final isMatch = drift < 0.01;
+
+    return (
+      expectedBalance: expectedBalance,
+      actualBalance: actualBalance,
+      isMatch: isMatch,
+      drift: drift,
+    );
+  }
+
+  Future<void> autoCorrectAccountBalance(String accountId) async {
+    final result = await reconcileAccount(accountId);
+    if (!result.isMatch) {
+      await updateAccountBalanceDirect(
+        accountId,
+        result.expectedBalance,
+        reason: 'Automated ledger reconciliation correction',
+      );
+    }
+  }
 }
