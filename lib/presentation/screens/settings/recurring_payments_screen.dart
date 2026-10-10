@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../core/utils/currency_formatter.dart';
@@ -12,7 +13,11 @@ import '../../../data/models/recurring_payment_model.dart';
 import '../../providers/account_providers.dart';
 import '../../providers/category_providers.dart';
 import '../../providers/recurring_providers.dart';
+import '../../widgets/app_dropdown.dart';
 import '../../widgets/app_sheets.dart';
+import '../../widgets/field_decoration.dart';
+import '../../widgets/primary_button.dart';
+import '../../widgets/segmented_tabs.dart';
 import '../../widgets/list_widgets.dart';
 
 class RecurringPaymentsScreen extends ConsumerWidget {
@@ -198,65 +203,67 @@ class _RecurringFormState extends State<_RecurringForm> {
           autofocus: true,
           textInputAction: TextInputAction.next,
           onChanged: (_) => setState(() => _error = null),
-          decoration: const InputDecoration(
-            labelText: 'Name',
-            hintText: 'e.g. Netflix, Rent',
-          ),
+          decoration: appFieldDecoration(
+            p,
+            hint: 'e.g. Netflix, Rent',
+          ).copyWith(labelText: 'Name'),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _amount,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           onChanged: (_) => setState(() => _error = null),
-          decoration: const InputDecoration(labelText: 'Amount (₹)'),
+          decoration: appFieldDecoration(p).copyWith(labelText: 'Amount (₹)'),
         ),
         const SizedBox(height: 14),
         Text('Repeats', style: AppText.section(p.muted)),
         const SizedBox(height: 8),
-        SegmentedButton<String>(
-          showSelectedIcon: false,
-          segments: const [
-            ButtonSegment(value: 'weekly', label: Text('Weekly')),
-            ButtonSegment(value: 'monthly', label: Text('Monthly')),
-            ButtonSegment(value: 'yearly', label: Text('Yearly')),
-          ],
-          selected: {_frequency},
-          onSelectionChanged: (s) => setState(() {
-            _frequency = s.first;
+        SegmentedTabs(
+          options: const ['Weekly', 'Monthly', 'Yearly'],
+          selected: _frequency[0].toUpperCase() + _frequency.substring(1),
+          onSelected: (label) => setState(() {
+            _frequency = label.toLowerCase();
             _firstDue = _defaultDue(_frequency);
           }),
         ),
         const SizedBox(height: 14),
-        DropdownButtonFormField<String>(
-          initialValue: _accountId,
-          decoration: const InputDecoration(labelText: 'Pay from'),
-          items: [
-            for (final a in widget.accounts)
-              DropdownMenuItem(value: a.id, child: Text(a.name)),
-          ],
-          onChanged: (v) => setState(() => _accountId = v ?? _accountId),
+        AppDropdown<AccountModel>(
+          label: 'Pay from',
+          value: widget.accounts.firstWhere((a) => a.id == _accountId),
+          items: widget.accounts,
+          keyOf: (a) => a.id,
+          labelOf: (a) => a.name,
+          subtitleOf: (a) => CurrencyFormatter.format(a.currentBalance),
+          emojiOf: (a) => a.isPrimary ? '⭐' : '🏦',
+          onChanged: (a) => setState(() => _accountId = a.id),
         ),
         const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          initialValue: _categoryId,
-          decoration: const InputDecoration(labelText: 'Category'),
-          items: [
-            for (final c in widget.categories)
-              DropdownMenuItem(value: c.id, child: Text(c.name)),
-          ],
-          onChanged: (v) => setState(() => _categoryId = v ?? _categoryId),
+        AppDropdown<CategoryModel>(
+          label: 'Category',
+          value: widget.categories.firstWhere((c) => c.id == _categoryId),
+          items: widget.categories,
+          keyOf: (c) => c.id,
+          labelOf: (c) => c.name,
+          emojiOf: (c) => AppColors.getCategoryEmoji(c.name),
+          onChanged: (c) => setState(() => _categoryId = c.id),
         ),
         const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: _pickDate,
-          icon: const Icon(Icons.event_rounded),
-          label: Text('First due: ${DateFormat('d MMM yyyy').format(_firstDue)}'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: p.ink,
-            side: BorderSide(color: p.border),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+        InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: _pickDate,
+          child: InputDecorator(
+            isEmpty: false,
+            decoration: appFieldDecoration(p).copyWith(
+              labelText: 'First due',
+              suffixIcon: Icon(Icons.event_rounded, color: p.muted),
+            ),
+            child: Text(
+              DateFormat('d MMM yyyy').format(_firstDue),
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: p.ink,
+              ),
             ),
           ),
         ),
@@ -265,7 +272,7 @@ class _RecurringFormState extends State<_RecurringForm> {
           Text(_error!, style: AppText.caption(p.expense)),
         ],
         const SizedBox(height: 16),
-        ElevatedButton(onPressed: _submit, child: const Text('Add payment')),
+        PrimaryButton(label: 'Add payment', onPressed: _submit),
       ],
     );
   }

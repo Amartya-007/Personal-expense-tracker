@@ -21,6 +21,7 @@ import '../../widgets/fade_slide_in.dart';
 import '../../widgets/list_widgets.dart';
 import '../../widgets/pressable.dart';
 import '../../widgets/section_header.dart';
+import '../../widgets/segmented_tabs.dart';
 import '../../widgets/undo_snackbar.dart';
 import 'budget_form.dart';
 
@@ -258,15 +259,11 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
               const SizedBox(height: 16),
               FadeSlideIn(
                 index: 1,
-                child: SegmentedButton<String>(
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(value: 'weekly', label: Text('Weekly')),
-                    ButtonSegment(value: 'monthly', label: Text('Monthly')),
-                    ButtonSegment(value: 'yearly', label: Text('Yearly')),
-                  ],
-                  selected: {_period},
-                  onSelectionChanged: (s) => setState(() => _period = s.first),
+                child: SegmentedTabs(
+                  options: const ['Weekly', 'Monthly', 'Yearly'],
+                  selected: _period[0].toUpperCase() + _period.substring(1),
+                  onSelected: (label) =>
+                      setState(() => _period = label.toLowerCase()),
                 ),
               ),
               const SizedBox(height: 16),

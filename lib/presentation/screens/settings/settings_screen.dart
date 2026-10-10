@@ -18,6 +18,7 @@ import '../../widgets/fade_slide_in.dart';
 import '../../widgets/list_widgets.dart';
 import '../../widgets/pressable.dart';
 import '../../widgets/section_header.dart';
+import '../../widgets/segmented_tabs.dart';
 import '../../widgets/sms_permission_help.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../sms_review/sms_review_screen.dart';
@@ -108,23 +109,14 @@ class SettingsScreen extends ConsumerWidget {
           // Watched inside the sheet so the selection updates live. (This used
           // to call ref.watch from a tap callback, which Riverpod rejects.)
           final mode = ref.watch(themeModeProvider);
-          return SegmentedButton<ThemeMode>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(
-                value: ThemeMode.light,
-                icon: Icon(Icons.light_mode_rounded),
-                label: Text('Light'),
-              ),
-              ButtonSegment(
-                value: ThemeMode.dark,
-                icon: Icon(Icons.dark_mode_rounded),
-                label: Text('Dark'),
-              ),
-            ],
-            selected: {mode == ThemeMode.dark ? ThemeMode.dark : ThemeMode.light},
-            onSelectionChanged: (s) =>
-                ref.read(themeModeProvider.notifier).setThemeMode(s.first),
+          return SegmentedTabs(
+            options: const ['Light', 'Dark'],
+            selected: mode == ThemeMode.dark ? 'Dark' : 'Light',
+            onSelected: (label) => ref
+                .read(themeModeProvider.notifier)
+                .setThemeMode(
+                  label == 'Dark' ? ThemeMode.dark : ThemeMode.light,
+                ),
           );
         },
       ),

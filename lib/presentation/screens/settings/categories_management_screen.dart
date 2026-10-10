@@ -8,6 +8,8 @@ import '../../../core/theme/app_text.dart';
 import '../../../data/models/category_model.dart';
 import '../../providers/category_providers.dart';
 import '../../providers/transaction_providers.dart';
+import '../../widgets/segmented_tabs.dart';
+import '../../widgets/primary_button.dart';
 import '../../widgets/app_sheets.dart';
 import '../../widgets/list_widgets.dart';
 
@@ -171,17 +173,13 @@ class _CategoryFormState extends State<_CategoryForm> {
         const SizedBox(height: 14),
         Text('Type', style: AppText.section(p.muted)),
         const SizedBox(height: 8),
-        SegmentedButton<String>(
-          showSelectedIcon: false,
-          segments: const [
-            ButtonSegment(value: 'expense', label: Text('Expense')),
-            ButtonSegment(value: 'income', label: Text('Income')),
-          ],
-          selected: {_type},
-          onSelectionChanged: (s) => setState(() => _type = s.first),
+        SegmentedTabs(
+          options: const ['Expense', 'Income'],
+          selected: _type[0].toUpperCase() + _type.substring(1),
+          onSelected: (label) => setState(() => _type = label.toLowerCase()),
         ),
         const SizedBox(height: 16),
-        ElevatedButton(onPressed: _submit, child: const Text('Add category')),
+        PrimaryButton(label: 'Add category', onPressed: _submit),
       ],
     );
   }
