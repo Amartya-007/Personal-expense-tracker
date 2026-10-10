@@ -18,6 +18,7 @@ class AppConstants {
   static const String prefAutoSmsDetection = 'auto_sms_detection';
   static const String prefAutoLocationCapture = 'auto_location_capture';
   static const String prefThemeMode = 'theme_mode';
+  static const String prefHapticsEnabled = 'haptics_enabled';
 
   // Database
   // BUG FIX: single source of truth for the DB file name used by both

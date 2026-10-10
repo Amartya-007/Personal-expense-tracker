@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_palette.dart';
 import '../../core/theme/app_text.dart';
 import 'app_sheets.dart';
@@ -64,7 +65,10 @@ class AppDropdown<T> extends StatelessWidget {
         showSearch: items.length > searchThreshold,
       ),
     );
-    if (picked != null) onChanged(picked);
+    if (picked != null) {
+      AppHaptics.select();
+      onChanged(picked);
+    }
   }
 
   @override

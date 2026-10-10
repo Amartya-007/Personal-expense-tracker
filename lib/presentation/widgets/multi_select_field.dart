@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_palette.dart';
 import '../../core/theme/app_text.dart';
 import 'app_sheets.dart';
@@ -134,6 +135,7 @@ class _MultiSelectSheetState extends State<_MultiSelectSheet> {
   late final Set<String> _chosen = {...widget.initial};
 
   void _toggle(String name, bool on) {
+    AppHaptics.select();
     setState(() => on ? _chosen.add(name) : _chosen.remove(name));
     // Keep the field behind the sheet in step as boxes are ticked.
     widget.onChanged([

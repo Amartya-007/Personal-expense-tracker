@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/constants/app_constants.dart';
 import 'core/logging/app_logger.dart';
+import 'core/theme/app_haptics.dart';
 import 'core/theme/app_theme.dart';
 import 'presentation/providers/auth_provider.dart';
 import 'presentation/providers/settings_providers.dart';
@@ -43,6 +44,7 @@ void main() async {
       final prefs = await SharedPreferences.getInstance();
       final bool isOnboardingComplete =
           prefs.getBool(AppConstants.prefIsOnboardingComplete) ?? false;
+      AppHaptics.enabled = prefs.getBool(AppConstants.prefHapticsEnabled) ?? true;
 
       runApp(
         ProviderScope(

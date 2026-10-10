@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../core/theme/app_haptics.dart';
 
 final defaultUpiAccountProvider =
     StateNotifierProvider<DefaultUpiNotifier, String?>((ref) {
@@ -116,3 +117,30 @@ final autoLocationCaptureProvider =
     });
 
 final mainTabProvider = StateProvider<int>((ref) => 0);
+
+final hapticsEnabledProvider =
+    StateNotifierProvider<HapticsNotifier, bool>((ref) => HapticsNotifier());
+
+/// Haptic feedback on/off. Mirrors the value into [AppHaptics.enabled], which
+/// the shared widgets read, so a change takes effect everywhere at once.
+class HapticsNotifier extends StateNotifier<bool> {
+  HapticsNotifier() : super(AppHaptics.enabled) {
+    load();
+  }
+
+  Future<void> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final value = prefs.getBool(AppConstants.prefHapticsEnabled) ?? true;
+    AppHaptics.enabled = value;
+    if (mounted) state = value;
+  }
+
+  Future<void> setEnabled(bool value) async {
+    AppHaptics.enabled = value;
+    state = value;
+    // Let the person feel what they just switched on.
+    AppHaptics.select();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(AppConstants.prefHapticsEnabled, value);
+  }
+}

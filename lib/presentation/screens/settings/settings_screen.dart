@@ -444,6 +444,15 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
               ListRowTile(
+                emoji: '📳',
+                title: 'Haptic feedback',
+                subtitle: 'Gentle vibration on taps and selections',
+                trailing: toggle(
+                  ref.watch(hapticsEnabledProvider),
+                  (v) => ref.read(hapticsEnabledProvider.notifier).setEnabled(v),
+                ),
+              ),
+              ListRowTile(
                 emoji: '🎨',
                 title: 'Appearance',
                 subtitle: themeMode == ThemeMode.dark ? 'Dark' : 'Light',
