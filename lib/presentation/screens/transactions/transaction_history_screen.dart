@@ -10,6 +10,8 @@ import '../../../core/theme/app_text.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_filters.dart';
 import '../../../data/models/transaction_model.dart';
+import '../../providers/account_providers.dart';
+import '../../providers/category_providers.dart';
 import '../../providers/transaction_providers.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/fade_slide_in.dart';
@@ -76,14 +78,19 @@ class _TransactionHistoryScreenState
 
   /// Applies a complete filter set (null = no filter). This is the single
   /// path used by both the chips and the filter sheet.
-  void _applyFilters({String? type, String? paymentMethod, String? dateFilter}) {
-    final current = ref.read(transactionListProvider);
+  void _applyFilters({
+    String? type,
+    String? paymentMethod,
+    String? dateFilter,
+    String? categoryId,
+    String? accountId,
+  }) {
     setState(() => _dateFilter = dateFilter ?? DateFilters.all);
     ref.read(transactionListProvider.notifier).setFilters(
           type: type,
           paymentMethod: paymentMethod,
-          categoryId: current.categoryId,
-          accountId: current.accountId,
+          categoryId: categoryId,
+          accountId: accountId,
           dateRange: DateFilters.rangeFor(dateFilter),
         );
   }
@@ -93,22 +100,32 @@ class _TransactionHistoryScreenState
     _applyFilters(
       type: current.type,
       paymentMethod: current.paymentMethod,
+      categoryId: current.categoryId,
+      accountId: current.accountId,
       dateFilter: chip == DateFilters.all ? null : chip,
     );
   }
 
   Future<void> _openFilterSheet() async {
     final current = ref.read(transactionListProvider);
+    final categories = await ref.read(categoriesListProvider.future);
+    if (!mounted) return;
     final result = await FilterSheet.show(
       context,
+      categories: categories,
+      accounts: ref.read(accountListProvider).value ?? const [],
       type: current.type,
       paymentMethod: current.paymentMethod,
+      categoryId: current.categoryId,
+      accountId: current.accountId,
       dateFilter: _dateFilter == DateFilters.all ? null : _dateFilter,
     );
     if (result == null) return;
     _applyFilters(
       type: result.type,
       paymentMethod: result.paymentMethod,
+      categoryId: result.categoryId,
+      accountId: result.accountId,
       dateFilter: result.dateFilter,
     );
   }
@@ -162,8 +179,11 @@ class _TransactionHistoryScreenState
   Widget build(BuildContext context) {
     final p = context.palette;
     final state = ref.watch(transactionListProvider);
-    final hasFilters =
-        state.type != null || state.paymentMethod != null || state.dateRange != null;
+    final hasFilters = state.type != null ||
+        state.paymentMethod != null ||
+        state.categoryId != null ||
+        state.accountId != null ||
+        state.dateRange != null;
     final hasSearch = (state.searchQuery ?? '').isNotEmpty;
     final groups = _groupByDay(state.transactions);
     final bottom = MediaQuery.of(context).padding.bottom;
