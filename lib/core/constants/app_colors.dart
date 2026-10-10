@@ -1,23 +1,24 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Brand Accents
-  static const Color primary = Color(0xFF5B3DF5); // --ac: #5b3df5
-  static const Color primaryDark = Color(0xFF8D7BFF); // --ac: #8d7bff
-  static const Color secondary = Color(0xFFFFB627); // --ac2: #ffb627 (Warm gold / amber)
-  static const Color secondaryDark = Color(0xFFFFC247); // --ac2: #ffc247
-  static const Color darkFabText = Color(0xFF2A1D00); // FAB icon / text on gold
+  // Brand accents: deep teal, with a warm gold used sparingly for the one
+  // primary action (the add button) so it always stands out.
+  static const Color primary = Color(0xFF0F766E); // teal-700
+  static const Color primaryDark = Color(0xFF2DD4BF); // teal-400
+  static const Color secondary = Color(0xFFFFB627); // warm gold
+  static const Color secondaryDark = Color(0xFFFFC247);
+  static const Color darkFabText = Color(0xFF2A1D00); // icon / text on gold
 
-  // Light Theme
-  static const Color backgroundLight = Color(0xFFF4F3FB); // --bg: #f4f3fb
-  static const Color surfaceLight = Color(0xFFFFFFFF); // --sf: #fff
-  static const Color surface2Light = Color(0xFFEBEAF6); // --s2: #ebeaf6
+  // Light theme: cool slate neutrals with a faint teal cast.
+  static const Color backgroundLight = Color(0xFFF2F6F6);
+  static const Color surfaceLight = Color(0xFFFFFFFF);
+  static const Color surface2Light = Color(0xFFE6EEEE);
   static const Color cardLight = Color(0xFFFFFFFF);
-  static const Color textPrimaryLight = Color(0xFF17163A); // --ink: #17163a
-  static const Color textSecondaryLight = Color(0xFF767493); // --mut: #767493
-  static const Color borderLight = Color(0xFFE3E1F1); // --ln: #e3e1f1
+  static const Color textPrimaryLight = Color(0xFF0B1F24);
+  static const Color textSecondaryLight = Color(0xFF52696E);
+  static const Color borderLight = Color(0xFFD9E4E4);
 
-  // Shorthand Light Aliases (matching CSS vars)
+  // Shorthand light aliases
   static const Color bg = backgroundLight;
   static const Color surface = surfaceLight;
   static const Color surface2 = surface2Light;
@@ -25,16 +26,17 @@ class AppColors {
   static const Color muted = textSecondaryLight;
   static const Color lines = borderLight;
 
-  // Dark Theme
-  static const Color backgroundDark = Color(0xFF0E0E1F); // --bg: #0e0e1f
-  static const Color surfaceDark = Color(0xFF181833); // --sf: #181833
-  static const Color surface2Dark = Color(0xFF222247); // --s2: #222247
-  static const Color cardDark = Color(0xFF181833);
-  static const Color textPrimaryDark = Color(0xFFF1F0FC); // --ink: #f1f0fc
-  static const Color textSecondaryDark = Color(0xFF9391B8); // --mut: #9391b8
-  static const Color borderDark = Color(0xFF2A2A52); // --ln: #2a2a52
+  // Dark theme: deep slate-teal layers; each step up is lighter, which is
+  // what makes raised surfaces read as closer to the user.
+  static const Color backgroundDark = Color(0xFF071214);
+  static const Color surfaceDark = Color(0xFF0E1D20);
+  static const Color surface2Dark = Color(0xFF16292D);
+  static const Color cardDark = Color(0xFF0E1D20);
+  static const Color textPrimaryDark = Color(0xFFE8F3F2);
+  static const Color textSecondaryDark = Color(0xFF8FA9AC);
+  static const Color borderDark = Color(0xFF21383C);
 
-  // Shorthand Dark Aliases (matching CSS vars)
+  // Shorthand dark aliases
   static const Color darkBg = backgroundDark;
   static const Color darkSurface = surfaceDark;
   static const Color darkSurface2 = surface2Dark;
@@ -42,42 +44,43 @@ class AppColors {
   static const Color darkMuted = textSecondaryDark;
   static const Color darkLines = borderDark;
 
-  // Status Colors
-  static const Color expense = Color(0xFFE5484D); // --ex: #e5484d
-  static const Color expenseDark = Color(0xFFFF7075);
-  static const Color income = Color(0xFF12A574); // --in: #12a574
-  static const Color incomeDark = Color(0xFF4FDCAB);
-  static const Color transfer = Color(0xFF5B3DF5);
+  // Status colours. Income is a true green (not teal) so it is never
+  // confused with the brand colour.
+  static const Color expense = Color(0xFFD92D3A);
+  static const Color expenseDark = Color(0xFFFF7A82);
+  static const Color income = Color(0xFF15803D);
+  static const Color incomeDark = Color(0xFF5BE29A);
+  static const Color transfer = Color(0xFF0F766E);
   static const Color pending = Color(0xFFFFB627);
-  static const Color overlay = Color(0x800F0E28); // --ov: rgba(15,14,40,.5)
+  static const Color overlay = Color(0x800A1A1E);
 
-  // Category palette (for charts)
+  // Category palette (charts): distinct hues that sit well beside teal.
   static const List<Color> categoryPalette = [
-    Color(0xFFFF8A5B), // Food (coral)
-    Color(0xFF7C8CFF), // Shopping (indigo)
-    Color(0xFF46D6A4), // Bills (mint)
-    Color(0xFFFFB627), // Transport (gold)
-    Color(0xFFC77DFF), // Other (purple)
-    Color(0xFF38BDF8), // Blue
-    Color(0xFFF472B6), // Pink
+    Color(0xFFFF8A5B), // coral
+    Color(0xFF4F9DFF), // blue
+    Color(0xFF46D6A4), // mint
+    Color(0xFFFFB627), // gold
+    Color(0xFFC77DFF), // purple
+    Color(0xFF38BDF8), // sky
+    Color(0xFFF472B6), // pink
   ];
 
-  // Hero Card Gradients
+  // Hero card gradients: deep teal falling into near-black teal.
   static const LinearGradient heroGradientLight = LinearGradient(
-    colors: [Color(0xFF5B3DF5), Color(0xFF2D1BB0)],
-    begin: Alignment(-0.8, -0.6),
-    end: Alignment(0.8, 0.6),
+    colors: [Color(0xFF0D756B), Color(0xFF0A4A52)],
+    begin: Alignment(-0.8, -0.8),
+    end: Alignment(0.8, 0.9),
   );
 
   static const LinearGradient heroGradientDark = LinearGradient(
-    colors: [Color(0xFF4A38C9), Color(0xFF241A78)],
-    begin: Alignment(-0.8, -0.6),
-    end: Alignment(0.8, 0.6),
+    colors: [Color(0xFF0D6B65), Color(0xFF082F36)],
+    begin: Alignment(-0.8, -0.8),
+    end: Alignment(0.8, 0.9),
   );
 
-  // Soft Shadows
+  // Soft shadows, tinted with the slate instead of neutral grey.
   static const BoxShadow cardShadowLight = BoxShadow(
-    color: Color(0x1F281E78),
+    color: Color(0x1A0B3B3F),
     blurRadius: 24,
     offset: Offset(0, 8),
   );

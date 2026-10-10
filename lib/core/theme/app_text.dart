@@ -1,3 +1,5 @@
+import 'dart:ui' show FontFeature;
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -22,7 +24,20 @@ class AppText {
       );
 
   static TextStyle display(Color? c) =>
-      _s(26, FontWeight.w800, c, letterSpacing: -0.5);
+      _s(26, FontWeight.w800, c, letterSpacing: -0.5).copyWith(
+        fontFeatures: const [FontFeature.tabularFigures()],
+      );
+
+  /// Money figures: tabular (equal-width) digits so amounts line up in lists
+  /// and don't jitter while a total counts up.
+  static TextStyle amount(Color? c, {double size = 15}) =>
+      _s(size, FontWeight.w800, c, letterSpacing: -0.2).copyWith(
+        fontFeatures: const [FontFeature.tabularFigures()],
+      );
+
+  /// Small all-caps label above a block of content.
+  static TextStyle overline(Color? c) =>
+      _s(11, FontWeight.w700, c, letterSpacing: 1.0);
   static TextStyle title(Color? c) =>
       _s(18, FontWeight.w800, c, letterSpacing: -0.2);
   static TextStyle section(Color? c) =>
