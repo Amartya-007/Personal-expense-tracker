@@ -526,18 +526,51 @@ class _HeroCard extends StatelessWidget {
 
     return AppCard(
       gradient: p.heroGradient,
-      radius: 26,
+      radius: 28,
+      elevation: CardElevation.high,
       child: Stack(
         children: [
+          // Depth: two translucent discs, a top-left sheen, and a hairline
+          // edge so the card reads as a lit, glassy object.
           Positioned(
-            right: -40,
-            top: -40,
+            right: -44,
+            top: -44,
             child: Container(
-              width: 150,
-              height: 150,
+              width: 160,
+              height: 160,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.white.withValues(alpha: 0.08),
+              ),
+            ),
+          ),
+          Positioned(
+            left: -30,
+            bottom: -56,
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.black.withValues(alpha: 0.10),
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.white.withValues(alpha: 0.16),
+                      Colors.white.withValues(alpha: 0.0),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: const Alignment(0.2, 0.1),
+                  ),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+                ),
               ),
             ),
           ),
@@ -548,7 +581,7 @@ class _HeroCard extends StatelessWidget {
               children: [
                 Text(
                   'Total tracked balance',
-                  style: AppText.caption(Colors.white.withValues(alpha: 0.75))
+                  style: AppText.caption(Colors.white.withValues(alpha: 0.9))
                       .copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 4),
@@ -585,23 +618,41 @@ class _HeroCard extends StatelessWidget {
                                   horizontal: 13,
                                   vertical: 11,
                                 ),
+                                // Darker, not lighter, than the card: white
+                                // text keeps AA contrast on it.
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.14),
+                                  color: Colors.black.withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.12),
+                                  ),
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      acc.name,
-                                      style: AppText.caption(
-                                        Colors.white.withValues(alpha: 0.8),
-                                      ),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (acc.isPrimary) ...[
+                                          Icon(
+                                            Icons.star_rounded,
+                                            size: 13,
+                                            color: p.secondary,
+                                          ),
+                                          const SizedBox(width: 3),
+                                        ],
+                                        Text(
+                                          acc.name,
+                                          style: AppText.caption(
+                                            Colors.white.withValues(alpha: 0.9),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
                                       CurrencyFormatter.format(acc.currentBalance),
-                                      style: AppText.bodyStrong(Colors.white),
+                                      style: AppText.amount(Colors.white),
                                     ),
                                   ],
                                 ),

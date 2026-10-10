@@ -1,10 +1,12 @@
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/navigation/app_routes.dart';
+import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_haptics.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/theme/app_text.dart';
@@ -104,7 +106,7 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen>
   }
 
   void _toggleFab() {
-    HapticFeedback.lightImpact();
+    AppHaptics.tap();
     setState(() => _isFabOpen = !_isFabOpen);
     _isFabOpen ? _fabController.forward() : _fabController.reverse();
   }
@@ -121,7 +123,7 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen>
   }
 
   void _selectTab(int index) {
-    if (ref.read(mainTabProvider) != index) HapticFeedback.selectionClick();
+    if (ref.read(mainTabProvider) != index) AppHaptics.select();
     _closeFab();
     ref.read(mainTabProvider.notifier).state = index;
   }
@@ -172,7 +174,14 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen>
                       behavior: HitTestBehavior.opaque,
                       child: FadeTransition(
                         opacity: _overlayOpacity,
-                        child: Container(color: const Color(0x800F0E28)),
+                        // Frosted: the page behind softens instead of just
+                        // dimming, which keeps the menu feeling layered on top.
+                        child: ClipRect(
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                            child: Container(color: AppColors.overlay),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -285,13 +294,26 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen>
           width: _fabSize,
           height: _fabSize,
           decoration: BoxDecoration(
-            color: p.secondary,
+            gradient: LinearGradient(
+              colors: [
+                Color.lerp(p.secondary, Colors.white, 0.28)!,
+                p.secondary,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
             borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x66FFB627),
-                blurRadius: 20,
+                blurRadius: 22,
                 offset: Offset(0, 8),
+              ),
+              BoxShadow(
+                color: Color(0x33000000),
+                blurRadius: 6,
+                offset: Offset(0, 2),
               ),
             ],
           ),
@@ -340,7 +362,7 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen>
             decoration: BoxDecoration(
               color: p.surface,
               borderRadius: BorderRadius.circular(18),
-              boxShadow: [p.cardShadow],
+              boxShadow: p.shadowMd,
               border: Border.all(color: p.border),
             ),
             child: Row(
@@ -485,51 +507,69 @@ class _FloatingNavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
 
+    // Glass: a translucent, blurred surface so content scrolling underneath
+    // stays faintly visible, with a hairline highlight on the edge. The shadow
+    // sits on an outer layer because the blur needs a clip.
     return Container(
       height: _navHeight,
-      padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: p.surface,
         borderRadius: BorderRadius.circular(26),
-        boxShadow: [p.cardShadow],
-        border: Border.all(color: p.border),
+        boxShadow: p.shadowMd,
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final itemWidth = constraints.maxWidth / _navItems.length;
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(26),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: p.glass,
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(color: p.glassBorder),
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final itemWidth = constraints.maxWidth / _navItems.length;
 
-          return Stack(
-            children: [
-              // Sliding pill indicator.
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 320),
-                curve: Curves.fastOutSlowIn,
-                left: currentIndex * itemWidth,
-                top: 0,
-                bottom: 0,
-                width: itemWidth,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: p.surface2,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
-              ),
-              Row(
-                children: [
-                  for (var i = 0; i < _navItems.length; i++)
-                    Expanded(
-                      child: _NavButton(
-                        item: _navItems[i],
-                        selected: i == currentIndex,
-                        onTap: () => onSelect(i),
+                return Stack(
+                  children: [
+                    // Sliding indicator: a soft teal pill that glides to the
+                    // chosen tab.
+                    AnimatedPositioned(
+                      duration: AppMotion.slow,
+                      curve: AppMotion.emphasized,
+                      left: currentIndex * itemWidth,
+                      top: 0,
+                      bottom: 0,
+                      width: itemWidth,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: p.primarySoft,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: p.primary.withValues(alpha: 0.16),
+                          ),
+                        ),
                       ),
                     ),
-                ],
-              ),
-            ],
-          );
-        },
+                    Row(
+                      children: [
+                        for (var i = 0; i < _navItems.length; i++)
+                          Expanded(
+                            child: _NavButton(
+                              item: _navItems[i],
+                              selected: i == currentIndex,
+                              onTap: () => onSelect(i),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
       ),
     );
   }
