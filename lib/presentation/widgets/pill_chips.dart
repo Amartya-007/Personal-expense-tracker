@@ -72,6 +72,7 @@ class PillChip extends StatelessWidget {
 
     return Pressable(
       onTap: onTap,
+      haptic: PressHaptic.select,
       child: AnimatedContainer(
         duration: AppMotion.fast,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),

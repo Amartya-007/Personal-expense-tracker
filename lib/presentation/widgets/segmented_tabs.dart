@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_palette.dart';
 import '../../core/theme/app_text.dart';
 
-/// Equal-width segmented switch (a "pill" track with a raised selected
-/// segment). Shared by the transaction-type and payment-method pickers, which
-/// used to be two copies of the same ~40 lines.
+/// Equal-width segmented switch: a recessed track with a raised thumb that
+/// glides to the chosen segment. Shared by the transaction-type, payment-method,
+/// period and appearance pickers.
 class SegmentedTabs extends StatelessWidget {
   final List<String> options;
   final String selected;
@@ -22,43 +23,70 @@ class SegmentedTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    final index = options.indexOf(selected);
+    final count = options.length;
 
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: p.surface2,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
+      child: Stack(
         children: [
-          for (var i = 0; i < options.length; i++) ...[
-            if (i > 0) const SizedBox(width: 4),
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onSelected(options[i]),
-                child: AnimatedContainer(
-                  duration: AppMotion.fast,
-                  padding: const EdgeInsets.symmetric(vertical: 11),
-                  decoration: BoxDecoration(
-                    color: options[i] == selected
-                        ? p.surface
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(11),
-                    boxShadow: options[i] == selected ? [p.cardShadow] : null,
-                  ),
-                  alignment: Alignment.center,
-                  child: AnimatedDefaultTextStyle(
-                    duration: AppMotion.fast,
-                    style: AppText.caption(
-                      options[i] == selected ? p.ink : p.muted,
-                    ).copyWith(fontSize: 12.5, fontWeight: FontWeight.w700),
-                    child: Text(options[i]),
+          if (index >= 0)
+            Positioned.fill(
+              child: AnimatedAlign(
+                duration: AppMotion.medium,
+                curve: AppMotion.emphasized,
+                alignment: Alignment(
+                  count <= 1 ? 0 : -1 + 2 * index / (count - 1),
+                  0,
+                ),
+                child: FractionallySizedBox(
+                  widthFactor: 1 / count,
+                  heightFactor: 1,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: p.surfaceRaised,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: p.shadowSm,
+                    ),
                   ),
                 ),
               ),
             ),
-          ],
+          Row(
+            children: [
+              for (final option in options)
+                Expanded(
+                  child: Semantics(
+                    button: true,
+                    selected: option == selected,
+                    label: option,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        if (option == selected) return;
+                        AppHaptics.select();
+                        onSelected(option);
+                      },
+                      child: Container(
+                        constraints: const BoxConstraints(minHeight: 44),
+                        alignment: Alignment.center,
+                        child: AnimatedDefaultTextStyle(
+                          duration: AppMotion.fast,
+                          style: AppText.caption(
+                            option == selected ? p.ink : p.muted,
+                          ).copyWith(fontSize: 12.5, fontWeight: FontWeight.w700),
+                          child: Text(option),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ],
       ),
     );

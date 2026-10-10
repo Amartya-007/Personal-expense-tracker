@@ -67,7 +67,7 @@ class AppPalette {
     ink: AppColors.textPrimaryDark,
     muted: AppColors.textSecondaryDark,
     primary: AppColors.primaryDark,
-    onPrimary: Color(0xFF12102E),
+    onPrimary: Color(0xFF032321),
     secondary: AppColors.secondaryDark,
     income: AppColors.incomeDark,
     expense: AppColors.expenseDark,
