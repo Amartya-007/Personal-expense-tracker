@@ -18,6 +18,9 @@ import '../../../services/receipts/receipt_storage_service.dart';
 import '../../providers/account_providers.dart';
 import '../../providers/category_providers.dart';
 import '../../providers/tag_providers.dart';
+import '../../widgets/app_dropdown.dart';
+import '../../widgets/app_sheets.dart';
+import '../../widgets/field_decoration.dart';
 import '../../widgets/multi_select_field.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/segmented_tabs.dart';
@@ -517,7 +520,6 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                         _buildAccountDropdown(
                           value: _effectiveDestination(accounts),
                           accounts: accounts,
-                          slot: 'destination',
                           onChanged: (acc) =>
                               setState(() => _selectedDestinationAccount = acc),
                         )
@@ -528,49 +530,18 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                             style: TextStyle(color: mutedColor),
                           )
                         else ...[
-                          DropdownButtonFormField<CategoryModel>(
-                            // initialValue is only read when the field is
-                            // created: re-create it when the type or the
-                            // shown category changes.
-                            key: ValueKey<String>(
-                              'category:$_type:${_effectiveCategory(categories)?.id}',
-                            ),
-                            initialValue: _effectiveCategory(categories),
-                            hint: Text(
-                              'Uncategorized',
-                              style: TextStyle(color: mutedColor),
-                            ),
-                            dropdownColor: surfaceColor,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: inkColor,
-                            ),
-                            decoration: appFieldDecoration(p),
-                            items: categories.map((c) {
-                              final emoji = AppColors.getCategoryEmoji(c.name);
-                              return DropdownMenuItem<CategoryModel>(
-                                value: c,
-                                child: Row(
-                                  children: [
-                                    Text(
-                                      emoji,
-                                      style: const TextStyle(fontSize: 18),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Text(c.name),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() {
-                                  _selectedCategory = val;
-                                  _suggestedCategoryName = null;
-                                });
-                              }
-                            },
+                          AppDropdown<CategoryModel>(
+                            hint: 'Uncategorized',
+                            sheetTitle: 'Category',
+                            value: _effectiveCategory(categories),
+                            items: categories,
+                            keyOf: (c) => c.id,
+                            labelOf: (c) => c.name,
+                            emojiOf: (c) => AppColors.getCategoryEmoji(c.name),
+                            onChanged: (c) => setState(() {
+                              _selectedCategory = c;
+                              _suggestedCategoryName = null;
+                            }),
                           ),
                         ],
                       ],
@@ -942,108 +913,53 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     required AccountModel? value,
     required List<AccountModel> accounts,
     required ValueChanged<AccountModel?> onChanged,
-    String slot = 'account',
   }) {
-    final p = context.palette;
-    final surfaceColor = p.surface;
-    final inkColor = p.ink;
-
-    if (accounts.isEmpty) {
-      return Text(
-        'No accounts created.',
-        style: TextStyle(color: p.muted),
-      );
-    }
-
-    return DropdownButtonFormField<AccountModel>(
-      // initialValue is only read when the field is created, so re-create it
-      // whenever the account shown changes (e.g. switching Income/Expense).
-      key: ValueKey<String>('$slot:${value?.id}'),
-      initialValue: value,
-      // Only shown when editing a transaction whose account was removed.
-      hint: Text(
-        'Account removed - pick one',
-        style: TextStyle(color: p.muted),
-      ),
-      dropdownColor: surfaceColor,
-      style: TextStyle(
-        fontSize: 15,
-        fontWeight: FontWeight.w600,
-        color: inkColor,
-      ),
-      decoration: appFieldDecoration(p),
-      items: accounts.map((a) {
-        return DropdownMenuItem<AccountModel>(
-          value: a,
-          child: Text(
-            '${a.name} (${CurrencyFormatter.format(a.currentBalance)})',
-          ),
-        );
-      }).toList(),
+    return AppDropdown<AccountModel>(
+      // `value` is null only when editing a transaction whose account was
+      // removed.
+      hint: 'Account removed - pick one',
+      emptyMessage: 'No accounts created.',
+      sheetTitle: 'Account',
+      value: value,
+      items: accounts,
+      keyOf: (a) => a.id,
+      labelOf: (a) => a.name,
+      subtitleOf: (a) => CurrencyFormatter.format(a.currentBalance),
+      emojiOf: (a) => a.isPrimary ? '⭐' : '🏦',
       onChanged: onChanged,
     );
   }
 
   void _showReceiptSourceSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 40,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                const Text(
-                  'Attach Receipt',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 16),
-                ListTile(
-                  leading: Icon(
-                    Icons.camera_alt_rounded,
-                    color: ctx.palette.primary,
-                  ),
-                  title: const Text(
-                    'Take Photo',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _pickReceipt(ImageSource.camera);
-                  },
-                ),
-                ListTile(
-                  leading: Icon(
-                    Icons.photo_library_rounded,
-                    color: ctx.palette.primary,
-                  ),
-                  title: const Text(
-                    'Choose from Gallery',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _pickReceipt(ImageSource.gallery);
-                  },
-                ),
-              ],
-            ),
+    AppBottomSheet.show<void>(
+      context,
+      title: 'Attach receipt',
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.camera_alt_rounded, color: ctx.palette.primary),
+            title: const Text('Take photo'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _pickReceipt(ImageSource.camera);
+            },
           ),
-        );
-      },
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(
+              Icons.photo_library_rounded,
+              color: ctx.palette.primary,
+            ),
+            title: const Text('Choose from gallery'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _pickReceipt(ImageSource.gallery);
+            },
+          ),
+        ],
+      ),
     );
   }
 

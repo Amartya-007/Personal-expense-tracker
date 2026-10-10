@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../data/models/budget_model.dart';
 import '../../../data/models/category_model.dart';
 import '../../../data/repositories/budget_repository.dart';
+import '../../widgets/app_dropdown.dart';
+import '../../widgets/field_decoration.dart';
+import '../../widgets/primary_button.dart';
+import '../../widgets/segmented_tabs.dart';
 
 /// Create-budget form (shown in a bottom sheet). Resolves to the new
 /// [BudgetModel], or null if dismissed.
@@ -93,29 +98,26 @@ class _BudgetFormState extends State<BudgetForm> {
       children: [
         Text('Repeats', style: AppText.section(p.muted)),
         const SizedBox(height: 8),
-        SegmentedButton<String>(
-          showSelectedIcon: false,
-          segments: const [
-            ButtonSegment(value: 'weekly', label: Text('Weekly')),
-            ButtonSegment(value: 'monthly', label: Text('Monthly')),
-            ButtonSegment(value: 'yearly', label: Text('Yearly')),
-          ],
-          selected: {_period},
-          onSelectionChanged: (s) => setState(() {
-            _period = s.first;
+        SegmentedTabs(
+          options: const ['Weekly', 'Monthly', 'Yearly'],
+          selected: _period[0].toUpperCase() + _period.substring(1),
+          onSelected: (label) => setState(() {
+            _period = label.toLowerCase();
             _error = null;
           }),
         ),
         const SizedBox(height: 14),
-        DropdownButtonFormField<CategoryModel>(
-          initialValue: _category,
-          decoration: const InputDecoration(labelText: 'Category'),
-          items: [
-            for (final c in widget.categories)
-              DropdownMenuItem(value: c, child: Text(c.name)),
-          ],
+        AppDropdown<CategoryModel>(
+          label: 'Category',
+          value: _category,
+          items: widget.categories,
+          keyOf: (c) => c.id,
+          labelOf: (c) => c.name,
+          emojiOf: (c) => AppColors.getCategoryEmoji(c.name),
+          subtitleOf: (c) =>
+              _hasBudget(c, _period) ? 'Already has a $_period budget' : null,
           onChanged: (c) => setState(() {
-            _category = c ?? _category;
+            _category = c;
             _error = null;
           }),
         ),
@@ -128,17 +130,17 @@ class _BudgetFormState extends State<BudgetForm> {
             if (_error != null) setState(() => _error = null);
           },
           onSubmitted: (_) => _submit(),
-          decoration: const InputDecoration(
-            labelText: 'Limit (₹)',
-            hintText: 'e.g. 5000',
-          ),
+          decoration: appFieldDecoration(
+            p,
+            hint: 'e.g. 5000',
+          ).copyWith(labelText: 'Limit (₹)'),
         ),
         if (_error != null) ...[
           const SizedBox(height: 10),
           Text(_error!, style: AppText.caption(p.expense)),
         ],
         const SizedBox(height: 16),
-        ElevatedButton(onPressed: _submit, child: const Text('Create budget')),
+        PrimaryButton(label: 'Create budget', onPressed: _submit),
       ],
     );
   }
