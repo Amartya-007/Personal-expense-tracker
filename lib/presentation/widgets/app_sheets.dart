@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_palette.dart';
 import '../../core/theme/app_text.dart';
 
@@ -224,11 +224,13 @@ Future<bool> confirmDestructive(
         ),
         TextButton(
           onPressed: () => Navigator.pop(ctx, true),
-          style: TextButton.styleFrom(foregroundColor: AppColors.expense),
+          style: TextButton.styleFrom(foregroundColor: ctx.palette.expense),
           child: Text(confirmLabel),
         ),
       ],
     ),
   );
-  return result ?? false;
+  final confirmed = result ?? false;
+  if (confirmed) AppHaptics.warning();
+  return confirmed;
 }

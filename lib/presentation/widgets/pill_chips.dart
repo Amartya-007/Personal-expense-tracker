@@ -40,7 +40,7 @@ class PillChips extends StatelessWidget {
     }
 
     return SizedBox(
-      height: 40,
+      height: 44,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: padding,
@@ -75,6 +75,7 @@ class PillChip extends StatelessWidget {
       haptic: PressHaptic.select,
       child: AnimatedContainer(
         duration: AppMotion.fast,
+        constraints: const BoxConstraints(minHeight: 44),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         decoration: BoxDecoration(
           color: selected ? p.primary : p.surface,

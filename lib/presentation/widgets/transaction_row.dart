@@ -75,8 +75,9 @@ class TransactionRow extends StatelessWidget {
                   const SizedBox(width: 8),
                   Text(
                     '$prefix${CurrencyFormatter.format(tx.amount)}',
-                    style: AppText.bodyStrong(
+                    style: AppText.amount(
                       p.amount(isIncome: tx.isIncome, isExpense: tx.isExpense),
+                      size: 14,
                     ),
                   ),
                 ],

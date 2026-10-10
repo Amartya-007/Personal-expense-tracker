@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_haptics.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/account_model.dart';
@@ -281,6 +282,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       }
 
       if (mounted) {
+        AppHaptics.success();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('${_type.toUpperCase()} recorded successfully!'),
