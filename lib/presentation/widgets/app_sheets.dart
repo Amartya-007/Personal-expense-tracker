@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_haptics.dart';
+import '../../core/utils/keyboard.dart';
 import '../../core/theme/app_palette.dart';
 import '../../core/theme/app_text.dart';
 
@@ -14,6 +15,9 @@ class AppBottomSheet {
     String? title,
     required WidgetBuilder builder,
   }) {
+    // Otherwise the field that was being edited grabs focus back (and raises
+    // the keyboard) the moment this sheet closes.
+    dismissKeyboard();
     return showModalBottomSheet<T>(
       context: context,
       isScrollControlled: true,
@@ -212,6 +216,7 @@ Future<bool> confirmDestructive(
   required String message,
   String confirmLabel = 'Delete',
 }) async {
+  dismissKeyboard();
   final result = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(

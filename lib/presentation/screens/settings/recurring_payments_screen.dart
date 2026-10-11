@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/utils/keyboard.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/account_model.dart';
@@ -153,6 +154,7 @@ class _RecurringFormState extends State<_RecurringForm> {
   }
 
   Future<void> _pickDate() async {
+    dismissKeyboard();
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,

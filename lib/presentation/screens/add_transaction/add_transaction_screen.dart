@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_haptics.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/utils/keyboard.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/account_model.dart';
@@ -377,6 +378,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.fromLTRB(18, 8, 18, 40),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -390,7 +392,10 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                     _type = label.toLowerCase();
                     _suggestedCategoryName = null;
                   });
-                  if (widget.editTransaction == null) {
+                  // Jump to the amount for a fresh entry, but never pull the
+                  // keyboard up over a form the user has already started.
+                  if (widget.editTransaction == null &&
+                      _amountController.text.isEmpty) {
                     _amountFocusNode.requestFocus();
                   }
                 },
@@ -775,6 +780,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                       borderRadius: BorderRadius.circular(14),
                       onTap: () async {
                         AppHaptics.tap();
+                        dismissKeyboard();
                         final picked = await showDatePicker(
                           context: context,
                           initialDate: _selectedDate,

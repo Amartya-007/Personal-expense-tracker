@@ -124,7 +124,6 @@ class _BudgetFormState extends State<BudgetForm> {
         const SizedBox(height: 12),
         TextField(
           controller: _amount,
-          autofocus: true,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           onChanged: (_) {
             if (_error != null) setState(() => _error = null);
