@@ -202,14 +202,41 @@ class AccountRepository {
     );
   }
 
-  Future<void> autoCorrectAccountBalance(String accountId) async {
+  /// Brings the stored balance back to what the ledger says it should be.
+  ///
+  /// This is an explicit, approved correction, not a silent fix: the caller
+  /// passes the balance the person was shown ([seenBalance]), and nothing
+  /// changes if the balance is different now or already matches. Returns
+  /// `true` only when a correction was made.
+  ///
+  /// The fix is deliberately NOT written to `balance_adjustments`. The
+  /// reconciliation counts adjustments as ledger activity, so recording the
+  /// correction there would make the account drift again by the same amount.
+  /// The old and new values are logged instead, so it can be reversed by hand.
+  Future<bool> correctBalanceToLedger(
+    String accountId, {
+    required double seenBalance,
+  }) async {
     final result = await reconcileAccount(accountId);
-    if (!result.isMatch) {
-      await updateAccountBalanceDirect(
-        accountId,
-        result.expectedBalance,
-        reason: 'Automated ledger reconciliation correction',
-      );
-    }
+    if (result.isMatch) return false;
+
+    final db = await _dbHelper.database;
+    final changed = await db.update(
+      'accounts',
+      {
+        'current_balance': result.expectedBalance,
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ? AND current_balance = ?',
+      whereArgs: [accountId, seenBalance],
+    );
+    if (changed == 0) return false;
+
+    await AppLogger.i(
+      'Reconciliation correction on $accountId: '
+      '₹${result.actualBalance} -> ₹${result.expectedBalance} '
+      '(drift ₹${result.drift})',
+    );
+    return true;
   }
 }

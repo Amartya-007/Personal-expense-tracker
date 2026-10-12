@@ -234,12 +234,19 @@ class TransactionRepository {
         where: 'id = ?',
         whereArgs: [newTx.id],
       );
+      // A soft-deleted transaction's effect was already reversed when it was
+      // deleted, so reversing it again (or applying a still-deleted one)
+      // would move the balance for a transaction that no longer counts.
       if (oldTxMap.isNotEmpty) {
         final oldTx = TransactionModel.fromMap(oldTxMap.first);
-        await _applyBalanceImpact(txn, oldTx, isReversal: true);
+        if (oldTx.deletedAt == null) {
+          await _applyBalanceImpact(txn, oldTx, isReversal: true);
+        }
       }
 
-      await _applyBalanceImpact(txn, newTx, isReversal: false);
+      if (newTx.deletedAt == null) {
+        await _applyBalanceImpact(txn, newTx, isReversal: false);
+      }
 
       await txn.update(
         'transactions',
@@ -358,6 +365,10 @@ class TransactionRepository {
       if (maps.isEmpty) return;
 
       final tx = TransactionModel.fromMap(maps.first);
+      // Only a deleted transaction has had its effect reversed. Restoring one
+      // that is already active (a double tap, or Undo after restoring from
+      // Recently Deleted) must not apply it a second time.
+      if (tx.deletedAt == null) return;
       await _applyBalanceImpact(txn, tx, isReversal: false);
 
       await txn.update(
