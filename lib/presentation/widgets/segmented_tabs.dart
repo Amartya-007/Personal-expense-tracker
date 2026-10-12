@@ -72,7 +72,10 @@ class SegmentedTabs extends StatelessWidget {
                         onSelected(option);
                       },
                       child: Container(
-                        constraints: const BoxConstraints(minHeight: 44),
+                        // Material's minimum touch target is 48dp (kMinInteractiveDimension).
+                        constraints: const BoxConstraints(
+                          minHeight: kMinInteractiveDimension,
+                        ),
                         alignment: Alignment.center,
                         child: AnimatedDefaultTextStyle(
                           duration: AppMotion.fast,

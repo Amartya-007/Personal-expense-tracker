@@ -91,7 +91,7 @@ All text uses Flutter's text scaler, so system font-size settings apply.
 * **Grid:** 4 pt base; page gutter 18; section gap 22; card padding 14–22.
 * **Radii:** fields 16 · cards 20 · buttons 20 · nav 26 · hero 28 · sheets 28
   (top) · pills 20 · dialogs 24.
-* **Touch targets:** ≥ 44 px (nav 66, segmented control 44, pills 44, buttons 54).
+* **Touch targets:** ≥ 48 dp, Material's minimum (Flutter's `kMinInteractiveDimension`): nav 66, segmented control 48, pills 48, buttons 54.
 * **Elevation** — each level is a soft ambient layer plus a tight key layer:
 
 | Level | Token | Use |
@@ -264,7 +264,7 @@ Each screen follows: **Purpose → Layout → Data → States → Interactions.*
 ## 7. Accessibility checklist
 
 * Text contrast ≥ 4.5:1 in both themes (table in §2.1). Large text ≥ 3:1.
-* Touch targets ≥ 44 px on all primary controls.
+* Touch targets ≥ 48 dp on all primary controls (Material minimum).
 * Semantic labels on nav items, buttons, segmented options, the add button.
 * Haptics can be switched off; shimmer respects "remove animations".
 * Colour is never the only signal: amounts carry a +/− sign, budget states
