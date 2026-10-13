@@ -37,6 +37,8 @@ class SmsQueueNotifier extends StateNotifier<AsyncValue<List<SmsReviewModel>>> {
     if (!state.hasValue) state = const AsyncValue.loading();
     try {
       await _parserService.processPendingMessages();
+      // Copies queued before duplicates were checked: keep one of each.
+      await _repository.collapseDuplicateDetected();
       final list = await _repository.getQueueByStatus(_status);
       state = AsyncValue.data(list);
     } catch (e, st) {
