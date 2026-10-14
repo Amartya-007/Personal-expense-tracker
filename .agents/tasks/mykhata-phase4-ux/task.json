@@ -1,0 +1,7 @@
+{
+  "task_id": "task-mykhata-phase4-ux",
+  "task_description": "Phase 4 of the MyKhata 2.0 UX redesign: (1) move/add balance adjustment onto the Accounts management screen reusing the Home adjustment provider; (2) add a conditional 'N bills due this week' attention item on Home driven by recurring nextDueDate; (3) introduce a single composed Home-overview snapshot provider so hero total + month strip + attention zone derive from one consistent snapshot; (4) budget enhancements: suggested limit from previous-period spend + lightweight per-budget history in the detail sheet. All using existing fields/providers/queries; NO DB migrations or schema changes (raise a warning first if any seems needed). Keep the full test suite green and preserve Phase-3 visual calm.",
+  "status": "pending",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null
+}

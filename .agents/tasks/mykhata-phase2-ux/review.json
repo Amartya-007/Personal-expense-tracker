@@ -1,0 +1,46 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "severity": "info",
+      "file": "lib/presentation/screens/add_transaction/add_transaction_screen.dart",
+      "detail": "Item 1 (disclosure): `_detailsExpanded` set in initState to `widget.editTransaction != null` (collapsed for new, expanded for edit). Payment method (+ Account) and Note/Tags/Location/Receipt are wrapped in a single Pressable header + AnimatedSize(AppMotion.fast, AppMotion.enter) region mirroring the SMS `_showOriginal` pattern. Inner conditionals preserved (Payment/Account only for non-transfer; Account hidden on Cash). Collapsing only hides widgets; no controller/selection is reset. Amount/type/description/category/Date stay always-visible. Item 2 (SMS prefill): immutable top-level SmsPrefill class + optional `smsPrefill` param (defaults null). Seeding gated behind `editTransaction == null && smsPrefill != null`; _effectiveAccount resolves the prefill account id after edit/empty checks and before primaryDefault/UPI/first. Save path tags source='sms'+smsMessageId+externalReference and pops `true` only on success. Meets all FEAT-001 acceptance criteria."
+    },
+    {
+      "severity": "info",
+      "file": "lib/presentation/screens/sms_review/sms_review_screen.dart",
+      "detail": "Item 2 single-confirm (_SmsCardState._confirm) opens AddTransactionScreen via AppRoutes.pushModal<bool>, keeps the _busy guard and the no-account snackbar, and marks the SMS 'added' only when the awaited result == true (cancel/back leaves it 'detected'). Item 3 batch (_MessageList._addAll) builds the same source:'sms' TransactionModel inline, guards re-entry via smsBatchProcessingProvider, fires exactly one AppHaptics.success() and one 'Added N transactions.' snackbar, reloads the queue once, and leaves unmatched messages 'detected'. The 'Add all N' PrimaryButton shows only when N>0 with loading bound to the processing provider. Meets FEAT-002 acceptance criteria."
+    },
+    {
+      "severity": "info",
+      "file": "lib/presentation/providers/sms_review_providers.dart",
+      "detail": "Shared helper `smsBestMatchAccount(sms, accounts)` lifted from _SmsCardState._match (behaviour-preserving lowercase contains / reverse-contains with name.length>=3); _match now delegates to it, and both single + batch paths use the one implementation. `smsBatchProcessingProvider` (StateProvider<bool>) added for batch re-entry guarding."
+    },
+    {
+      "severity": "info",
+      "file": "lib/presentation/screens/transactions/transaction_history_screen.dart",
+      "detail": "Item 4: _QuickFilterChips renders independent PillChip toggles (This month / Expenses / Income + top 1-2 categories) placed directly below the search/filter Row and above _ActiveFilterChips. Active state is derived from the live filter; taps apply/clear via the existing transactionListProvider.notifier.updateFilter path (clearType / clearDatePeriod+clearCustomDateRange / categoryIds const []), staying in sync with _ActiveFilterChips. Per-day 'Spent' total is not duplicated and now honors privacy masking by threading isMasked (privacyModeProvider) into CurrencyFormatter.format. Item 5 wiring: history TransactionListCard passes onQuickEdit -> showTransactionQuickEditSheet; Home's usage is untouched."
+    },
+    {
+      "severity": "info",
+      "file": "lib/presentation/widgets/transaction_row.dart",
+      "detail": "Item 5: opt-in `onQuickEdit` added to TransactionListCard. When null (Home, which also passes no onDelete) rows render with no Dismissible — byte-for-byte unchanged. When onDelete!=null && onQuickEdit==null, endToStart-only delete is preserved. When onQuickEdit!=null, Dismissible is horizontal with a teal p.primary 'Edit' background on startToEnd whose confirmDismiss invokes onQuickEdit and returns false (no dismissal), while endToStart keeps delete+undo via onDismissed/onDelete. Uses existing palette tokens, no new design tokens."
+    },
+    {
+      "severity": "info",
+      "file": "lib/presentation/widgets/transaction_quick_edit_sheet.dart",
+      "detail": "New shared sheet showTransactionQuickEditSheet(context, ref, tx) via AppBottomSheet.show; lets the user change category (AppDropdown fed by expense/incomeCategoriesProvider per tx type) and amount (validated > 0), persisting via transactionListProvider.notifier.updateTransaction(tx.copyWith(categoryId, categoryName, amount)) + AppHaptics.success(). copyWith's `?? this.field` cannot null categoryId, which is documented and safe since only a non-null category is ever set; if the user saves without touching category, picked is null and the existing categoryId is retained (no wipe). TransactionModel.copyWith supports categoryName and amount params — verified."
+    },
+    {
+      "severity": "info",
+      "file": "lib/presentation/screens/budgets/budget_list_screen.dart",
+      "detail": "Item 6: period control swapped from SegmentedTabs to PillChips with identical options ['Weekly','Monthly','Yearly'], same selected (`_period[0].toUpperCase()+substring(1)`) and onSelected (`setState(() => _period = label.toLowerCase())`) wiring. The now-unused segmented_tabs.dart import was removed and pill_chips.dart added (analyze clean, no unused-import). Default 'monthly' and the `budgets.where((b)=>b.period==_period)` filtering are unchanged. Insights left as-is, so the two screens now share one PillChips visual family."
+    },
+    {
+      "severity": "info",
+      "file": "(guardrails + verification)",
+      "detail": "Guardrails confirmed: no changes under lib/core/theme or lib/core/constants (no design-token edits); no nav/FAB/speed-dial file changes; only the 7 planned lib files changed; existing AddTransactionScreen callers (initialType in main_navigation/home/history empty-state, editTransaction in transaction_detail) and TransactionListCard callers (Home onTap-only) are preserved. Untracked .agents/ and skills-lock.json were NOT committed. `flutter analyze` => No issues found. `flutter test` => All tests passed (103 tests incl. sms_parser, sms_dedupe, transaction_filter, transaction_calculation, smoke 'MyKhata'). Three commits map 1:1 to FEAT-001/002/003 on redesign/mykhata-2.0 since e317fcd."
+    }
+  ],
+  "summary": "APPROVED. All six Phase-2 plan items are implemented and meet their FEAT acceptance criteria: (1) 'Add details' disclosure collapsed for new / expanded for edit without resetting any field; (2) SMS single-confirm routed through the shared form via optional SmsPrefill, marking 'added' only on a truthy save; (3) Detected-tab 'Add all N' batch booking of confidently-matched messages with re-entry guard, one haptic and one snackbar; (4) independent quick-filter PillChip toggles on the existing updateFilter path plus privacy-masked per-day totals; (5) opt-in swipe-right quick-edit on history rows only (Home untouched) with a new shared quick-edit sheet; (6) Budgets period control standardized on PillChips to match Insights with identical semantics. Guardrails hold (no design-token / nav / FAB changes; shared widgets reused; existing callers preserved; .agents and skills-lock.json not committed). flutter analyze is clean and all 103 flutter tests pass."
+}

@@ -1,0 +1,31 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Budget enhancements (plan items 7-9, 10): (a) SUGGESTED LIMIT on budget creation — prefill/suggest a limit from the selected category's ACTUAL spend in the PREVIOUS period of the same type (weekly/monthly/yearly), computed by reusing BudgetRepository.currentWindow with a back-shifted `now` and AnalyticsService.getAnalytics(...).categoryBreakdown (no new SQL/schema), shown as an accept-or-overwrite hint 'Suggested: Rs X based on last {period}'; (b) LIGHTWEIGHT HISTORY in the budget detail sheet (_showBudgetDetail) — a compact row showing the last ~3 periods' used-% ('Oct: 92% . Sep: 78% . Aug: 110%') recomputed from existing data. Isolated to the budgets feature; independent of FEAT-001 (only shares that it reuses the same analytics seam). NO DB migration/schema changes; raise a warning first if any seems needed, and if a sub-item genuinely cannot use existing data, raise a warning and skip just that sub-item.",
+  "status": "pending",
+  "steps": [
+    "Read .agents/tasks/mykhata-phase4-ux/context.json and this FEAT file FIRST; context.json replaces re-exploration. Also read plan.md items 7-9 and FEAT-001 findings (for any shared analytics helper location). This FEAT is independent of FEAT-001's runtime behavior but shares the AnalyticsService.getAnalytics seam.",
+    "Item 7: Add a per-category previous-period spend reader. Add `suggestedBudgetLimitProvider` as a FutureProvider.family keyed by a (categoryId, period) record in lib/presentation/providers/budget_providers.dart. Compute the previous window: weekly -> now.subtract(7d); monthly -> first day of last month (DateTime(n.year,n.month-1,1)); yearly -> DateTime(n.year-1, n.month, n.day); then window = BudgetRepository.currentWindow(period, now, now, now: shifted); call ref.watch(analyticsServiceProvider).getAnalytics(startDate: window.start, endDate: window.end) and return categoryBreakdown.firstWhere(c.categoryId==categoryId, orElse 0).totalAmount (0.0 if absent). No schema. If this cannot be read with existing data, STOP and send_message severity 'warning' with the needed change + no-migration alternative, then ship item 9 only.",
+    "Item 8: Wire the suggestion into budget creation. In lib/presentation/screens/budgets/budget_list_screen.dart (which has ref), pass a suggestion callback `Future<double> Function(String categoryId, String period)` into BudgetForm (keeps the form free of provider plumbing). In lib/presentation/screens/budgets/budget_form.dart, when category/period changes or on first build, fetch the suggested value and render an accept-or-overwrite hint under the Limit field: tappable text/chip 'Suggested: ' + CurrencyFormatter.format(x) + ' based on last {period noun}' that fills _amount on tap. Do NOT clobber a value the user already typed (only prefill when empty or on explicit tap). Reuse the _periodNoun mapping pattern from budget_list_screen.dart. Keep Phase-3 calm (AppText/AppSpacing, no new gradients/shadows).",
+    "Item 9: Add a pure budget-history percentage helper. Create a top-level pure function (co-locate in budget_providers.dart or a new lib/services/analytics/budget_history.dart) that takes a list of prior-period spends + the budget limit and returns a list of {label, percent} (percent = spend/limit*100, NOT clamped so >100% shows). Add the data-fetch side (window-shift k periods back via currentWindow + getAnalytics per window, reading the category totalAmount) as a provider/method; keep the math pure and separate so it is unit-testable without a DB.",
+    "Item 9: In _showBudgetDetail (budget_list_screen.dart) render a compact history row BELOW the existing progress bar: either a text row 'Oct: 92% . Sep: 78% . Aug: 110%' using AppText.caption, or a simple bar row (fl_chart is already a dependency and MAY be used for a sparkline, but a plain bar/text row is preferred for calm). Use AppSpacing for gaps; single edge signal, no new gradients/shadows. If prior-period recomputation is not feasible with existing data, STOP and send_message severity 'warning', then skip just this sub-item (ship items 7-8).",
+    "Item 9: Add test/unit/budget_history_test.dart for the pure percentage/label computation (e.g. spends [920,780,1100] with limit 1000 -> ['92%','78%','110%']; verify over-limit stays >100%). Mirror test/unit/transaction_calculation_test.dart.",
+    "Item 10 (scoped to this FEAT's files): run flutter analyze and flutter test; run `dart format` on every file you changed/created and accept the reflow.",
+    "Set this FEAT status to completed in features/FEAT-002.json and record in findings: the suggestion provider name/signature, the history helper location, and whether any sub-item was skipped via a raised warning (and why).",
+    "Commit locally on redesign/mykhata-2.0 (stage only the files you touched; never `git add .`); do NOT push."
+  ],
+  "acceptance_criteria": [
+    "Opening Create budget for a category that had spend in the previous same-type period shows a 'Suggested: Rs X based on last {period}' hint; tapping it prefills the limit; a value the user already typed is not overwritten.",
+    "The suggested limit is derived from existing transaction/analytics data (AnalyticsService.getAnalytics over the previous window) with no new SQL/schema.",
+    "The budget detail sheet (_showBudgetDetail) shows a compact history of the last ~3 periods' used-% (or spent-vs-limit) recomputed from existing data, below the progress bar, respecting Phase-3 calm.",
+    "No new persisted field, column, table, or migration was introduced; any skipped sub-item was accompanied by a raised 'warning'.",
+    "flutter analyze reports no new errors and flutter test passes (all existing tests plus the new budget_history unit test)."
+  ],
+  "verification": [
+    "flutter test test/unit/budget_history_test.dart",
+    "flutter analyze",
+    "flutter test"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

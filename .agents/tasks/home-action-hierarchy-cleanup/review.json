@@ -1,0 +1,12 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "label": "Formatter reflow bundled with the deletion",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "detail": "The diff mixes a whole-file `dart format` rewrap with the surgical removal of `_QuickActionsRow`, inflating the change and obscuring the one behavioral edit. Behaviorally inert; worth a note in the commit message so a reader knows the churn is formatting, not logic."
+    }
+  ],
+  "reviewDoc": "e:\\MyKhata\\.agents\\tasks\\home-action-hierarchy-cleanup\\review.md"
+}
