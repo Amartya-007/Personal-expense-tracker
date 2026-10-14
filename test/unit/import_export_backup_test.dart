@@ -3,6 +3,8 @@ library;
 
 import 'dart:convert';
 
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mykhata/core/database/database_helper.dart';
@@ -13,14 +15,30 @@ import 'package:mykhata/data/repositories/transaction_repository.dart';
 import 'package:mykhata/services/backup/backup_service.dart';
 import 'package:mykhata/services/export/export_service.dart';
 import 'package:mykhata/services/import/import_service.dart';
+import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:uuid/uuid.dart';
 
 void main() {
-  setUpAll(() {
+  Directory? tempDir;
+
+  setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
+
+    tempDir = await Directory.systemTemp.createTemp('mykhata_test_import_');
+    DatabaseHelper.setCustomDatabasePath(p.join(tempDir!.path, 'mykhata_import.db'));
+  });
+
+  tearDownAll(() async {
+    await DatabaseHelper.instance.close();
+    DatabaseHelper.setCustomDatabasePath(null);
+    try {
+      if (tempDir != null && await tempDir!.exists()) {
+        await tempDir!.delete(recursive: true);
+      }
+    } catch (_) {}
   });
 
   setUp(() async {

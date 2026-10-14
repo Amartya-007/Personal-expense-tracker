@@ -9,14 +9,17 @@ import '../../../core/theme/app_palette.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_filters.dart';
+import '../../../data/models/account_model.dart';
+import '../../../data/models/category_model.dart';
+import '../../../data/models/tag_model.dart';
 import '../../../data/models/transaction_model.dart';
 import '../../providers/account_providers.dart';
 import '../../providers/category_providers.dart';
+import '../../providers/tag_providers.dart';
 import '../../providers/transaction_providers.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/fade_slide_in.dart';
 import '../../widgets/filter_bottom_sheet.dart';
-import '../../widgets/pill_chips.dart';
 import '../../widgets/pressable.dart';
 import '../../widgets/skeleton.dart';
 import '../../widgets/transaction_row.dart';
@@ -38,7 +41,6 @@ class _TransactionHistoryScreenState
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
-  String _dateFilter = DateFilters.all;
 
   @override
   void initState() {
@@ -76,64 +78,28 @@ class _TransactionHistoryScreenState
     ref.read(transactionListProvider.notifier).setSearchQuery(null);
   }
 
-  /// Applies a complete filter set (null = no filter). This is the single
-  /// path used by both the chips and the filter sheet.
-  void _applyFilters({
-    String? type,
-    String? paymentMethod,
-    String? dateFilter,
-    String? categoryId,
-    String? accountId,
-  }) {
-    setState(() => _dateFilter = dateFilter ?? DateFilters.all);
-    ref.read(transactionListProvider.notifier).setFilters(
-          type: type,
-          paymentMethod: paymentMethod,
-          categoryId: categoryId,
-          accountId: accountId,
-          dateRange: DateFilters.rangeFor(dateFilter),
-        );
-  }
-
-  void _selectDateChip(String chip) {
-    final current = ref.read(transactionListProvider);
-    _applyFilters(
-      type: current.type,
-      paymentMethod: current.paymentMethod,
-      categoryId: current.categoryId,
-      accountId: current.accountId,
-      dateFilter: chip == DateFilters.all ? null : chip,
-    );
-  }
-
   Future<void> _openFilterSheet() async {
-    final current = ref.read(transactionListProvider);
+    final currentFilter = ref.read(transactionListProvider).filter;
     final categories = await ref.read(categoriesListProvider.future);
+    final accounts = ref.read(accountListProvider).value ?? const [];
+    final tags = await ref.read(tagsListProvider.future);
+
     if (!mounted) return;
-    final result = await FilterSheet.show(
+    final newFilter = await FilterSheet.show(
       context,
       categories: categories,
-      accounts: ref.read(accountListProvider).value ?? const [],
-      type: current.type,
-      paymentMethod: current.paymentMethod,
-      categoryId: current.categoryId,
-      accountId: current.accountId,
-      dateFilter: _dateFilter == DateFilters.all ? null : _dateFilter,
+      accounts: accounts,
+      tags: tags,
+      initialFilter: currentFilter,
     );
-    if (result == null) return;
-    _applyFilters(
-      type: result.type,
-      paymentMethod: result.paymentMethod,
-      categoryId: result.categoryId,
-      accountId: result.accountId,
-      dateFilter: result.dateFilter,
-    );
+
+    if (newFilter == null) return;
+    ref.read(transactionListProvider.notifier).setFilter(newFilter);
   }
 
   void _clearAll() {
     _debounce?.cancel();
     _searchController.clear();
-    setState(() => _dateFilter = DateFilters.all);
     ref.read(transactionListProvider.notifier).clearFilters();
   }
 
@@ -154,8 +120,6 @@ class _TransactionHistoryScreenState
     );
   }
 
-  /// Groups by calendar day. The old key was just "1 Oct", so the same
-  /// day/month from different years was merged under one header.
   List<List<TransactionModel>> _groupByDay(List<TransactionModel> txs) {
     final groups = <String, List<TransactionModel>>{};
     for (final tx in txs) {
@@ -179,12 +143,8 @@ class _TransactionHistoryScreenState
   Widget build(BuildContext context) {
     final p = context.palette;
     final state = ref.watch(transactionListProvider);
-    final hasFilters = state.type != null ||
-        state.paymentMethod != null ||
-        state.categoryId != null ||
-        state.accountId != null ||
-        state.dateRange != null;
-    final hasSearch = (state.searchQuery ?? '').isNotEmpty;
+    final filter = state.filter;
+    final activeCount = filter.activeFilterCount;
     final groups = _groupByDay(state.transactions);
     final bottom = MediaQuery.of(context).padding.bottom;
 
@@ -216,7 +176,7 @@ class _TransactionHistoryScreenState
               ),
             ),
 
-            // Search + filter button
+            // Search bar + Filter button with active count badge
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 18),
               child: Row(
@@ -237,7 +197,7 @@ class _TransactionHistoryScreenState
                           textInputAction: TextInputAction.search,
                           style: AppText.body(p.ink),
                           decoration: InputDecoration(
-                            hintText: 'Search anything',
+                            hintText: 'Search merchant, note, amount, category...',
                             filled: false,
                             border: InputBorder.none,
                             enabledBorder: InputBorder.none,
@@ -275,22 +235,30 @@ class _TransactionHistoryScreenState
                             size: 52,
                             child: Icon(Icons.tune_rounded, size: 20, color: p.ink),
                           ),
-                          Positioned(
-                            right: 8,
-                            top: 8,
-                            child: AnimatedScale(
-                              scale: hasFilters ? 1 : 0,
-                              duration: const Duration(milliseconds: 200),
+                          if (activeCount > 0)
+                            Positioned(
+                              right: 2,
+                              top: 2,
                               child: Container(
-                                width: 9,
-                                height: 9,
+                                padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
                                   color: p.secondary,
                                   shape: BoxShape.circle,
                                 ),
+                                constraints: const BoxConstraints(
+                                  minWidth: 18,
+                                  minHeight: 18,
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  '$activeCount',
+                                  style: AppText.caption(p.onPrimary).copyWith(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
                         ],
                       ),
                     ),
@@ -298,16 +266,22 @@ class _TransactionHistoryScreenState
                 ],
               ),
             ),
-            const SizedBox(height: 12),
 
-            // Quick date chips
-            PillChips(
-              options: DateFilters.options.where((o) => o != 'Today').toList(),
-              selected: _dateFilter == 'Today' ? '' : _dateFilter,
-              onSelected: _selectDateChip,
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-            ),
-            const SizedBox(height: 12),
+            // Active Removable Filter Chips
+            if (filter.hasAnyFilter)
+              _ActiveFilterChips(
+                filter: filter,
+                searchController: _searchController,
+                onClearAll: _clearAll,
+              ),
+
+            // Summary Banner
+            if (!state.isLoading || state.transactions.isNotEmpty)
+              _SummaryBanner(
+                count: state.totalCount,
+                totalExpense: state.totalExpense,
+                totalIncome: state.totalIncome,
+              ),
 
             // List
             Expanded(
@@ -316,7 +290,7 @@ class _TransactionHistoryScreenState
                 p,
                 state,
                 groups,
-                hasFilters || hasSearch,
+                filter.hasAnyFilter,
                 bottom,
               ),
             ),
@@ -351,9 +325,9 @@ class _TransactionHistoryScreenState
         emoji: filtered ? '🔍' : '🧾',
         title: filtered ? 'No transactions match' : 'No transactions yet',
         message: filtered
-            ? 'Try a different search or clear the filters.'
+            ? 'Try adjusting your search or clearing the filters.'
             : 'Tap + to record your first one.',
-        actionLabel: filtered ? 'Clear filters' : 'Add expense',
+        actionLabel: filtered ? 'Clear all filters' : 'Add expense',
         onAction: filtered
             ? _clearAll
             : () => AppRoutes.pushModal(
@@ -403,6 +377,372 @@ class _TransactionHistoryScreenState
               padding: EdgeInsets.all(16),
               child: Center(child: CircularProgressIndicator()),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActiveFilterChips extends ConsumerWidget {
+  final TransactionFilter filter;
+  final TextEditingController searchController;
+  final VoidCallback onClearAll;
+
+  const _ActiveFilterChips({
+    required this.filter,
+    required this.searchController,
+    required this.onClearAll,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+    final categories = ref.watch(categoriesListProvider).value ?? const [];
+    final accounts = ref.watch(accountListProvider).value ?? const [];
+    final tags = ref.watch(tagsListProvider).value ?? const [];
+
+    final chips = <Widget>[];
+
+    // Search chip
+    if (filter.hasSearch) {
+      chips.add(_RemovableChip(
+        label: 'Search: "${filter.searchQuery}"',
+        onRemove: () {
+          searchController.clear();
+          ref.read(transactionListProvider.notifier).setSearchQuery(null);
+        },
+      ));
+    }
+
+    // Type chip
+    if (filter.type != null && filter.type!.isNotEmpty) {
+      final label = filter.type![0].toUpperCase() + filter.type!.substring(1);
+      chips.add(_RemovableChip(
+        label: 'Type: $label',
+        onRemove: () {
+          ref.read(transactionListProvider.notifier).updateFilter(
+                (f) => f.copyWith(clearType: true),
+              );
+        },
+      ));
+    }
+
+    // Date chip
+    if (filter.datePeriod != null && filter.datePeriod!.isNotEmpty && filter.datePeriod != DateFilters.all) {
+      String dateLabel = 'Date: ${filter.datePeriod}';
+      if (filter.datePeriod == 'Custom' && filter.customDateRange != null) {
+        final start = filter.customDateRange!.start;
+        final end = filter.customDateRange!.end;
+        dateLabel = 'Date: ${start.day}/${start.month} - ${end.day}/${end.month}';
+      }
+      chips.add(_RemovableChip(
+        label: dateLabel,
+        onRemove: () {
+          ref.read(transactionListProvider.notifier).updateFilter(
+                (f) => f.copyWith(clearDatePeriod: true, clearCustomDateRange: true),
+              );
+        },
+      ));
+    }
+
+    // Amount chip
+    if (filter.minAmount != null || filter.maxAmount != null) {
+      String amtLabel = 'Amount: ';
+      if (filter.minAmount != null && filter.maxAmount != null) {
+        amtLabel += '₹${filter.minAmount!.toStringAsFixed(0)} - ₹${filter.maxAmount!.toStringAsFixed(0)}';
+      } else if (filter.minAmount != null) {
+        amtLabel += '> ₹${filter.minAmount!.toStringAsFixed(0)}';
+      } else {
+        amtLabel += '< ₹${filter.maxAmount!.toStringAsFixed(0)}';
+      }
+      chips.add(_RemovableChip(
+        label: amtLabel,
+        onRemove: () {
+          ref.read(transactionListProvider.notifier).updateFilter(
+                (f) => f.copyWith(clearMinAmount: true, clearMaxAmount: true),
+              );
+        },
+      ));
+    }
+
+    // Categories chip
+    if (filter.categoryIds.isNotEmpty) {
+      final firstId = filter.categoryIds.first;
+      final catMatch = categories.cast<CategoryModel?>().firstWhere(
+            (c) => c?.id == firstId,
+            orElse: () => null,
+          );
+      String name = firstId == 'uncategorized'
+          ? 'Uncategorized'
+          : (catMatch?.name ?? 'Category');
+      if (filter.categoryIds.length > 1) {
+        name += ' (+${filter.categoryIds.length - 1})';
+      }
+      chips.add(_RemovableChip(
+        label: 'Category: $name',
+        onRemove: () {
+          ref.read(transactionListProvider.notifier).updateFilter(
+                (f) => f.copyWith(categoryIds: const []),
+              );
+        },
+      ));
+    }
+
+    // Tags chip
+    if (filter.tagIds.isNotEmpty) {
+      final firstId = filter.tagIds.first;
+      final tagMatch = tags.cast<TagModel?>().firstWhere(
+            (t) => t?.id == firstId,
+            orElse: () => null,
+          );
+      String name = '#${tagMatch?.name ?? 'tag'}';
+      if (filter.tagIds.length > 1) {
+        name += ' (+${filter.tagIds.length - 1})';
+      }
+      chips.add(_RemovableChip(
+        label: 'Tag: $name',
+        onRemove: () {
+          ref.read(transactionListProvider.notifier).updateFilter(
+                (f) => f.copyWith(tagIds: const []),
+              );
+        },
+      ));
+    }
+
+    // Accounts chip
+    if (filter.accountIds.isNotEmpty) {
+      final firstId = filter.accountIds.first;
+      final accMatch = accounts.cast<AccountModel?>().firstWhere(
+            (a) => a?.id == firstId,
+            orElse: () => null,
+          );
+      String name = firstId == 'primary'
+          ? 'Primary Account'
+          : (accMatch?.name ?? 'Account');
+      if (filter.accountIds.length > 1) {
+        name += ' (+${filter.accountIds.length - 1})';
+      }
+      chips.add(_RemovableChip(
+        label: 'Account: $name',
+        onRemove: () {
+          ref.read(transactionListProvider.notifier).updateFilter(
+                (f) => f.copyWith(accountIds: const []),
+              );
+        },
+      ));
+    }
+
+    // Payment methods chip
+    if (filter.paymentMethods.isNotEmpty) {
+      String name = filter.paymentMethods.first;
+      if (filter.paymentMethods.length > 1) {
+        name += ' (+${filter.paymentMethods.length - 1})';
+      }
+      chips.add(_RemovableChip(
+        label: 'Payment: $name',
+        onRemove: () {
+          ref.read(transactionListProvider.notifier).updateFilter(
+                (f) => f.copyWith(paymentMethods: const []),
+              );
+        },
+      ));
+    }
+
+    // Additional Filter chips
+    if (filter.hasReceipt != null) {
+      chips.add(_RemovableChip(
+        label: filter.hasReceipt! ? 'With Receipt' : 'Without Receipt',
+        onRemove: () {
+          ref.read(transactionListProvider.notifier).updateFilter(
+                (f) => f.copyWith(clearReceipt: true),
+              );
+        },
+      ));
+    }
+
+    if (filter.isRecurring != null) {
+      chips.add(_RemovableChip(
+        label: filter.isRecurring! ? 'Recurring Only' : 'Non-Recurring',
+        onRemove: () {
+          ref.read(transactionListProvider.notifier).updateFilter(
+                (f) => f.copyWith(clearRecurring: true),
+              );
+        },
+      ));
+    }
+
+    if (filter.hasNote != null) {
+      chips.add(_RemovableChip(
+        label: 'With Note',
+        onRemove: () {
+          ref.read(transactionListProvider.notifier).updateFilter(
+                (f) => f.copyWith(clearNote: true),
+              );
+        },
+      ));
+    }
+
+    if (filter.hasLocation != null) {
+      chips.add(_RemovableChip(
+        label: 'With Location',
+        onRemove: () {
+          ref.read(transactionListProvider.notifier).updateFilter(
+                (f) => f.copyWith(clearLocation: true),
+              );
+        },
+      ));
+    }
+
+    // Sort option chip
+    if (filter.sortBy != TransactionSortOption.dateDesc) {
+      String sortName = 'Newest';
+      switch (filter.sortBy) {
+        case TransactionSortOption.dateAsc:
+          sortName = 'Oldest First';
+          break;
+        case TransactionSortOption.amountDesc:
+          sortName = 'Highest Amount';
+          break;
+        case TransactionSortOption.amountAsc:
+          sortName = 'Lowest Amount';
+          break;
+        case TransactionSortOption.titleAsc:
+          sortName = 'Title A-Z';
+          break;
+        case TransactionSortOption.titleDesc:
+          sortName = 'Title Z-A';
+          break;
+        case TransactionSortOption.dateDesc:
+          break;
+      }
+      chips.add(_RemovableChip(
+        label: 'Sort: $sortName',
+        onRemove: () {
+          ref.read(transactionListProvider.notifier).updateFilter(
+                (f) => f.copyWith(sortBy: TransactionSortOption.dateDesc),
+              );
+        },
+      ));
+    }
+
+    if (chips.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      height: 38,
+      margin: const EdgeInsets.only(top: 8, bottom: 4),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        itemCount: chips.length + 1,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          if (index == chips.length) {
+            return Center(
+              child: InkWell(
+                onTap: onClearAll,
+                borderRadius: BorderRadius.circular(16),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Text(
+                    'Clear All',
+                    style: AppText.caption(p.primary).copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
+          return chips[index];
+        },
+      ),
+    );
+  }
+}
+
+class _RemovableChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onRemove;
+
+  const _RemovableChip({required this.label, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 4, 4, 4),
+      decoration: BoxDecoration(
+        color: p.primary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: p.primary.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: AppText.caption(p.primary).copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(width: 2),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onRemove,
+            child: Padding(
+              padding: const EdgeInsets.all(2),
+              child: Icon(Icons.close_rounded, size: 15, color: p.primary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryBanner extends StatelessWidget {
+  final int count;
+  final double totalExpense;
+  final double totalIncome;
+
+  const _SummaryBanner({
+    required this.count,
+    required this.totalExpense,
+    required this.totalIncome,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(18, 8, 18, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: p.border),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            '$count ${count == 1 ? 'Transaction' : 'Transactions'}',
+            style: AppText.caption(p.ink).copyWith(fontWeight: FontWeight.w700),
+          ),
+          Row(
+            children: [
+              if (totalExpense > 0) ...[
+                Text(
+                  'Exp: ${CurrencyFormatter.format(totalExpense)}',
+                  style: AppText.caption(p.expense).copyWith(fontWeight: FontWeight.w600),
+                ),
+                if (totalIncome > 0) const SizedBox(width: 8),
+              ],
+              if (totalIncome > 0)
+                Text(
+                  'Inc: ${CurrencyFormatter.format(totalIncome)}',
+                  style: AppText.caption(p.income).copyWith(fontWeight: FontWeight.w600),
+                ),
+            ],
+          ),
         ],
       ),
     );

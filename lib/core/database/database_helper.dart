@@ -94,24 +94,46 @@ class DatabaseHelper {
 
   static final DatabaseHelper instance = DatabaseHelper._internal();
   static Database? _database;
+  static String? _customDatabasePath;
 
   DatabaseHelper._internal();
 
+  /// Allows tests or custom configurations to specify an isolated database path.
+  static void setCustomDatabasePath(String? path) {
+    if (_database != null && _database!.isOpen) {
+      _database!.close();
+    }
+    _database = null;
+    _customDatabasePath = path;
+  }
+
+  static String? get customDatabasePath => _customDatabasePath;
+  String? get activeCustomPath => _customDatabasePath;
+
   Future<Database> get database async {
-    if (_database != null) return _database!;
+    if (_database != null && _database!.isOpen) return _database!;
     _database = await _initDatabase();
     return _database!;
   }
 
   Future<Database> _initDatabase() async {
-    String path;
+    final path = _customDatabasePath ?? await _defaultDatabasePath();
+    return await _openDatabaseWithPath(path);
+  }
+
+  static Future<String> _defaultDatabasePath() async {
     try {
       final docsDir = await getApplicationDocumentsDirectory();
-      path = join(docsDir.path, _dbName);
+      return join(docsDir.path, _dbName);
     } catch (_) {
-      path = join(Directory.systemTemp.path, _dbName);
+      return join(
+        Directory.systemTemp.path,
+        'mykhata_test_${pid}_${identityHashCode(DatabaseHelper.instance)}.db',
+      );
     }
+  }
 
+  Future<Database> _openDatabaseWithPath(String path) async {
     return await openDatabase(
       path,
       version: _dbVersion,
@@ -286,8 +308,23 @@ class DatabaseHelper {
         whereArgs: ruleIds,
       );
 
-      // Put back any default tag/rule the user had removed.
+      // Put back any default category, tag, or rule the user had removed.
       final now = DateTime.now().millisecondsSinceEpoch;
+      for (final cat in DefaultCategories.list) {
+        await txn.insert(
+          'categories',
+          {
+            'id': cat.id,
+            'name': cat.name,
+            'icon': cat.icon,
+            'color': cat.color,
+            'type': cat.type,
+            'is_default': 1,
+            'created_at': now,
+          },
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+      }
       for (final tag in _defaultTags) {
         await txn.insert(
           'tags',

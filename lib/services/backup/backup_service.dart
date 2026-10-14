@@ -265,16 +265,22 @@ class BackupService {
   /// Restores a full backup with 5-stage safety, integrity validation, and automatic rollback.
   Future<bool> restoreFullBackupPackage(File zipFile) async {
     final docsDir = await _getDocsDirectory();
-    final tempDir = Directory(p.join(docsDir.path, 'restore_temp'));
-    final safetyDir = Directory(p.join(docsDir.path, 'restore_safety'));
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final tempDir = Directory(p.join(docsDir.path, 'restore_temp_$timestamp'));
+    final safetyDir = Directory(p.join(docsDir.path, 'restore_safety_$timestamp'));
 
     try {
       if (await tempDir.exists()) await tempDir.delete(recursive: true);
       await tempDir.create(recursive: true);
 
+      // Stage 1: Extract zip archive to tempDir
       final bytes = await zipFile.readAsBytes();
-      final archive = ZipDecoder().decodeBytes(bytes);
+      if (bytes.isEmpty) {
+        await AppLogger.w('Restore rejected: Backup archive is empty.');
+        return false;
+      }
 
+      final archive = ZipDecoder().decodeBytes(bytes);
       for (final file in archive) {
         if (file.isFile) {
           final data = file.content as List<int>;
@@ -285,12 +291,10 @@ class BackupService {
         }
       }
 
+      // Stage 2: Validate manifest and staged DB checksum
       final manifestFile = File(p.join(tempDir.path, 'manifest.json'));
       if (!await manifestFile.exists()) {
-        await AppLogger.w(
-          'Restore rejected: manifest.json missing in backup archive.',
-        );
-        await tempDir.delete(recursive: true);
+        await AppLogger.w('Restore rejected: manifest.json missing in backup archive.');
         return false;
       }
 
@@ -299,10 +303,7 @@ class BackupService {
 
       final stagedDbFile = File(p.join(tempDir.path, AppConstants.dbFileName));
       if (!await stagedDbFile.exists()) {
-        await AppLogger.w(
-          'Restore rejected: ${AppConstants.dbFileName} missing in backup package.',
-        );
-        await tempDir.delete(recursive: true);
+        await AppLogger.w('Restore rejected: ${AppConstants.dbFileName} missing in backup package.');
         return false;
       }
 
@@ -313,121 +314,166 @@ class BackupService {
           await AppLogger.w(
             'Restore rejected: Database checksum mismatch (expected $expectedChecksum, got $actualChecksum).',
           );
-          await tempDir.delete(recursive: true);
           return false;
         }
       }
 
+      // Stage 3: Validate staged DB with PRAGMA quick_check
       Database? testDb;
       try {
         testDb = await openDatabase(stagedDbFile.path, readOnly: true);
         final checkRes = await testDb.rawQuery('PRAGMA quick_check');
         if (checkRes.isEmpty || checkRes.first.values.first != 'ok') {
           await testDb.close();
-          await tempDir.delete(recursive: true);
-          await AppLogger.w(
-            'Restore rejected: SQLite PRAGMA quick_check failed.',
-          );
+          await AppLogger.w('Restore rejected: SQLite PRAGMA quick_check failed.');
           return false;
         }
         await testDb.close();
+        testDb = null;
       } catch (e) {
         if (testDb != null && testDb.isOpen) await testDb.close();
-        await tempDir.delete(recursive: true);
-        await AppLogger.w('Restore rejected: staged DB failed to open: $e');
+        await AppLogger.w('Restore rejected: Staged DB integrity check failed: $e');
         return false;
       }
 
+      // Stage 4: Create safety backup of current active database & receipts
       if (await safetyDir.exists()) await safetyDir.delete(recursive: true);
-      safetyDir.createSync(recursive: true);
+      await safetyDir.create(recursive: true);
 
-      final db = await DatabaseHelper.instance.database;
-      final activeDbPath = db.path;
-      final activeDbFile = File(activeDbPath);
-      if (await activeDbFile.exists() && activeDbPath != ':memory:') {
-        await activeDbFile.copy(
-          p.join(safetyDir.path, AppConstants.dbFileName),
-        );
-      }
-
-      final activeReceiptsDir = Directory(p.join(docsDir.path, 'receipts'));
-      if (await activeReceiptsDir.exists()) {
-        final safetyReceiptsDir = Directory(p.join(safetyDir.path, 'receipts'));
-        await safetyReceiptsDir.create(recursive: true);
-        await for (final entity in activeReceiptsDir.list(recursive: true)) {
-          if (entity is File) {
-            final rel = p.relative(entity.path, from: activeReceiptsDir.path);
-            final target = File(p.join(safetyReceiptsDir.path, rel));
-            await target.parent.create(recursive: true);
-            await entity.copy(target.path);
-          }
-        }
-      }
+      final activeDb = await DatabaseHelper.instance.database;
+      final activeDbPath = activeDb.path;
 
       if (activeDbPath != ':memory:') {
+        // Truncate active WAL before copying safety backup
+        try {
+          await activeDb.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+        } catch (_) {}
+
+        final activeDbFile = File(activeDbPath);
+        if (await activeDbFile.exists()) {
+          await activeDbFile.copy(p.join(safetyDir.path, AppConstants.dbFileName));
+        }
+
+        final activeReceiptsDir = Directory(p.join(docsDir.path, 'receipts'));
+        if (await activeReceiptsDir.exists()) {
+          final safetyReceiptsDir = Directory(p.join(safetyDir.path, 'receipts'));
+          await safetyReceiptsDir.create(recursive: true);
+          await for (final entity in activeReceiptsDir.list(recursive: true)) {
+            if (entity is File) {
+              final rel = p.relative(entity.path, from: activeReceiptsDir.path);
+              final target = File(p.join(safetyReceiptsDir.path, rel));
+              await target.parent.create(recursive: true);
+              await entity.copy(target.path);
+            }
+          }
+        }
+
+        // Stage 5: Replace active database
+        // Close DatabaseHelper connection and sqflite factory handle
         await DatabaseHelper.instance.close();
         try {
           await databaseFactory.deleteDatabase(activeDbPath);
         } catch (_) {}
-        final activeFile = File(activeDbPath);
-        if (await activeFile.exists()) {
-          await activeFile.delete();
-        }
-        await stagedDbFile.copy(activeDbPath);
-      } else {
-        final activeDb = await DatabaseHelper.instance.database;
-        await activeDb.execute('VACUUM INTO ?', [activeDbPath]);
-      }
 
-      final stagedReceipts = Directory(p.join(tempDir.path, 'receipts'));
-      if (await stagedReceipts.exists()) {
-        if (!await activeReceiptsDir.exists()) {
-          await activeReceiptsDir.create(recursive: true);
-        }
-
-        await for (final entity in stagedReceipts.list(recursive: true)) {
-          if (entity is File) {
-            final relativePath = p.relative(
-              entity.path,
-              from: stagedReceipts.path,
-            );
-            final targetPath = p.join(activeReceiptsDir.path, relativePath);
-            final targetFile = File(targetPath);
-            await targetFile.parent.create(recursive: true);
-            await entity.copy(targetPath);
+        // Remove/truncate active WAL and SHM sidecars
+        final walFile = File('$activeDbPath-wal');
+        final shmFile = File('$activeDbPath-shm');
+        if (await walFile.exists()) {
+          try {
+            await walFile.delete();
+          } catch (_) {
+            await walFile.writeAsBytes([], flush: true);
           }
         }
+        if (await shmFile.exists()) {
+          try {
+            await shmFile.delete();
+          } catch (_) {
+            await shmFile.writeAsBytes([], flush: true);
+          }
+        }
+
+        // Replace database file on disk
+        final activeFile = File(activeDbPath);
+        try {
+          if (await activeFile.exists()) {
+            await activeFile.delete();
+          }
+          await stagedDbFile.copy(activeDbPath);
+        } catch (_) {
+          await activeFile.writeAsBytes(await stagedDbFile.readAsBytes(), flush: true);
+        }
+
+        // Replace receipts
+        final stagedReceipts = Directory(p.join(tempDir.path, 'receipts'));
+        if (await stagedReceipts.exists()) {
+          if (!await activeReceiptsDir.exists()) {
+            await activeReceiptsDir.create(recursive: true);
+          }
+          await for (final entity in stagedReceipts.list(recursive: true)) {
+            if (entity is File) {
+              final relativePath = p.relative(entity.path, from: stagedReceipts.path);
+              final targetPath = p.join(activeReceiptsDir.path, relativePath);
+              final targetFile = File(targetPath);
+              await targetFile.parent.create(recursive: true);
+              await entity.copy(targetPath);
+            }
+          }
+        }
+
+        // Reopen database and verify restored database works
+        final restoredDb = await DatabaseHelper.instance.database;
+        final checkRes = await restoredDb.rawQuery('PRAGMA quick_check');
+        if (checkRes.isEmpty || checkRes.first.values.first != 'ok') {
+          throw Exception('Restored database failed quick_check verification');
+        }
       }
 
-      await tempDir.delete(recursive: true);
-      if (await safetyDir.exists()) await safetyDir.delete(recursive: true);
-
-      await AppLogger.i(
-        'Successfully restored full backup package from ${zipFile.path}',
-      );
+      await AppLogger.i('Successfully restored full backup package from ${zipFile.path}');
       return true;
     } catch (e, stack) {
+      await AppLogger.e('Backup restore failed, attempting rollback', error: e, stackTrace: stack);
+      // Rollback from safety backup
       try {
-        final db = await DatabaseHelper.instance.database;
-        final activeDbPath = db.path;
-        final safetyDbFile = File(
-          p.join(safetyDir.path, AppConstants.dbFileName),
-        );
+        final docsDir = await _getDocsDirectory();
+        final safetyDbFile = File(p.join(safetyDir.path, AppConstants.dbFileName));
+        final activeDbPath = DatabaseHelper.customDatabasePath ??
+            p.join(docsDir.path, AppConstants.dbFileName);
+
         if (await safetyDbFile.exists() && activeDbPath != ':memory:') {
           await DatabaseHelper.instance.close();
-          await safetyDbFile.copy(activeDbPath);
+          try { await databaseFactory.deleteDatabase(activeDbPath); } catch (_) {}
+
+          final walFile = File('$activeDbPath-wal');
+          final shmFile = File('$activeDbPath-shm');
+          if (await walFile.exists()) {
+            try { await walFile.delete(); } catch (_) { await walFile.writeAsBytes([], flush: true); }
+          }
+          if (await shmFile.exists()) {
+            try { await shmFile.delete(); } catch (_) { await shmFile.writeAsBytes([], flush: true); }
+          }
+
+          final activeFile = File(activeDbPath);
+          try {
+            if (await activeFile.exists()) await activeFile.delete();
+            await safetyDbFile.copy(activeDbPath);
+          } catch (_) {
+            await activeFile.writeAsBytes(await safetyDbFile.readAsBytes(), flush: true);
+          }
+
+          await DatabaseHelper.instance.database;
         }
-      } catch (_) {}
-
-      if (await tempDir.exists()) await tempDir.delete(recursive: true);
-      if (await safetyDir.exists()) await safetyDir.delete(recursive: true);
-
-      await AppLogger.e(
-        'Backup restore failed and rolled back safely',
-        error: e,
-        stackTrace: stack,
-      );
+      } catch (rollbackErr) {
+        await AppLogger.e('Rollback failed', error: rollbackErr);
+      }
       return false;
+    } finally {
+      try {
+        if (await tempDir.exists()) await tempDir.delete(recursive: true);
+      } catch (_) {}
+      try {
+        if (await safetyDir.exists()) await safetyDir.delete(recursive: true);
+      } catch (_) {}
     }
   }
 }

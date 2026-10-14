@@ -14,6 +14,213 @@ class TransactionRepository {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
   final Uuid _uuid = const Uuid();
 
+  ({String whereSql, List<dynamic> whereArgs}) _buildWhereClause({
+    String? type,
+    String? accountId,
+    List<String>? accountIds,
+    String? categoryId,
+    List<String>? categoryIds,
+    String? paymentMethod,
+    List<String>? paymentMethods,
+    List<String>? tagIds,
+    DateTime? startDate,
+    DateTime? endDate,
+    double? minAmount,
+    double? maxAmount,
+    bool? hasReceipt,
+    bool? isRecurring,
+    bool? hasNote,
+    bool? hasLocation,
+    String? searchQuery,
+  }) {
+    final whereClauses = <String>['t.deleted_at IS NULL'];
+    final whereArgs = <dynamic>[];
+
+    // Transaction Type
+    if (type != null && type.isNotEmpty && type.toLowerCase() != 'all') {
+      whereClauses.add('t.type = ?');
+      whereArgs.add(type.toLowerCase());
+    }
+
+    // Categories (merge single categoryId into list if provided)
+    final effectiveCatIds = <String>{
+      if (categoryId != null && categoryId.isNotEmpty) categoryId,
+      if (categoryIds != null) ...categoryIds.where((id) => id.isNotEmpty),
+    }.toList();
+
+    if (effectiveCatIds.isNotEmpty) {
+      final hasUncategorized = effectiveCatIds.contains('uncategorized');
+      final regularCatIds = effectiveCatIds.where((id) => id != 'uncategorized').toList();
+
+      final catClauses = <String>[];
+      if (hasUncategorized) {
+        catClauses.add('t.category_id IS NULL');
+      }
+      if (regularCatIds.isNotEmpty) {
+        final placeholders = List.filled(regularCatIds.length, '?').join(',');
+        catClauses.add('t.category_id IN ($placeholders)');
+        whereArgs.addAll(regularCatIds);
+        catClauses.add(
+          't.id IN (SELECT transaction_id FROM transaction_splits WHERE category_id IN ($placeholders))',
+        );
+        whereArgs.addAll(regularCatIds);
+      }
+      whereClauses.add('(${catClauses.join(' OR ')})');
+    }
+
+    // Tags
+    if (tagIds != null && tagIds.isNotEmpty) {
+      final cleanTagIds = tagIds.where((id) => id.isNotEmpty).toList();
+      if (cleanTagIds.isNotEmpty) {
+        final placeholders = List.filled(cleanTagIds.length, '?').join(',');
+        whereClauses.add(
+          't.id IN (SELECT transaction_id FROM transaction_tags WHERE tag_id IN ($placeholders))',
+        );
+        whereArgs.addAll(cleanTagIds);
+      }
+    }
+
+    // Accounts (merge single accountId into list if provided)
+    final effectiveAccIds = <String>{
+      if (accountId != null && accountId.isNotEmpty) accountId,
+      if (accountIds != null) ...accountIds.where((id) => id.isNotEmpty),
+    }.toList();
+
+    if (effectiveAccIds.isNotEmpty) {
+      final hasPrimary = effectiveAccIds.contains('primary');
+      final regularAccIds = effectiveAccIds.where((id) => id != 'primary').toList();
+
+      final accClauses = <String>[];
+      if (hasPrimary) {
+        accClauses.add('a.is_primary = 1 OR da.is_primary = 1');
+      }
+      if (regularAccIds.isNotEmpty) {
+        final placeholders = List.filled(regularAccIds.length, '?').join(',');
+        accClauses.add('t.account_id IN ($placeholders)');
+        whereArgs.addAll(regularAccIds);
+        accClauses.add('t.destination_account_id IN ($placeholders)');
+        whereArgs.addAll(regularAccIds);
+      }
+      whereClauses.add('(${accClauses.join(' OR ')})');
+    }
+
+    // Payment Methods (merge single paymentMethod into list if provided)
+    final effectivePayments = <String>{
+      if (paymentMethod != null && paymentMethod.isNotEmpty) paymentMethod,
+      if (paymentMethods != null) ...paymentMethods.where((m) => m.isNotEmpty),
+    }.where((m) => m.toLowerCase() != 'all').toList();
+
+    if (effectivePayments.isNotEmpty) {
+      final placeholders = List.filled(effectivePayments.length, '?').join(',');
+      whereClauses.add('t.payment_method IN ($placeholders)');
+      whereArgs.addAll(effectivePayments);
+    }
+
+    // Date Range
+    if (startDate != null) {
+      whereClauses.add('t.date >= ?');
+      whereArgs.add(startDate.millisecondsSinceEpoch);
+    }
+    if (endDate != null) {
+      whereClauses.add('t.date <= ?');
+      whereArgs.add(endDate.millisecondsSinceEpoch);
+    }
+
+    // Amount Range
+    if (minAmount != null) {
+      whereClauses.add('t.amount >= ?');
+      whereArgs.add(minAmount);
+    }
+    if (maxAmount != null) {
+      whereClauses.add('t.amount <= ?');
+      whereArgs.add(maxAmount);
+    }
+
+    // Receipt presence
+    if (hasReceipt != null) {
+      if (hasReceipt) {
+        whereClauses.add('EXISTS (SELECT 1 FROM receipts r WHERE r.transaction_id = t.id)');
+      } else {
+        whereClauses.add('NOT EXISTS (SELECT 1 FROM receipts r WHERE r.transaction_id = t.id)');
+      }
+    }
+
+    // Recurring presence
+    if (isRecurring != null) {
+      if (isRecurring) {
+        whereClauses.add('(t.recurring_payment_id IS NOT NULL AND TRIM(t.recurring_payment_id) != "")');
+      } else {
+        whereClauses.add('(t.recurring_payment_id IS NULL OR TRIM(t.recurring_payment_id) = "")');
+      }
+    }
+
+    // Note presence
+    if (hasNote != null) {
+      if (hasNote) {
+        whereClauses.add('(t.note IS NOT NULL AND TRIM(t.note) != "")');
+      } else {
+        whereClauses.add('(t.note IS NULL OR TRIM(t.note) = "")');
+      }
+    }
+
+    // Location presence
+    if (hasLocation != null) {
+      if (hasLocation) {
+        whereClauses.add('(t.location_name IS NOT NULL AND TRIM(t.location_name) != "")');
+      } else {
+        whereClauses.add('(t.location_name IS NULL OR TRIM(t.location_name) = "")');
+      }
+    }
+
+    // Universal Search
+    if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+      final query = searchQuery.trim();
+      final term = '%$query%';
+
+      final searchClauses = <String>[
+        't.description LIKE ?',
+        't.note LIKE ?',
+        't.payment_method LIKE ?',
+        't.location_name LIKE ?',
+        'c.name LIKE ?',
+        'a.name LIKE ?',
+        'da.name LIKE ?',
+        't.id IN (SELECT tt.transaction_id FROM transaction_tags tt JOIN tags tg ON tt.tag_id = tg.id WHERE tg.name LIKE ?)',
+        't.id IN (SELECT ts.transaction_id FROM transaction_splits ts LEFT JOIN categories sc ON ts.category_id = sc.id WHERE ts.note LIKE ? OR sc.name LIKE ?)',
+      ];
+      whereArgs.addAll([term, term, term, term, term, term, term, term, term, term]);
+
+      // Check numeric query / amount match
+      final cleanedNumStr = query.replaceAll(RegExp(r'[^\d.]'), '');
+      final parsedNum = double.tryParse(cleanedNumStr);
+      if (parsedNum != null && parsedNum > 0) {
+        final lowerQuery = query.toLowerCase();
+        if (lowerQuery.contains('above') || lowerQuery.contains('more than') || lowerQuery.startsWith('>')) {
+          searchClauses.add('t.amount > ?');
+          whereArgs.add(parsedNum);
+        } else if (lowerQuery.contains('below') || lowerQuery.contains('less than') || lowerQuery.startsWith('<')) {
+          searchClauses.add('t.amount < ?');
+          whereArgs.add(parsedNum);
+        } else {
+          searchClauses.add('t.amount = ?');
+          whereArgs.add(parsedNum);
+          searchClauses.add('CAST(t.amount AS TEXT) LIKE ?');
+          whereArgs.add('%$cleanedNumStr%');
+        }
+      }
+
+      // Check year match like '2026'
+      if (RegExp(r'^\d{4}$').hasMatch(query)) {
+        searchClauses.add("strftime('%Y', t.date / 1000, 'unixepoch', 'localtime') = ?");
+        whereArgs.add(query);
+      }
+
+      whereClauses.add('(${searchClauses.join(' OR ')})');
+    }
+
+    return (whereSql: whereClauses.join(' AND '), whereArgs: whereArgs);
+  }
+
   Future<List<TransactionModel>> getTransactionsPaged({
     int limit = 30,
     int offset = 0,
@@ -21,87 +228,78 @@ class TransactionRepository {
     String? cursorId,
     String? type,
     String? accountId,
+    List<String>? accountIds,
     String? categoryId,
+    List<String>? categoryIds,
     String? paymentMethod,
+    List<String>? paymentMethods,
+    List<String>? tagIds,
     String? searchQuery,
     DateTime? startDate,
     DateTime? endDate,
+    double? minAmount,
+    double? maxAmount,
+    bool? hasReceipt,
+    bool? isRecurring,
+    bool? hasNote,
+    bool? hasLocation,
+    String sortBy = 'dateDesc',
   }) async {
     final db = await _dbHelper.database;
-    final whereClauses = <String>['t.deleted_at IS NULL'];
-    final whereArgs = <dynamic>[];
+    final (:whereSql, :whereArgs) = _buildWhereClause(
+      type: type,
+      accountId: accountId,
+      accountIds: accountIds,
+      categoryId: categoryId,
+      categoryIds: categoryIds,
+      paymentMethod: paymentMethod,
+      paymentMethods: paymentMethods,
+      tagIds: tagIds,
+      startDate: startDate,
+      endDate: endDate,
+      minAmount: minAmount,
+      maxAmount: maxAmount,
+      hasReceipt: hasReceipt,
+      isRecurring: isRecurring,
+      hasNote: hasNote,
+      hasLocation: hasLocation,
+      searchQuery: searchQuery,
+    );
 
-    if (cursorDate != null && cursorId != null) {
-      whereClauses.add('(t.date < ? OR (t.date = ? AND t.id < ?))');
-      whereArgs.add(cursorDate.millisecondsSinceEpoch);
-      whereArgs.add(cursorDate.millisecondsSinceEpoch);
-      whereArgs.add(cursorId);
+    final finalWhereClauses = <String>[whereSql];
+    final finalWhereArgs = List<dynamic>.from(whereArgs);
+
+    if (cursorDate != null && cursorId != null && sortBy == 'dateDesc') {
+      finalWhereClauses.add('(t.date < ? OR (t.date = ? AND t.id < ?))');
+      finalWhereArgs.add(cursorDate.millisecondsSinceEpoch);
+      finalWhereArgs.add(cursorDate.millisecondsSinceEpoch);
+      finalWhereArgs.add(cursorId);
     }
 
-    if (type != null && type.isNotEmpty) {
-      whereClauses.add('t.type = ?');
-      whereArgs.add(type);
+    String orderBySql;
+    switch (sortBy) {
+      case 'dateAsc':
+        orderBySql = 't.date ASC, t.id ASC';
+        break;
+      case 'amountDesc':
+        orderBySql = 't.amount DESC, t.date DESC, t.id DESC';
+        break;
+      case 'amountAsc':
+        orderBySql = 't.amount ASC, t.date DESC, t.id DESC';
+        break;
+      case 'titleAsc':
+        orderBySql = 'LOWER(t.description) ASC, t.date DESC, t.id DESC';
+        break;
+      case 'titleDesc':
+        orderBySql = 'LOWER(t.description) DESC, t.date DESC, t.id DESC';
+        break;
+      case 'dateDesc':
+      default:
+        orderBySql = 't.date DESC, t.id DESC';
+        break;
     }
 
-    if (accountId != null && accountId.isNotEmpty) {
-      whereClauses.add('(t.account_id = ? OR t.destination_account_id = ?)');
-      whereArgs.add(accountId);
-      whereArgs.add(accountId);
-    }
-
-    if (categoryId != null && categoryId.isNotEmpty) {
-      whereClauses.add('(t.category_id = ? OR t.id IN (SELECT transaction_id FROM transaction_splits WHERE category_id = ?))');
-      whereArgs.add(categoryId);
-      whereArgs.add(categoryId);
-    }
-
-    if (paymentMethod != null && paymentMethod.isNotEmpty) {
-      whereClauses.add('t.payment_method = ?');
-      whereArgs.add(paymentMethod);
-    }
-
-    if (startDate != null) {
-      whereClauses.add('t.date >= ?');
-      whereArgs.add(startDate.millisecondsSinceEpoch);
-    }
-
-    if (endDate != null) {
-      whereClauses.add('t.date <= ?');
-      whereArgs.add(endDate.millisecondsSinceEpoch);
-    }
-
-    if (searchQuery != null && searchQuery.trim().isNotEmpty) {
-      final cleanQuery = searchQuery.trim();
-      try {
-        final ftsRes = await db.rawQuery(
-          'SELECT id FROM transactions_fts WHERE transactions_fts MATCH ?',
-          ['$cleanQuery*'],
-        );
-        if (ftsRes.isNotEmpty) {
-          final ftsIds = ftsRes.map((r) => r['id'] as String).toList();
-          final placeholders = List.filled(ftsIds.length, '?').join(',');
-          whereClauses.add('t.id IN ($placeholders)');
-          whereArgs.addAll(ftsIds);
-        } else {
-          final term = '%$cleanQuery%';
-          whereClauses.add(
-            '(t.description LIKE ? OR t.note LIKE ? OR t.payment_method LIKE ? OR c.name LIKE ?)',
-          );
-          whereArgs.addAll([term, term, term, term]);
-        }
-      } catch (_) {
-        final term = '%$cleanQuery%';
-        whereClauses.add(
-          '(t.description LIKE ? OR t.note LIKE ? OR t.payment_method LIKE ? OR c.name LIKE ?)',
-        );
-        whereArgs.addAll([term, term, term, term]);
-      }
-    }
-
-    final whereSql = whereClauses.join(' AND ');
-    final useOffset = cursorDate == null || cursorId == null;
-    final sql =
-        '''
+    final sql = '''
       SELECT 
         t.*,
         c.name as category_name,
@@ -113,15 +311,15 @@ class TransactionRepository {
       LEFT JOIN categories c ON t.category_id = c.id
       LEFT JOIN accounts a ON t.account_id = a.id
       LEFT JOIN accounts da ON t.destination_account_id = da.id
-      WHERE $whereSql
-      ORDER BY t.date DESC, t.id DESC
-      LIMIT ? ${useOffset ? 'OFFSET ?' : ''}
+      WHERE ${finalWhereClauses.join(' AND ')}
+      ORDER BY $orderBySql
+      LIMIT ? OFFSET ?
     ''';
 
-    whereArgs.add(limit);
-    if (useOffset) whereArgs.add(offset);
+    finalWhereArgs.add(limit);
+    finalWhereArgs.add(offset);
 
-    final maps = await db.rawQuery(sql, whereArgs);
+    final maps = await db.rawQuery(sql, finalWhereArgs);
     final list = <TransactionModel>[];
     for (final map in maps) {
       final txId = map['id'] as String;
@@ -131,6 +329,70 @@ class TransactionRepository {
       list.add(TransactionModel.fromMap(map, tags: tags, receipts: receipts, splits: splits));
     }
     return list;
+  }
+
+  Future<({int count, double totalExpense, double totalIncome})> getFilteredSummary({
+    String? type,
+    String? accountId,
+    List<String>? accountIds,
+    String? categoryId,
+    List<String>? categoryIds,
+    String? paymentMethod,
+    List<String>? paymentMethods,
+    List<String>? tagIds,
+    DateTime? startDate,
+    DateTime? endDate,
+    double? minAmount,
+    double? maxAmount,
+    bool? hasReceipt,
+    bool? isRecurring,
+    bool? hasNote,
+    bool? hasLocation,
+    String? searchQuery,
+  }) async {
+    final db = await _dbHelper.database;
+    final (:whereSql, :whereArgs) = _buildWhereClause(
+      type: type,
+      accountId: accountId,
+      accountIds: accountIds,
+      categoryId: categoryId,
+      categoryIds: categoryIds,
+      paymentMethod: paymentMethod,
+      paymentMethods: paymentMethods,
+      tagIds: tagIds,
+      startDate: startDate,
+      endDate: endDate,
+      minAmount: minAmount,
+      maxAmount: maxAmount,
+      hasReceipt: hasReceipt,
+      isRecurring: isRecurring,
+      hasNote: hasNote,
+      hasLocation: hasLocation,
+      searchQuery: searchQuery,
+    );
+
+    final sql = '''
+      SELECT 
+        COUNT(*) as total_count,
+        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END), 0) as total_expense,
+        COALESCE(SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END), 0) as total_income
+      FROM transactions t
+      LEFT JOIN categories c ON t.category_id = c.id
+      LEFT JOIN accounts a ON t.account_id = a.id
+      LEFT JOIN accounts da ON t.destination_account_id = da.id
+      WHERE $whereSql
+    ''';
+
+    final res = await db.rawQuery(sql, whereArgs);
+    if (res.isEmpty) {
+      return (count: 0, totalExpense: 0.0, totalIncome: 0.0);
+    }
+    final row = res.first;
+    return (
+      count: (row['total_count'] as num? ?? 0).toInt(),
+      totalExpense: (row['total_expense'] as num? ?? 0.0).toDouble(),
+      totalIncome: (row['total_income'] as num? ?? 0.0).toDouble(),
+    );
   }
 
   Future<TransactionModel?> getTransactionById(String id) async {

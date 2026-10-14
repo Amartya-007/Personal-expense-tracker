@@ -1,11 +1,11 @@
-@Timeout(Duration(seconds: 60))
-library;
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mykhata/core/database/database_helper.dart';
 import 'package:mykhata/core/database/database_migrations.dart';
 import 'package:mykhata/data/models/account_model.dart';
 import 'package:mykhata/data/repositories/account_repository.dart';
+import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 AccountModel _account(String id, {bool primary = false, double balance = 100}) {
@@ -22,10 +22,25 @@ AccountModel _account(String id, {bool primary = false, double balance = 100}) {
 }
 
 void main() {
-  setUpAll(() {
+  Directory? tempDir;
+
+  setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
+
+    tempDir = await Directory.systemTemp.createTemp('mykhata_test_primary_');
+    DatabaseHelper.setCustomDatabasePath(p.join(tempDir!.path, 'mykhata_primary.db'));
+  });
+
+  tearDownAll(() async {
+    await DatabaseHelper.instance.close();
+    DatabaseHelper.setCustomDatabasePath(null);
+    try {
+      if (tempDir != null && await tempDir!.exists()) {
+        await tempDir!.delete(recursive: true);
+      }
+    } catch (_) {}
   });
 
   group('Primary account', () {

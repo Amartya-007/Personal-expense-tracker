@@ -121,23 +121,32 @@ Future<void> _seedUserData(Database db) async {
   });
 }
 
+Directory? _testDir;
+
 void main() {
-  setUpAll(() {
+  setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
+
+    _testDir = await Directory.systemTemp.createTemp('mykhata_test_delete_');
+    DatabaseHelper.setCustomDatabasePath(p.join(_testDir!.path, AppConstants.dbFileName));
+  });
+
+  tearDownAll(() async {
+    await DatabaseHelper.instance.close();
+    DatabaseHelper.setCustomDatabasePath(null);
+    try {
+      if (_testDir != null && await _testDir!.exists()) {
+        await _testDir!.delete(recursive: true);
+      }
+    } catch (_) {}
   });
 
   setUp(() async {
     // Start from a pristine, freshly seeded database.
     await DatabaseHelper.instance.close();
-    String dbPath;
-    try {
-      final docsDir = await getApplicationDocumentsDirectory();
-      dbPath = p.join(docsDir.path, AppConstants.dbFileName);
-    } catch (_) {
-      dbPath = p.join(Directory.systemTemp.path, AppConstants.dbFileName);
-    }
+    final dbPath = DatabaseHelper.customDatabasePath!;
     await databaseFactory.deleteDatabase(dbPath);
     await DatabaseHelper.instance.database;
     SharedPreferences.setMockInitialValues({});

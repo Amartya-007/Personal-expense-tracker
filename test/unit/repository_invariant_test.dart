@@ -4,13 +4,13 @@ library;
 import 'dart:io';
 import 'dart:math';
 
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mykhata/core/database/database_helper.dart';
 import 'package:mykhata/data/models/account_model.dart';
 import 'package:mykhata/data/models/transaction_model.dart';
 import 'package:mykhata/data/repositories/account_repository.dart';
 import 'package:mykhata/data/repositories/transaction_repository.dart';
+import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 /// Unlike `financial_invariant_stress_test.dart` (which re-implements the
@@ -25,7 +25,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 ///   * a soft-deleted transaction counts for nothing
 ///   * a direct balance edit shifts the balance by (target - current)
 
-class _TempIO extends IOOverrides {
+base class _TempIO extends IOOverrides {
   final Directory dir;
   _TempIO(this.dir);
 
@@ -42,8 +42,7 @@ class _Event {
   String? to;
   bool active;
 
-  _Event(this.id, this.type, this.amount, this.method, this.from, this.to,
-      {this.active = true});
+  _Event(this.id, this.type, this.amount, this.method, this.from, this.to) : active = true;
 }
 
 class _Ledger {
@@ -113,6 +112,12 @@ void main() {
     // Private database file, so parallel test files can't clobber each other.
     tmp = Directory.systemTemp.createTempSync('mykhata_invariants_');
     IOOverrides.global = _TempIO(tmp);
+    DatabaseHelper.setCustomDatabasePath(p.join(tmp.path, 'mykhata_repo.db'));
+  });
+
+  tearDownAll(() async {
+    await DatabaseHelper.instance.close();
+    DatabaseHelper.setCustomDatabasePath(null);
   });
 
   tearDownAll(() async {

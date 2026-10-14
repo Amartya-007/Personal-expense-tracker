@@ -8,15 +8,31 @@ import 'package:mykhata/core/database/database_helper.dart';
 import 'package:mykhata/services/backup/backup_service.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'package:path/path.dart' as p;
+
 void main() {
-  setUpAll(() {
+  Directory? tempDir;
+
+  setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
+
+    tempDir = await Directory.systemTemp.createTemp('mykhata_test_backup_');
+    DatabaseHelper.setCustomDatabasePath(p.join(tempDir!.path, 'mykhata_backup.db'));
+  });
+
+  tearDownAll(() async {
+    await DatabaseHelper.instance.close();
+    DatabaseHelper.setCustomDatabasePath(null);
+    try {
+      if (tempDir != null && await tempDir!.exists()) {
+        await tempDir!.delete(recursive: true);
+      }
+    } catch (_) {}
   });
 
   setUp(() async {
-    await DatabaseHelper.instance.close();
     await DatabaseHelper.instance.database;
   });
 
