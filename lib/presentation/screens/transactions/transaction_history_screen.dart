@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/navigation/app_routes.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_filters.dart';
@@ -20,9 +21,10 @@ import '../../providers/tag_providers.dart';
 import '../../providers/transaction_providers.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/fade_slide_in.dart';
+import '../../widgets/field_decoration.dart';
 import '../../widgets/filter_bottom_sheet.dart';
+import '../../widgets/icon_square_button.dart';
 import '../../widgets/pill_chips.dart';
-import '../../widgets/pressable.dart';
 import '../../widgets/skeleton.dart';
 import '../../widgets/transaction_quick_edit_sheet.dart';
 import '../../widgets/transaction_row.dart';
@@ -159,7 +161,12 @@ class _TransactionHistoryScreenState
           children: [
             // Title (Recently deleted lives in Settings → Data).
             Padding(
-              padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
+              padding: const EdgeInsets.fromLTRB(
+                18,
+                AppSpacing.lg,
+                18,
+                AppSpacing.md,
+              ),
               child: Row(
                 children: [Text('Transactions', style: AppText.display(p.ink))],
               ),
@@ -171,94 +178,73 @@ class _TransactionHistoryScreenState
               child: Row(
                 children: [
                   Expanded(
-                    child: Container(
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: p.surface,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: p.border),
-                      ),
-                      child: ValueListenableBuilder<TextEditingValue>(
-                        valueListenable: _searchController,
-                        builder: (context, value, _) => TextField(
-                          controller: _searchController,
-                          onChanged: _onSearchChanged,
-                          textInputAction: TextInputAction.search,
-                          style: AppText.body(p.ink),
-                          decoration: InputDecoration(
-                            hintText:
-                                'Search merchant, note, amount, category...',
-                            filled: false,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 15,
+                    child: ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: _searchController,
+                      builder: (context, value, _) => TextField(
+                        controller: _searchController,
+                        onChanged: _onSearchChanged,
+                        textInputAction: TextInputAction.search,
+                        style: AppText.body(p.ink),
+                        decoration:
+                            appFieldDecoration(
+                              p,
+                              hint:
+                                  'Search merchant, note, amount, category...',
+                            ).copyWith(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 15,
+                              ),
+                              prefixIcon: Icon(
+                                Icons.search_rounded,
+                                color: p.muted,
+                              ),
+                              suffixIcon: value.text.isNotEmpty
+                                  ? IconButton(
+                                      tooltip: 'Clear search',
+                                      icon: const Icon(
+                                        Icons.close_rounded,
+                                        size: 18,
+                                      ),
+                                      onPressed: _clearSearch,
+                                    )
+                                  : null,
                             ),
-                            prefixIcon: Icon(
-                              Icons.search_rounded,
-                              color: p.muted,
-                            ),
-                            suffixIcon: value.text.isNotEmpty
-                                ? IconButton(
-                                    tooltip: 'Clear search',
-                                    icon: const Icon(
-                                      Icons.close_rounded,
-                                      size: 18,
-                                    ),
-                                    onPressed: _clearSearch,
-                                  )
-                                : null,
-                          ),
-                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Pressable(
+                  const SizedBox(width: AppSpacing.sm),
+                  IconSquareButton(
+                    icon: Icons.tune_rounded,
+                    iconSize: 20,
+                    size: 52,
                     onTap: _openFilterSheet,
-                    child: Semantics(
-                      button: true,
-                      label: 'Filters',
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          _SquareButton(
-                            size: 52,
-                            child: Icon(
-                              Icons.tune_rounded,
-                              size: 20,
-                              color: p.ink,
-                            ),
-                          ),
-                          if (activeCount > 0)
-                            Positioned(
-                              right: 2,
-                              top: 2,
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: p.secondary,
-                                  shape: BoxShape.circle,
-                                ),
-                                constraints: const BoxConstraints(
-                                  minWidth: 18,
-                                  minHeight: 18,
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  '$activeCount',
-                                  style: AppText.caption(p.onPrimary).copyWith(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                    semanticLabel: 'Filters',
+                    badge: activeCount > 0
+                        ? Positioned(
+                            right: 2,
+                            top: 2,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: p.secondary,
+                                shape: BoxShape.circle,
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 18,
+                                minHeight: 18,
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                '$activeCount',
+                                style: AppText.caption(p.onPrimary).copyWith(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ),
-                        ],
-                      ),
-                    ),
+                          )
+                        : null,
                   ),
                 ],
               ),
@@ -902,30 +888,6 @@ class _DayHeader extends StatelessWidget {
             ),
         ],
       ),
-    );
-  }
-}
-
-class _SquareButton extends StatelessWidget {
-  final Widget child;
-  final double size;
-
-  const _SquareButton({required this.child, this.size = 40});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: p.surface,
-        borderRadius: BorderRadius.circular(size > 44 ? 16 : 14),
-        boxShadow: [p.cardShadow],
-        border: Border.all(color: p.border),
-      ),
-      alignment: Alignment.center,
-      child: child,
     );
   }
 }

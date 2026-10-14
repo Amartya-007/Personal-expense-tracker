@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/navigation/app_routes.dart';
 import '../../../core/permissions/permission_service.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../services/backup/data_reset_service.dart';
 import '../../providers/account_providers.dart';
@@ -87,8 +88,9 @@ class SettingsScreen extends ConsumerWidget {
     bool value,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    final success =
-        await ref.read(authProvider.notifier).toggleBiometrics(value);
+    final success = await ref
+        .read(authProvider.notifier)
+        .toggleBiometrics(value);
     if (!success && value) {
       messenger.showSnackBar(
         const SnackBar(
@@ -135,7 +137,7 @@ class SettingsScreen extends ConsumerWidget {
               height: 76,
               decoration: BoxDecoration(
                 gradient: p.heroGradient,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(AppRadius.dialog),
               ),
               alignment: Alignment.center,
               child: const Text('📒', style: TextStyle(fontSize: 36)),
@@ -163,8 +165,7 @@ class SettingsScreen extends ConsumerWidget {
     final confirmed = await confirmDestructive(
       context,
       title: 'Delete all data?',
-      message:
-          'This permanently erases every transaction, account, budget, recurring payment, tag, receipt and log on this phone, and MyKhata starts fresh.\n\nA safety backup is created automatically first. If it cannot be created, nothing is deleted.',
+      message: 'This permanently erases every transaction, account, budget, recurring payment, tag, receipt and log on this phone, and MyKhata starts fresh.\n\nA safety backup is created automatically first. If it cannot be created, nothing is deleted.',
       confirmLabel: 'Delete everything',
     );
     if (!confirmed || !context.mounted) return;
@@ -197,7 +198,8 @@ class SettingsScreen extends ConsumerWidget {
     } on DataResetException catch (e) {
       failure = e.message;
     } catch (_) {
-      failure = 'Something went wrong. Please check your data before trying again.';
+      failure =
+          'Something went wrong. Please check your data before trying again.';
     }
 
     navigator.pop(); // close the progress dialog
@@ -217,7 +219,9 @@ class SettingsScreen extends ConsumerWidget {
     AppRoutes.fadeResetTo(navigator, const OnboardingScreen());
     messenger.showSnackBar(
       const SnackBar(
-        content: Text('All data deleted. A safety backup was kept in private app storage.'),
+        content: Text(
+          'All data deleted. A safety backup was kept in private app storage.',
+        ),
       ),
     );
   }
@@ -236,21 +240,18 @@ class SettingsScreen extends ConsumerWidget {
         .firstOrNull;
 
     Widget section(int index, String title, List<Widget> rows) => FadeSlideIn(
-          index: index,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SectionHeader(title: title),
-              SettingsGroup(children: rows),
-            ],
-          ),
-        );
+      index: index,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionHeader(title: title),
+          SettingsGroup(children: rows),
+        ],
+      ),
+    );
 
-    Switch toggle(bool value, ValueChanged<bool> onChanged) => Switch(
-          value: value,
-          activeThumbColor: p.primary,
-          onChanged: onChanged,
-        );
+    Switch toggle(bool value, ValueChanged<bool> onChanged) =>
+        Switch(value: value, activeThumbColor: p.primary, onChanged: onChanged);
 
     return Scaffold(
       backgroundColor: p.background,
@@ -275,8 +276,8 @@ class SettingsScreen extends ConsumerWidget {
                 onTap: () => _editName(context, ref, name),
                 scale: 0.98,
                 child: AppCard(
-                  gradient: p.heroGradient,
-                  radius: 26,
+                  gradient: p.heroGradientSoft,
+                  radius: AppRadius.profile,
                   padding: const EdgeInsets.all(20),
                   child: Row(
                     children: [
@@ -291,8 +292,10 @@ class SettingsScreen extends ConsumerWidget {
                         child: Text(
                           name.isEmpty
                               ? '👤'
-                              : String.fromCharCode(name.runes.first).toUpperCase(),
-                          style: AppText.title(Colors.white).copyWith(fontSize: 24),
+                              : String.fromCharCode(name.runes.first)
+                                    .toUpperCase(),
+                          style: AppText.title(Colors.white)
+                              .copyWith(fontSize: 24),
                         ),
                       ),
                       const SizedBox(width: 14),
@@ -316,7 +319,11 @@ class SettingsScreen extends ConsumerWidget {
                           ],
                         ),
                       ),
-                      const Icon(Icons.edit_rounded, color: Colors.white70, size: 20),
+                      const Icon(
+                        Icons.edit_rounded,
+                        color: Colors.white70,
+                        size: 20,
+                      ),
                     ],
                   ),
                 ),
@@ -376,8 +383,7 @@ class SettingsScreen extends ConsumerWidget {
                     value: v,
                     notifier: ref.read(autoSmsDetectionProvider.notifier),
                     requestPermission: PermissionService.requestSmsPermission,
-                    deniedMessage:
-                        'SMS permission is needed to detect bank messages. You can allow it in Android Settings.',
+                    deniedMessage: 'SMS permission is needed to detect bank messages. You can allow it in Android Settings.',
                     // Android often blocks this for sideloaded apps; show how
                     // to unblock it (or paste messages instead).
                     onDenied: () => showSmsPermissionHelp(
@@ -408,8 +414,7 @@ class SettingsScreen extends ConsumerWidget {
                     notifier: ref.read(autoLocationCaptureProvider.notifier),
                     requestPermission:
                         PermissionService.requestLocationPermission,
-                    deniedMessage:
-                        'Location permission is needed. You can allow it in Android Settings.',
+                    deniedMessage: 'Location permission is needed. You can allow it in Android Settings.',
                   ),
                 ),
               ),
@@ -458,7 +463,8 @@ class SettingsScreen extends ConsumerWidget {
                 subtitle: 'Gentle vibration on taps and selections',
                 trailing: toggle(
                   ref.watch(hapticsEnabledProvider),
-                  (v) => ref.read(hapticsEnabledProvider.notifier).setEnabled(v),
+                  (v) =>
+                      ref.read(hapticsEnabledProvider.notifier).setEnabled(v),
                 ),
               ),
               ListRowTile(

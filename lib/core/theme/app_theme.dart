@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../navigation/app_routes.dart';
 import 'app_palette.dart';
+import 'app_radius.dart';
 
 class AppTheme {
   static ThemeData get lightTheme => _build(AppPalette.light, Brightness.light);
@@ -54,7 +55,7 @@ class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           side: BorderSide(color: p.border, width: 1.0),
         ),
       ),
@@ -63,7 +64,7 @@ class AppTheme {
         foregroundColor: const Color(0xFF2A1D00),
         elevation: 4,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppRadius.card),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -77,7 +78,7 @@ class AppTheme {
           ),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(AppRadius.button),
           ),
         ),
       ),
@@ -94,18 +95,21 @@ class AppTheme {
         filled: true,
         fillColor: p.surface,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           borderSide: BorderSide(color: p.border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           borderSide: BorderSide(color: p.border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           borderSide: BorderSide(color: p.primary, width: 2),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         hintStyle: GoogleFonts.sora(color: p.muted, fontSize: 14),
         labelStyle: GoogleFonts.sora(color: p.muted, fontSize: 14),
       ),
@@ -125,28 +129,26 @@ class AppTheme {
           color: p.onPrimary,
         ),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           side: BorderSide(color: p.border),
         ),
       ),
-      dividerTheme: DividerThemeData(
-        color: p.border,
-        thickness: 1,
-        space: 1,
-      ),
+      dividerTheme: DividerThemeData(color: p.border, thickness: 1, space: 1),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: p.surface,
         surfaceTintColor: Colors.transparent,
         modalBackgroundColor: p.surface,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadius.lg),
+          ),
         ),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: p.surface,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(AppRadius.dialog),
         ),
         titleTextStyle: GoogleFonts.sora(
           fontSize: 18,
@@ -169,7 +171,7 @@ class AppTheme {
         ),
         actionTextColor: p.isDark ? p.primary : p.secondary,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.md),
         ),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(color: p.primary),

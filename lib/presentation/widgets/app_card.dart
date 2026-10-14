@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_palette.dart';
+import '../../core/theme/app_radius.dart';
 
 /// How far a card appears to sit above the page.
 enum CardElevation { flat, low, medium, high }
 
-/// The one card surface used across the app (surface colour, hairline border,
-/// layered soft shadow). Pick an [elevation] by importance: `low` for rows
-/// inside a list, `medium` (default) for ordinary cards, `high` for the one
-/// thing a screen is about (e.g. a hero or a modal-like panel).
+/// The one card surface used across the app (surface colour, hairline border).
+///
+/// Content cards carry at most one edge signal: a hairline border and NO
+/// shadow, so a screen reads calm. Only [CardElevation.high] keeps a subtle
+/// shadow, reserved for the single thing a screen is about (the hero). Heavier
+/// [AppPalette.shadowMd]/[AppPalette.shadowLg] belong to floating chrome (nav
+/// pill, FAB, sheets, dialogs), which live outside this widget. Pick an
+/// [elevation] by importance: `low` for rows inside a list, `medium` (default)
+/// for ordinary cards, `high` for a hero.
 class AppCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -23,7 +29,7 @@ class AppCard extends StatelessWidget {
     required this.child,
     this.padding = EdgeInsets.zero,
     this.onTap,
-    this.radius = 20,
+    this.radius = AppRadius.card,
     this.gradient,
     this.shadow = true,
     this.elevation = CardElevation.medium,
@@ -44,10 +50,13 @@ class AppCard extends StatelessWidget {
         boxShadow: !shadow
             ? null
             : switch (elevation) {
+                // Content cards stay border-only (calm). Only the hero keeps a
+                // subtle shadow; heavier shadows are reserved for floating
+                // chrome, which lives outside AppCard.
                 CardElevation.flat => null,
-                CardElevation.low => p.shadowSm,
-                CardElevation.medium => p.shadowMd,
-                CardElevation.high => p.shadowLg,
+                CardElevation.low => null,
+                CardElevation.medium => null,
+                CardElevation.high => p.shadowSm,
               },
         border: gradient == null ? Border.all(color: p.border) : null,
       ),

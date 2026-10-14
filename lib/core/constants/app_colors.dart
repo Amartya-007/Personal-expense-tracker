@@ -78,6 +78,21 @@ class AppColors {
     end: Alignment(0.8, 0.9),
   );
 
+  // Softer hero gradients: the same teal, but with the two stops brought
+  // closer so the surface reads informational rather than like a banner.
+  // Stops stay dark enough that white text keeps AA contrast.
+  static const LinearGradient heroGradientSoftLight = LinearGradient(
+    colors: [Color(0xFF0D756B), Color(0xFF0B5E60)],
+    begin: Alignment(-0.8, -0.8),
+    end: Alignment(0.8, 0.9),
+  );
+
+  static const LinearGradient heroGradientSoftDark = LinearGradient(
+    colors: [Color(0xFF0D6B65), Color(0xFF0A3C42)],
+    begin: Alignment(-0.8, -0.8),
+    end: Alignment(0.8, 0.9),
+  );
+
   // Soft shadows, tinted with the slate instead of neutral grey.
   static const BoxShadow cardShadowLight = BoxShadow(
     color: Color(0x1A0B3B3F),
@@ -95,20 +110,70 @@ class AppColors {
   static String getCategoryEmoji(String? categoryName) {
     if (categoryName == null) return '📂';
     final lower = categoryName.toLowerCase();
-    if (lower.contains('food') || lower.contains('dining') || lower.contains('restaurant') || lower.contains('snack')) return '🍜';
+    if (lower.contains('food') ||
+        lower.contains('dining') ||
+        lower.contains('restaurant') ||
+        lower.contains('snack')) {
+      return '🍜';
+    }
     if (lower.contains('grocer') || lower.contains('supermarket')) return '🛒';
-    if (lower.contains('shop') || lower.contains('cloth') || lower.contains('mall')) return '🛍️';
-    if (lower.contains('bill') || lower.contains('recharge') || lower.contains('utilit') || lower.contains('electricity')) return '🧾';
-    if (lower.contains('transport') || lower.contains('travel') || lower.contains('cab') || lower.contains('auto') || lower.contains('fuel') || lower.contains('bus')) return '🚕';
-    if (lower.contains('stationery') || lower.contains('office') || lower.contains('book')) return '✏️';
-    if (lower.contains('electronic') || lower.contains('gadget') || lower.contains('phone')) return '🔌';
-    if (lower.contains('education') || lower.contains('course') || lower.contains('school')) return '📚';
-    if (lower.contains('health') || lower.contains('medic') || lower.contains('doctor') || lower.contains('hospital')) return '💊';
+    if (lower.contains('shop') ||
+        lower.contains('cloth') ||
+        lower.contains('mall')) {
+      return '🛍️';
+    }
+    if (lower.contains('bill') ||
+        lower.contains('recharge') ||
+        lower.contains('utilit') ||
+        lower.contains('electricity')) {
+      return '🧾';
+    }
+    if (lower.contains('transport') ||
+        lower.contains('travel') ||
+        lower.contains('cab') ||
+        lower.contains('auto') ||
+        lower.contains('fuel') ||
+        lower.contains('bus')) {
+      return '🚕';
+    }
+    if (lower.contains('stationery') ||
+        lower.contains('office') ||
+        lower.contains('book')) {
+      return '✏️';
+    }
+    if (lower.contains('electronic') ||
+        lower.contains('gadget') ||
+        lower.contains('phone')) {
+      return '🔌';
+    }
+    if (lower.contains('education') ||
+        lower.contains('course') ||
+        lower.contains('school')) {
+      return '📚';
+    }
+    if (lower.contains('health') ||
+        lower.contains('medic') ||
+        lower.contains('doctor') ||
+        lower.contains('hospital')) {
+      return '💊';
+    }
     if (lower.contains('salary') || lower.contains('pay')) return '💰';
-    if (lower.contains('freelance') || lower.contains('business') || lower.contains('work')) return '💼';
-    if (lower.contains('invest') || lower.contains('return') || lower.contains('cashback')) return '📈';
+    if (lower.contains('freelance') ||
+        lower.contains('business') ||
+        lower.contains('work')) {
+      return '💼';
+    }
+    if (lower.contains('invest') ||
+        lower.contains('return') ||
+        lower.contains('cashback')) {
+      return '📈';
+    }
     if (lower.contains('transfer')) return '⇄';
-    if (lower.contains('entertain') || lower.contains('movie') || lower.contains('netflix')) return '🎬';
+    if (lower.contains('entertain') ||
+        lower.contains('movie') ||
+        lower.contains('netflix')) {
+      return '🎬';
+    }
     return '📂';
   }
 }

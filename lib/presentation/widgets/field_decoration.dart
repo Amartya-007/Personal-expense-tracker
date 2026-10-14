@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_palette.dart';
+import '../../core/theme/app_radius.dart';
 
 /// The shared look for text fields and dropdowns: filled surface, rounded
 /// border, primary-coloured focus ring.
 InputDecoration appFieldDecoration(AppPalette p, {String? hint}) {
   OutlineInputBorder border(BorderSide side) => OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: side,
-      );
+    borderRadius: BorderRadius.circular(AppRadius.md),
+    borderSide: side,
+  );
   return InputDecoration(
     hintText: hint,
     hintStyle: TextStyle(color: p.muted.withValues(alpha: 0.7)),

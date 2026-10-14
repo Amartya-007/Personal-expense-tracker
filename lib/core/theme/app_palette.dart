@@ -22,6 +22,7 @@ class AppPalette {
   final Color income;
   final Color expense;
   final LinearGradient heroGradient;
+  final LinearGradient heroGradientSoft;
   final BoxShadow cardShadow;
 
   const AppPalette._({
@@ -38,6 +39,7 @@ class AppPalette {
     required this.income,
     required this.expense,
     required this.heroGradient,
+    required this.heroGradientSoft,
     required this.cardShadow,
   });
 
@@ -55,6 +57,7 @@ class AppPalette {
     income: AppColors.income,
     expense: AppColors.expense,
     heroGradient: AppColors.heroGradientLight,
+    heroGradientSoft: AppColors.heroGradientSoftLight,
     cardShadow: AppColors.cardShadowLight,
   );
 
@@ -72,6 +75,7 @@ class AppPalette {
     income: AppColors.incomeDark,
     expense: AppColors.expenseDark,
     heroGradient: AppColors.heroGradientDark,
+    heroGradientSoft: AppColors.heroGradientSoftDark,
     cardShadow: AppColors.cardShadowDark,
   );
 
@@ -99,39 +103,87 @@ class AppPalette {
 
   /// Coloured glow under primary actions.
   BoxShadow get primaryGlow => BoxShadow(
-        color: primary.withValues(alpha: isDark ? 0.40 : 0.32),
-        blurRadius: 20,
-        offset: const Offset(0, 8),
-      );
+    color: primary.withValues(alpha: isDark ? 0.40 : 0.32),
+    blurRadius: 20,
+    offset: const Offset(0, 8),
+  );
 
   List<BoxShadow> get shadowSm => isDark
       ? const [
-          BoxShadow(color: Color(0x40000000), blurRadius: 6, offset: Offset(0, 2)),
-          BoxShadow(color: Color(0x26000000), blurRadius: 2, offset: Offset(0, 1)),
+          BoxShadow(
+            color: Color(0x40000000),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+          BoxShadow(
+            color: Color(0x26000000),
+            blurRadius: 2,
+            offset: Offset(0, 1),
+          ),
         ]
       : const [
-          BoxShadow(color: Color(0x0F0B3B3F), blurRadius: 6, offset: Offset(0, 2)),
-          BoxShadow(color: Color(0x0A0B3B3F), blurRadius: 2, offset: Offset(0, 1)),
+          BoxShadow(
+            color: Color(0x0F0B3B3F),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+          BoxShadow(
+            color: Color(0x0A0B3B3F),
+            blurRadius: 2,
+            offset: Offset(0, 1),
+          ),
         ];
 
   List<BoxShadow> get shadowMd => isDark
       ? const [
-          BoxShadow(color: Color(0x59000000), blurRadius: 18, offset: Offset(0, 6)),
-          BoxShadow(color: Color(0x33000000), blurRadius: 4, offset: Offset(0, 1)),
+          BoxShadow(
+            color: Color(0x59000000),
+            blurRadius: 18,
+            offset: Offset(0, 6),
+          ),
+          BoxShadow(
+            color: Color(0x33000000),
+            blurRadius: 4,
+            offset: Offset(0, 1),
+          ),
         ]
       : const [
-          BoxShadow(color: Color(0x140B3B3F), blurRadius: 18, offset: Offset(0, 6)),
-          BoxShadow(color: Color(0x0A0B3B3F), blurRadius: 4, offset: Offset(0, 1)),
+          BoxShadow(
+            color: Color(0x140B3B3F),
+            blurRadius: 18,
+            offset: Offset(0, 6),
+          ),
+          BoxShadow(
+            color: Color(0x0A0B3B3F),
+            blurRadius: 4,
+            offset: Offset(0, 1),
+          ),
         ];
 
   List<BoxShadow> get shadowLg => isDark
       ? const [
-          BoxShadow(color: Color(0x73000000), blurRadius: 34, offset: Offset(0, 14)),
-          BoxShadow(color: Color(0x40000000), blurRadius: 8, offset: Offset(0, 2)),
+          BoxShadow(
+            color: Color(0x73000000),
+            blurRadius: 34,
+            offset: Offset(0, 14),
+          ),
+          BoxShadow(
+            color: Color(0x40000000),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
         ]
       : const [
-          BoxShadow(color: Color(0x1F0B3B3F), blurRadius: 34, offset: Offset(0, 14)),
-          BoxShadow(color: Color(0x0F0B3B3F), blurRadius: 8, offset: Offset(0, 2)),
+          BoxShadow(
+            color: Color(0x1F0B3B3F),
+            blurRadius: 34,
+            offset: Offset(0, 14),
+          ),
+          BoxShadow(
+            color: Color(0x0F0B3B3F),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
         ];
 
   static AppPalette of(BuildContext context) =>

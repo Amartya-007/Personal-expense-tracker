@@ -7,6 +7,8 @@ import '../../../core/navigation/app_routes.dart';
 import '../../../core/theme/app_haptics.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/account_model.dart';
@@ -221,7 +223,7 @@ class HomeScreen extends ConsumerWidget {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: EdgeInsets.fromLTRB(
               18,
-              16,
+              AppSpacing.lg,
               18,
               MediaQuery.of(context).padding.bottom + 130,
             ),
@@ -231,7 +233,7 @@ class HomeScreen extends ConsumerWidget {
                 child: Row(
                   children: [
                     _Avatar(name: userName),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -255,7 +257,7 @@ class HomeScreen extends ConsumerWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
 
               // 2. Hero balance card
               FadeSlideIn(
@@ -308,7 +310,7 @@ class HomeScreen extends ConsumerWidget {
               // 2b. This month at a glance (always this month, whatever range
               // Insights is showing).
               const FadeSlideIn(index: 1, child: _ThisMonthStrip()),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.xl),
 
               // 4. Recent transactions
               FadeSlideIn(
@@ -356,7 +358,7 @@ class HomeScreen extends ConsumerWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.xl),
 
               // 5. Upcoming recurring
               FadeSlideIn(
@@ -421,7 +423,7 @@ class HomeScreen extends ConsumerWidget {
                 data: (insights) => insights.isEmpty
                     ? const <Widget>[]
                     : <Widget>[
-                        const SizedBox(height: 24),
+                        const SizedBox(height: AppSpacing.xl),
                         FadeSlideIn(
                           index: 5,
                           child: Column(
@@ -797,8 +799,8 @@ class _HeroCard extends ConsumerWidget {
     );
 
     return AppCard(
-      gradient: p.heroGradient,
-      radius: 28,
+      gradient: p.heroGradientSoft,
+      radius: AppRadius.lg,
       elevation: CardElevation.high,
       child: Stack(
         children: [
@@ -832,7 +834,7 @@ class _HeroCard extends ConsumerWidget {
             child: IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
                   gradient: LinearGradient(
                     colors: [
                       Colors.white.withValues(alpha: 0.16),
@@ -925,7 +927,9 @@ class _HeroCard extends ConsumerWidget {
                                 // text keeps AA contrast on it.
                                 decoration: BoxDecoration(
                                   color: Colors.black.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(16),
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.md,
+                                  ),
                                   border: Border.all(
                                     color: Colors.white.withValues(alpha: 0.12),
                                   ),

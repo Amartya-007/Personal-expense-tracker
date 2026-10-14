@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/budget_model.dart';
@@ -19,9 +20,9 @@ import '../../widgets/async_section.dart';
 import '../../widgets/budget_row.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/fade_slide_in.dart';
+import '../../widgets/icon_square_button.dart';
 import '../../widgets/list_widgets.dart';
 import '../../widgets/pill_chips.dart';
-import '../../widgets/pressable.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/undo_snackbar.dart';
 import 'budget_form.dart';
@@ -242,7 +243,7 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: EdgeInsets.fromLTRB(
               18,
-              16,
+              AppSpacing.lg,
               18,
               MediaQuery.of(context).padding.bottom + 130,
             ),
@@ -252,28 +253,16 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text('Budgets', style: AppText.display(p.ink)),
-                    Pressable(
+                    IconSquareButton(
+                      icon: Icons.add,
+                      size: 40,
                       onTap: () => _createBudget(all),
-                      child: Semantics(
-                        button: true,
-                        label: 'Create budget',
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: p.surface,
-                            borderRadius: BorderRadius.circular(14),
-                            boxShadow: [p.cardShadow],
-                            border: Border.all(color: p.border),
-                          ),
-                          child: Icon(Icons.add, size: 22, color: p.ink),
-                        ),
-                      ),
+                      semanticLabel: 'Create budget',
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               FadeSlideIn(
                 index: 1,
                 child: PillChips(
@@ -283,7 +272,7 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
                       setState(() => _period = label.toLowerCase()),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               FadeSlideIn(
                 index: 2,
                 child: AsyncSection<List<BudgetModel>>(
