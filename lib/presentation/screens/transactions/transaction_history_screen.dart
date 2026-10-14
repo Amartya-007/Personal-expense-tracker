@@ -438,8 +438,17 @@ class _QuickFilterChips extends ConsumerWidget {
       );
     }
 
+    // Each PillChip is at least kMinInteractiveDimension tall; the list adds
+    // 8+4=12px of vertical padding. A hard kMinInteractiveDimension box can't
+    // hold both and overflows the bottom (~8px, worse at larger text scale).
+    // Size the box to the chip height plus the list padding, scaled with the
+    // system text size.
+    const listVerticalPadding = 8 + 4;
+    final scale = MediaQuery.textScalerOf(context);
+    final height = scale.scale(kMinInteractiveDimension) + listVerticalPadding;
+
     return SizedBox(
-      height: kMinInteractiveDimension,
+      height: height,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.fromLTRB(18, 8, 18, 4),
@@ -734,8 +743,13 @@ class _ActiveFilterChips extends ConsumerWidget {
 
     if (chips.isEmpty) return const SizedBox.shrink();
 
+    // Scale the fixed row height with the system text size so chips don't clip
+    // vertically at larger scales.
+    final scale = MediaQuery.textScalerOf(context);
+    final rowHeight = scale.scale(38);
+
     return Container(
-      height: 38,
+      height: rowHeight,
       margin: const EdgeInsets.only(top: 8, bottom: 4),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
@@ -788,10 +802,17 @@ class _RemovableChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            label,
-            style: AppText.caption(p.primary)
-                .copyWith(fontWeight: FontWeight.w600),
+          // Cap the label so a very long search term truncates instead of
+          // producing a chip only reachable by long horizontal scrolling.
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 220),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.caption(p.primary)
+                  .copyWith(fontWeight: FontWeight.w600),
+            ),
           ),
           const SizedBox(width: 2),
           GestureDetector(
@@ -833,27 +854,50 @@ class _SummaryBanner extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            '$count ${count == 1 ? 'Transaction' : 'Transactions'}',
-            style: AppText.caption(p.ink).copyWith(fontWeight: FontWeight.w700),
+          Flexible(
+            child: Text(
+              '$count ${count == 1 ? 'Transaction' : 'Transactions'}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.caption(p.ink)
+                  .copyWith(fontWeight: FontWeight.w700),
+            ),
           ),
-          Row(
-            children: [
-              if (totalExpense > 0) ...[
-                Text(
-                  'Exp: ${CurrencyFormatter.format(totalExpense)}',
-                  style: AppText.caption(p.expense)
-                      .copyWith(fontWeight: FontWeight.w600),
-                ),
-                if (totalIncome > 0) const SizedBox(width: 8),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (totalExpense > 0) ...[
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        'Exp: ${CurrencyFormatter.format(totalExpense)}',
+                        maxLines: 1,
+                        style: AppText.caption(p.expense)
+                            .copyWith(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                  if (totalIncome > 0) const SizedBox(width: 8),
+                ],
+                if (totalIncome > 0)
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        'Inc: ${CurrencyFormatter.format(totalIncome)}',
+                        maxLines: 1,
+                        style: AppText.caption(p.income)
+                            .copyWith(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
               ],
-              if (totalIncome > 0)
-                Text(
-                  'Inc: ${CurrencyFormatter.format(totalIncome)}',
-                  style: AppText.caption(p.income)
-                      .copyWith(fontWeight: FontWeight.w600),
-                ),
-            ],
+            ),
           ),
         ],
       ),

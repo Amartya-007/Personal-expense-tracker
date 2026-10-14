@@ -39,8 +39,17 @@ class PillChips extends StatelessWidget {
       return Wrap(spacing: 8, runSpacing: 8, children: chips);
     }
 
+    // The horizontal ListView needs a bounded height. Each PillChip is at least
+    // kMinInteractiveDimension tall, so the box must clear that plus the list's
+    // own vertical padding; sizing to a hard kMinInteractiveDimension overflows
+    // the bottom. Fold the padding in and scale with the system text size so a
+    // taller chip (at large text scale) still fits.
+    final verticalPadding = padding.resolve(TextDirection.ltr).vertical;
+    final scale = MediaQuery.textScalerOf(context);
+    final height = scale.scale(kMinInteractiveDimension) + verticalPadding;
+
     return SizedBox(
-      height: kMinInteractiveDimension,
+      height: height,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: padding,
@@ -94,10 +103,8 @@ class PillChip extends StatelessWidget {
         alignment: Alignment.center,
         child: AnimatedDefaultTextStyle(
           duration: AppMotion.fast,
-          style: AppText.caption(selected ? p.onPrimary : p.ink).copyWith(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w600,
-          ),
+          style: AppText.caption(selected ? p.onPrimary : p.ink)
+              .copyWith(fontSize: 12.5, fontWeight: FontWeight.w600),
           child: Text(label),
         ),
       ),

@@ -513,19 +513,15 @@ class _ThisMonthStrip extends ConsumerWidget {
                       _MonthFigure(
                         icon: Icons.south_west_rounded,
                         label: 'Income',
-                        value: CurrencyFormatter.format(
-                          data.totalIncome,
-                          isMasked: isMasked,
-                        ),
+                        amount: data.totalIncome,
+                        isMasked: isMasked,
                         color: p.income,
                       ),
                       _MonthFigure(
                         icon: Icons.north_east_rounded,
                         label: 'Spent',
-                        value: CurrencyFormatter.format(
-                          data.totalExpense,
-                          isMasked: isMasked,
-                        ),
+                        amount: data.totalExpense,
+                        isMasked: isMasked,
                         color: p.expense,
                       ),
                       _MonthFigure(
@@ -533,10 +529,8 @@ class _ThisMonthStrip extends ConsumerWidget {
                             ? Icons.trending_up_rounded
                             : Icons.trending_down_rounded,
                         label: positive ? 'Saved' : 'Over by',
-                        value: CurrencyFormatter.format(
-                          net.abs(),
-                          isMasked: isMasked,
-                        ),
+                        amount: net.abs(),
+                        isMasked: isMasked,
                         color: positive ? p.income : p.expense,
                       ),
                     ],
@@ -552,19 +546,31 @@ class _ThisMonthStrip extends ConsumerWidget {
 class _MonthFigure extends StatelessWidget {
   final IconData icon;
   final String label;
-  final String value;
+  final double amount;
+  final bool isMasked;
   final Color color;
 
   const _MonthFigure({
     required this.icon,
     required this.label,
-    required this.value,
+    required this.amount,
+    required this.isMasked,
     required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    // Below a lakh, show the full figure at the normal size-16 look. From a
+    // lakh up, switch to the compact "₹2.05 L" / "₹1.00 Cr" form so a crore
+    // value stays readable in its ~1/3-of-card slot instead of ellipsising to
+    // a stub. FittedBox then scales down only if even that is too wide, with a
+    // floor so it never becomes unreadable.
+    final text = isMasked
+        ? '••••••'
+        : (amount >= 100000
+              ? CurrencyFormatter.formatCompact(amount)
+              : CurrencyFormatter.format(amount));
     return Expanded(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -573,15 +579,25 @@ class _MonthFigure extends StatelessWidget {
             children: [
               Icon(icon, size: 14, color: color),
               const SizedBox(width: 4),
-              Text(label, style: AppText.caption(p.muted)),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.caption(p.muted),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 3),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppText.amount(color, size: 16),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              text,
+              maxLines: 1,
+              style: AppText.amount(color, size: 16),
+            ),
           ),
         ],
       ),
@@ -978,21 +994,39 @@ class _HeroCard extends ConsumerWidget {
                                           ),
                                           const SizedBox(width: 3),
                                         ],
-                                        Text(
-                                          acc.name,
-                                          style: AppText.caption(
-                                            Colors.white.withValues(alpha: 0.9),
+                                        // Cap the name width so a very long
+                                        // account name truncates instead of
+                                        // stretching the chip arbitrarily wide
+                                        // (minWidth:132 above stays the floor).
+                                        ConstrainedBox(
+                                          constraints: const BoxConstraints(
+                                            maxWidth: 160,
+                                          ),
+                                          child: Text(
+                                            acc.name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppText.caption(
+                                              Colors.white.withValues(
+                                                alpha: 0.9,
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ],
                                     ),
                                     const SizedBox(height: 2),
-                                    Text(
-                                      CurrencyFormatter.format(
-                                        acc.currentBalance,
-                                        isMasked: isMasked,
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        CurrencyFormatter.format(
+                                          acc.currentBalance,
+                                          isMasked: isMasked,
+                                        ),
+                                        maxLines: 1,
+                                        style: AppText.amount(Colors.white),
                                       ),
-                                      style: AppText.amount(Colors.white),
                                     ),
                                   ],
                                 ),
