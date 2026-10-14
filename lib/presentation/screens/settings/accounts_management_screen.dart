@@ -8,6 +8,7 @@ import '../../../data/models/account_model.dart';
 import '../../providers/account_providers.dart';
 import '../../widgets/app_sheets.dart';
 import '../../widgets/list_widgets.dart';
+import 'account_balance_actions.dart';
 
 class AccountsManagementScreen extends ConsumerWidget {
   const AccountsManagementScreen({super.key});
@@ -41,7 +42,9 @@ class AccountsManagementScreen extends ConsumerWidget {
     final balance = double.tryParse(values[1]) ?? 0.0;
     final now = DateTime.now();
     try {
-      await ref.read(accountListProvider.notifier).createAccount(
+      await ref
+          .read(accountListProvider.notifier)
+          .createAccount(
             AccountModel(
               id: const Uuid().v4(),
               name: values[0],
@@ -104,7 +107,9 @@ class AccountsManagementScreen extends ConsumerWidget {
     try {
       await ref.read(accountListProvider.notifier).deleteAccount(account.id);
     } catch (e) {
-      if (context.mounted) _showError(context, 'Could not remove the account: $e');
+      if (context.mounted) {
+        _showError(context, 'Could not remove the account: $e');
+      }
     }
   }
 
@@ -128,6 +133,7 @@ class AccountsManagementScreen extends ConsumerWidget {
         subtitle: acc.isPrimary
             ? 'Primary · ${CurrencyFormatter.format(acc.currentBalance)}'
             : CurrencyFormatter.format(acc.currentBalance),
+        onTap: () => editAccountBalance(context, ref, acc),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

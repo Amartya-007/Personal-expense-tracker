@@ -17,9 +17,9 @@ import '../../../data/models/recurring_payment_model.dart';
 import '../../providers/account_providers.dart';
 import '../../providers/budget_providers.dart';
 import '../../providers/home_controller.dart';
+import '../../providers/home_overview_provider.dart';
 import '../../providers/insights_providers.dart';
 import '../../providers/recurring_providers.dart';
-import '../../providers/sms_review_providers.dart';
 import '../../providers/transaction_providers.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_sheets.dart';
@@ -33,6 +33,7 @@ import '../../widgets/section_header.dart';
 import '../../widgets/skeleton.dart';
 import '../../widgets/transaction_row.dart';
 import '../add_transaction/add_transaction_screen.dart';
+import '../settings/account_balance_actions.dart';
 import '../settings/recurring_payments_screen.dart';
 import '../sms_review/sms_review_screen.dart';
 import '../transactions/transaction_detail_screen.dart';
@@ -50,49 +51,6 @@ class HomeScreen extends ConsumerWidget {
     if (hour < 12) return 'Good morning';
     if (hour < 17) return 'Good afternoon';
     return 'Good evening';
-  }
-
-  Future<void> _editBalance(
-    BuildContext context,
-    WidgetRef ref,
-    AccountModel account,
-  ) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final values = await showFieldsSheet(
-      context,
-      title: 'Edit ${account.name} balance',
-      submitLabel: 'Save balance',
-      fields: [
-        FieldSpec(
-          label: 'Balance (₹)',
-          numeric: true,
-          required: true,
-          initial: account.currentBalance.toStringAsFixed(2),
-        ),
-      ],
-    );
-    if (values == null) return;
-
-    final newBalance = double.tryParse(values[0].replaceAll(',', ''));
-    if (newBalance == null) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Enter a valid amount.')),
-      );
-      return;
-    }
-
-    final success = await ref
-        .read(homeControllerProvider.notifier)
-        .updateAccountBalance(account.id, newBalance);
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          success
-              ? 'Adjustment recorded for ${account.name}'
-              : 'Could not update ${account.name} balance',
-        ),
-      ),
-    );
   }
 
   Future<void> _recurringAction(
@@ -193,10 +151,15 @@ class HomeScreen extends ConsumerWidget {
     final p = context.palette;
     final accountsAsync = ref.watch(accountListProvider);
     final recentTxsAsync = ref.watch(recentTransactionsProvider);
-    final budgetsAsync = ref.watch(budgetListProvider);
     final recurringAsync = ref.watch(recurringListProvider);
     final homeInsightsAsync = ref.watch(homeInsightsProvider);
-    final smsCount = ref.watch(smsQueueProvider('detected')).value?.length ?? 0;
+    // One consistent snapshot drives the hero total and the attention zone, so
+    // they never momentarily disagree. The month strip keeps its own
+    // AsyncValue read for skipLoadingOnReload no-flicker.
+    final overview = ref.watch(homeOverviewProvider);
+    final smsCount = overview.pendingSmsCount;
+    final billsDue = overview.billsDueCount;
+    final exceededBudgets = overview.exceededBudgets;
     final userName = ref.watch(userNameProvider);
 
     // Reload in place (keeps what is on screen) rather than invalidating the
@@ -270,7 +233,9 @@ class HomeScreen extends ConsumerWidget {
                       ref.read(accountListProvider.notifier).loadAccounts(),
                   builder: (accounts) => _HeroCard(
                     accounts: accounts,
-                    onEditAccount: (acc) => _editBalance(context, ref, acc),
+                    total: overview.totalBalance,
+                    onEditAccount: (acc) =>
+                        editAccountBalance(context, ref, acc),
                   ),
                 ),
               ),
@@ -286,26 +251,32 @@ class HomeScreen extends ConsumerWidget {
                 const SizedBox(height: 14),
               ],
 
-              // 2a-ii. Budget alert: budgets surface on Home only when a limit
+              // 2a-ii. Bills due this week: surfaced only when at least one
+              // active recurring rule is due within the next 7 days. Tapping
+              // opens the full recurring screen; the "Upcoming recurring"
+              // section below stays as the on-Home detail.
+              if (billsDue > 0) ...[
+                FadeSlideIn(
+                  index: 1,
+                  child: _BillsDueAttentionCard(count: billsDue),
+                ),
+                const SizedBox(height: 14),
+              ],
+
+              // 2a-iii. Budget alert: budgets surface on Home only when a limit
               // is reached or exceeded, as a compact tappable card in the
               // attention zone. The full list lives on the Budgets tab.
-              ...() {
-                final exceeded = (budgetsAsync.value ?? const <BudgetModel>[])
-                    .where((b) => b.overAmount > 0 || b.usedRatio >= 1.0)
-                    .toList();
-                if (exceeded.isEmpty) return const <Widget>[];
-                return <Widget>[
-                  FadeSlideIn(
-                    index: 1,
-                    child: _BudgetAlertCard(
-                      exceeded: exceeded,
-                      onTap: () => ref.read(mainTabProvider.notifier).state =
-                          _budgetsTab,
-                    ),
+              if (exceededBudgets.isNotEmpty) ...[
+                FadeSlideIn(
+                  index: 1,
+                  child: _BudgetAlertCard(
+                    exceeded: exceededBudgets,
+                    onTap: () =>
+                        ref.read(mainTabProvider.notifier).state = _budgetsTab,
                   ),
-                  const SizedBox(height: 14),
-                ];
-              }(),
+                ),
+                const SizedBox(height: 14),
+              ],
 
               // 2b. This month at a glance (always this month, whatever range
               // Insights is showing).
@@ -782,21 +753,80 @@ class _SmsAttentionCard extends StatelessWidget {
   }
 }
 
+/// Shown only while at least one active recurring rule is due within the next
+/// seven days: a compact tappable card in the attention zone that opens the
+/// recurring payments screen. Modelled on [_SmsAttentionCard]/[_BudgetAlertCard].
+class _BillsDueAttentionCard extends StatelessWidget {
+  final int count;
+
+  const _BillsDueAttentionCard({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return AppCard(
+      onTap: () => AppRoutes.push(context, const RecurringPaymentsScreen()),
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: p.primary.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            alignment: Alignment.center,
+            child: const Text('🔁', style: TextStyle(fontSize: 20)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$count ${count == 1 ? 'bill' : 'bills'} due this week',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.bodyStrong(p.ink),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Tap to review upcoming payments',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.caption(p.muted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(Icons.chevron_right_rounded, size: 18, color: p.muted),
+        ],
+      ),
+    );
+  }
+}
+
 /// Gradient total-balance card with privacy mode toggle.
 class _HeroCard extends ConsumerWidget {
   final List<AccountModel> accounts;
+
+  /// Total tracked balance from the composed [homeOverviewProvider] snapshot,
+  /// so the hero never disagrees with the rest of Home's top region.
+  final double total;
   final ValueChanged<AccountModel> onEditAccount;
 
-  const _HeroCard({required this.accounts, required this.onEditAccount});
+  const _HeroCard({
+    required this.accounts,
+    required this.total,
+    required this.onEditAccount,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
     final isMasked = ref.watch(privacyModeProvider);
-    final total = accounts.fold<double>(
-      0.0,
-      (sum, a) => sum + a.currentBalance,
-    );
 
     return AppCard(
       gradient: p.heroGradientSoft,

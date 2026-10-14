@@ -1,10 +1,44 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../data/models/recurring_payment_model.dart';
 import '../../data/repositories/recurring_payment_repository.dart';
 
-final recurringPaymentRepositoryProvider = Provider((ref) => RecurringPaymentRepository());
+final recurringPaymentRepositoryProvider = Provider(
+  (ref) => RecurringPaymentRepository(),
+);
 
-class RecurringListNotifier extends StateNotifier<AsyncValue<List<RecurringPaymentModel>>> {
+/// Active recurring rules whose [RecurringPaymentModel.nextDueDate] falls
+/// within `[startOfToday, startOfToday + days]` (inclusive of today and of the
+/// final day). Pure and widget-free so it can be unit-tested and reused by the
+/// composed Home-overview snapshot. [now] defaults to `DateTime.now()`.
+List<RecurringPaymentModel> dueWithinDaysList(
+  List<RecurringPaymentModel> items, {
+  int days = 7,
+  DateTime? now,
+}) {
+  final n = now ?? DateTime.now();
+  final startOfToday = DateTime(n.year, n.month, n.day);
+  final end = startOfToday.add(Duration(days: days));
+  return items
+      .where(
+        (r) =>
+            r.isActive &&
+            !r.nextDueDate.isBefore(startOfToday) &&
+            !r.nextDueDate.isAfter(end),
+      )
+      .toList();
+}
+
+/// Count of active recurring rules due within the next [days] days (see
+/// [dueWithinDaysList]).
+int dueWithinDays(
+  List<RecurringPaymentModel> items, {
+  int days = 7,
+  DateTime? now,
+}) => dueWithinDaysList(items, days: days, now: now).length;
+
+class RecurringListNotifier
+    extends StateNotifier<AsyncValue<List<RecurringPaymentModel>>> {
   final RecurringPaymentRepository _repository;
 
   RecurringListNotifier(this._repository) : super(const AsyncValue.loading()) {
@@ -27,7 +61,10 @@ class RecurringListNotifier extends StateNotifier<AsyncValue<List<RecurringPayme
     await loadRecurringPayments();
   }
 
-  Future<void> processPaymentAction(RecurringPaymentModel item, String action) async {
+  Future<void> processPaymentAction(
+    RecurringPaymentModel item,
+    String action,
+  ) async {
     await _repository.processPaymentAction(item, action);
     await loadRecurringPayments();
   }
@@ -38,7 +75,11 @@ class RecurringListNotifier extends StateNotifier<AsyncValue<List<RecurringPayme
   }
 }
 
-final recurringListProvider = StateNotifierProvider<RecurringListNotifier, AsyncValue<List<RecurringPaymentModel>>>((ref) {
-  final repo = ref.watch(recurringPaymentRepositoryProvider);
-  return RecurringListNotifier(repo);
-});
+final recurringListProvider =
+    StateNotifierProvider<
+      RecurringListNotifier,
+      AsyncValue<List<RecurringPaymentModel>>
+    >((ref) {
+      final repo = ref.watch(recurringPaymentRepositoryProvider);
+      return RecurringListNotifier(repo);
+    });
