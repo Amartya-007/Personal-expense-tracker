@@ -32,6 +32,19 @@ import '../../widgets/segmented_tabs.dart';
 import '../../providers/settings_providers.dart';
 import '../../providers/transaction_providers.dart';
 
+/// Single source of truth for the success-snackbar copy shown after a new
+/// transaction is saved, keyed by transaction type. Keeping it here (and
+/// top-level) lets both [_AddTransactionScreenState._successMessage] and the
+/// widget tests assert the exact wording from one place.
+const Map<String, String> kAddTransactionSuccessMessages = {
+  'expense': 'Expense added',
+  'income': 'Income added',
+  'transfer': 'Transfer saved',
+};
+
+/// Copy shown when an existing transaction is edited (any type).
+const String kAddTransactionEditedMessage = 'Changes saved';
+
 /// Immutable seed used to open the shared add-transaction form pre-filled from
 /// a detected SMS. Passing one (with no [AddTransactionScreen.editTransaction])
 /// seeds the form and tags the saved [TransactionModel] with `source: 'sms'`
@@ -231,6 +244,14 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     }
   }
 
+  /// Consistent, type-specific success copy reused by both the manual add
+  /// flow and the single SMS confirm (which routes through this screen).
+  String _successMessage() {
+    if (widget.editTransaction != null) return kAddTransactionEditedMessage;
+    return kAddTransactionSuccessMessages[_type] ??
+        kAddTransactionEditedMessage;
+  }
+
   Future<void> _saveTransaction() async {
     if (_isSaving) return;
 
@@ -349,7 +370,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
         AppHaptics.success();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${_type.toUpperCase()} recorded successfully!'),
+            content: Text(_successMessage()),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
@@ -690,7 +711,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                                     });
                                   },
                                   child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 150),
+                                    duration: AppMotion.fast,
+                                    curve: AppMotion.standard,
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 12,
                                       vertical: 8,

@@ -125,7 +125,7 @@ class HomeScreen extends ConsumerWidget {
                 final ok = await confirmDestructive(
                   context,
                   title: 'Delete ${item.name}?',
-                  message: 'It will no longer appear on Home.',
+                  message: 'This payment rule will be permanently deleted. Past transactions it created are kept.',
                 );
                 if (!ok || !context.mounted) return;
                 await _recurringAction(

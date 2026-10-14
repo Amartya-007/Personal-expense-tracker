@@ -6,6 +6,7 @@ import '../../core/theme/app_text.dart';
 import 'app_card.dart';
 import 'empty_state.dart';
 import 'fade_slide_in.dart';
+import 'skeleton.dart';
 
 /// A card that stacks rows and draws dividers between them automatically
 /// (no more manual `isLast` flags).
@@ -69,7 +70,8 @@ class ListRowTile extends StatelessWidget {
       );
     }
 
-    final tail = trailing ??
+    final tail =
+        trailing ??
         (onTap != null
             ? Icon(Icons.chevron_right_rounded, size: 20, color: p.muted)
             : null);
@@ -156,7 +158,14 @@ class ManagementScaffold<T> extends StatelessWidget {
               label: Text(addLabel),
             ),
       body: items.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => ListView(
+          padding: EdgeInsets.fromLTRB(18, 8, 18, bottom + 110),
+          children: const [
+            SkeletonCard(),
+            SizedBox(height: 12),
+            SkeletonCard(),
+          ],
+        ),
         error: (err, _) => EmptyState(
           emoji: '⚠️',
           title: 'Something went wrong',
@@ -177,7 +186,9 @@ class ManagementScaffold<T> extends StatelessWidget {
             children: [
               FadeSlideIn(
                 child: SettingsGroup(
-                  children: [for (final item in list) rowBuilder(context, item)],
+                  children: [
+                    for (final item in list) rowBuilder(context, item),
+                  ],
                 ),
               ),
             ],

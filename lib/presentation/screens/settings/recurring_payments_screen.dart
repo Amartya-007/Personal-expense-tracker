@@ -43,7 +43,8 @@ class RecurringPaymentsScreen extends ConsumerWidget {
     final rule = await AppBottomSheet.show<RecurringPaymentModel>(
       context,
       title: 'Add recurring payment',
-      builder: (_) => _RecurringForm(accounts: accounts, categories: categories),
+      builder: (_) =>
+          _RecurringForm(accounts: accounts, categories: categories),
     );
     if (rule == null) return;
 
@@ -58,7 +59,7 @@ class RecurringPaymentsScreen extends ConsumerWidget {
     final ok = await confirmDestructive(
       context,
       title: 'Delete ${rule.name}?',
-      message: 'It will no longer appear on Home.',
+      message: 'This payment rule will be permanently deleted. Past transactions it created are kept.',
     );
     if (!ok) return;
     await ref
@@ -76,8 +77,7 @@ class RecurringPaymentsScreen extends ConsumerWidget {
       items: ref.watch(recurringListProvider),
       emptyEmoji: '🔁',
       emptyTitle: 'Nothing recurring',
-      emptyMessage:
-          'Add rent, subscriptions or EMIs and mark them paid from Home when due.',
+      emptyMessage: 'Add rent, subscriptions or EMIs and mark them paid from Home when due.',
       addLabel: 'Add payment',
       onAdd: () => _add(context, ref),
       rowBuilder: (context, r) => ListRowTile(
