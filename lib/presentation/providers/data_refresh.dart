@@ -18,6 +18,7 @@ Future<void> refreshAllAppData(WidgetRef ref) async {
   ref.invalidate(recentlyDeletedTransactionsProvider);
   ref.invalidate(homeInsightsProvider);
   ref.invalidate(analyticsSummaryProvider);
+  ref.invalidate(homeMonthSummaryProvider);
   ref.invalidate(spendingTrendProvider);
   ref.invalidate(categoriesListProvider);
   ref.invalidate(expenseCategoriesProvider);

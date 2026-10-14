@@ -34,6 +34,15 @@ final analyticsSummaryProvider = FutureProvider<AnalyticsSummaryModel>((ref) asy
   return await service.getAnalytics(startDate: start, endDate: end);
 });
 
+/// This month's totals for Home. Unlike [analyticsSummaryProvider] it ignores
+/// the range chosen on the Insights screen, so Home's "This month" figures
+/// stay about this month.
+final homeMonthSummaryProvider = FutureProvider<AnalyticsSummaryModel>((ref) async {
+  final service = ref.watch(analyticsServiceProvider);
+  final range = insightsRange(DateTimeRangeType.thisMonth);
+  return await service.getAnalytics(startDate: range.start, endDate: range.end);
+});
+
 final spendingTrendProvider = FutureProvider<List<FlSpot>>((ref) async {
   final service = ref.watch(analyticsServiceProvider);
   final rangeType = ref.watch(selectedDateRangeProvider);
