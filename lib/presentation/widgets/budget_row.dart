@@ -24,15 +24,19 @@ class BudgetRow extends ConsumerWidget {
     final b = budget;
     final percent = (b.usedRatio * 100).round();
 
-    final remainingDays = (b.endDate.difference(DateTime.now()).inDays + 1).clamp(1, 365);
-    final dailyAllowance = b.remainingAmount > 0 ? b.remainingAmount / remainingDays : 0.0;
+    final remainingDays = (b.endDate.difference(DateTime.now()).inDays + 1)
+        .clamp(1, 365);
+    final dailyAllowance = b.remainingAmount > 0
+        ? b.remainingAmount / remainingDays
+        : 0.0;
 
     final String status;
     final Color badgeColor;
     final String badgeLabel;
 
     if (b.overAmount > 0) {
-      status = 'Over by ${CurrencyFormatter.format(b.overAmount, isMasked: isMasked)} · $percent% used';
+      status =
+          'Over by ${CurrencyFormatter.format(b.overAmount, isMasked: isMasked)} · $percent% used';
       badgeColor = p.expense;
       badgeLabel = 'Exceeded';
     } else if (b.usedRatio >= 1.0) {
@@ -40,7 +44,8 @@ class BudgetRow extends ConsumerWidget {
       badgeColor = p.expense;
       badgeLabel = '100%';
     } else {
-      status = '${CurrencyFormatter.format(dailyAllowance, showDecimals: false, isMasked: isMasked)}/day left ($remainingDays days left)';
+      status =
+          '${CurrencyFormatter.format(dailyAllowance, showDecimals: false, isMasked: isMasked)}/day left ($remainingDays days left)';
       badgeColor = b.usedRatio >= 0.75 ? p.secondary : p.income;
       badgeLabel = '$percent%';
     }
@@ -69,7 +74,10 @@ class BudgetRow extends ConsumerWidget {
                         ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: badgeColor.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(8),
@@ -86,9 +94,16 @@ class BudgetRow extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    '${CurrencyFormatter.format(b.spentAmount, isMasked: isMasked)} / ${CurrencyFormatter.format(b.amount, isMasked: isMasked)}',
-                    style: AppText.body(p.ink),
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        '${CurrencyFormatter.format(b.spentAmount, isMasked: isMasked)} / ${CurrencyFormatter.format(b.amount, isMasked: isMasked)}',
+                        maxLines: 1,
+                        style: AppText.body(p.ink),
+                      ),
+                    ),
                   ),
                 ],
               ),

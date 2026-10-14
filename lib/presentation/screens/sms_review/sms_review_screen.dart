@@ -400,22 +400,26 @@ class _MessageList extends ConsumerWidget {
                         ],
                       ),
                     ),
-                    _Total(
-                      label: 'Spent',
-                      value: CurrencyFormatter.format(
-                        spent,
-                        isMasked: isMasked,
+                    Flexible(
+                      child: _Total(
+                        label: 'Spent',
+                        value: CurrencyFormatter.format(
+                          spent,
+                          isMasked: isMasked,
+                        ),
+                        color: p.expense,
                       ),
-                      color: p.expense,
                     ),
                     const SizedBox(width: 18),
-                    _Total(
-                      label: 'Received',
-                      value: CurrencyFormatter.format(
-                        received,
-                        isMasked: isMasked,
+                    Flexible(
+                      child: _Total(
+                        label: 'Received',
+                        value: CurrencyFormatter.format(
+                          received,
+                          isMasked: isMasked,
+                        ),
+                        color: p.income,
                       ),
-                      color: p.income,
                     ),
                   ],
                 ),
@@ -483,7 +487,15 @@ class _Total extends StatelessWidget {
       children: [
         Text(label, style: AppText.caption(p.muted)),
         const SizedBox(height: 2),
-        Text(value, style: AppText.amount(color, size: 14)),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: Text(
+            value,
+            maxLines: 1,
+            style: AppText.amount(color, size: 14),
+          ),
+        ),
       ],
     );
   }
@@ -623,9 +635,16 @@ class _SmsCardState extends ConsumerState<_SmsCard> {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                '$sign${CurrencyFormatter.format(sms.amount, isMasked: isMasked)}',
-                style: AppText.amount(amountColor),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    '$sign${CurrencyFormatter.format(sms.amount, isMasked: isMasked)}',
+                    maxLines: 1,
+                    style: AppText.amount(amountColor),
+                  ),
+                ),
               ),
             ],
           ),

@@ -66,7 +66,9 @@ class InsightsScreen extends ConsumerWidget {
               MediaQuery.of(context).padding.bottom + 130,
             ),
             children: [
-              FadeSlideIn(child: Text('Insights', style: AppText.display(p.ink))),
+              FadeSlideIn(
+                child: Text('Insights', style: AppText.display(p.ink)),
+              ),
               const SizedBox(height: 16),
               FadeSlideIn(
                 index: 1,
@@ -74,10 +76,11 @@ class InsightsScreen extends ConsumerWidget {
                   options: _rangeLabels.values.toList(),
                   selected: _rangeLabels[rangeType]!,
                   onSelected: (label) {
-                    ref.read(selectedDateRangeProvider.notifier).state =
-                        _rangeLabels.entries
-                            .firstWhere((e) => e.value == label)
-                            .key;
+                    ref
+                        .read(selectedDateRangeProvider.notifier)
+                        .state = _rangeLabels.entries
+                        .firstWhere((e) => e.value == label)
+                        .key;
                   },
                 ),
               ),
@@ -117,7 +120,8 @@ class InsightsScreen extends ConsumerWidget {
                         }
                         return SettingsGroup(
                           children: [
-                            for (final b in budgets.take(4)) BudgetRow(budget: b),
+                            for (final b in budgets.take(4))
+                              BudgetRow(budget: b),
                           ],
                         );
                       },
@@ -201,9 +205,14 @@ class _AnalyticsBody extends ConsumerWidget {
                     ListRowTile(
                       emoji: '🏦',
                       title: acc.accountName,
-                      trailing: Text(
-                        CurrencyFormatter.format(acc.totalAmount),
-                        style: AppText.bodyStrong(p.ink),
+                      trailing: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          CurrencyFormatter.format(acc.totalAmount),
+                          maxLines: 1,
+                          style: AppText.bodyStrong(p.ink),
+                        ),
                       ),
                     ),
                 ],
@@ -220,7 +229,8 @@ class _CategoryCard extends ConsumerWidget {
 
   const _CategoryCard({required this.data});
 
-  Color _color(int idx, CategorySpending item) => idx < AppColors.categoryPalette.length
+  Color _color(int idx, CategorySpending item) =>
+      idx < AppColors.categoryPalette.length
       ? AppColors.categoryPalette[idx]
       : Color(item.categoryColor);
 
@@ -278,10 +288,26 @@ class _CategoryCard extends ConsumerWidget {
                     Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('Spent', style: AppText.caption(p.muted).copyWith(fontSize: 10)),
                         Text(
-                          CurrencyFormatter.format(total, isMasked: isMasked),
-                          style: AppText.bodyStrong(p.ink),
+                          'Spent',
+                          style: AppText.caption(p.muted)
+                              .copyWith(fontSize: 10),
+                        ),
+                        // Keep a crore total inside the ring's inner hole
+                        // (centerSpaceRadius 40 → ~80px) by scaling it down.
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 72),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              CurrencyFormatter.format(
+                                total,
+                                isMasked: isMasked,
+                              ),
+                              maxLines: 1,
+                              style: AppText.bodyStrong(p.ink),
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -379,18 +405,29 @@ class _IncomeExpenseCard extends ConsumerWidget {
     final net = income - expense;
 
     Widget line(String label, double value, double fill, Color color) => Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(label, style: AppText.body(p.ink)),
-                Text(CurrencyFormatter.format(value, isMasked: isMasked), style: AppText.bodyStrong(color)),
-              ],
+            Text(label, style: AppText.body(p.ink)),
+            const SizedBox(width: 8),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Text(
+                  CurrencyFormatter.format(value, isMasked: isMasked),
+                  maxLines: 1,
+                  style: AppText.bodyStrong(color),
+                ),
+              ),
             ),
-            const SizedBox(height: 8),
-            AnimatedProgressBar(value: fill, color: color),
           ],
-        );
+        ),
+        const SizedBox(height: 8),
+        AnimatedProgressBar(value: fill, color: color),
+      ],
+    );
 
     return AppCard(
       padding: const EdgeInsets.all(18),
@@ -401,7 +438,9 @@ class _IncomeExpenseCard extends ConsumerWidget {
           line(
             'Expense',
             expense,
-            income > 0 ? (expense / income).clamp(0.0, 1.0) : (expense > 0 ? 1.0 : 0.0),
+            income > 0
+                ? (expense / income).clamp(0.0, 1.0)
+                : (expense > 0 ? 1.0 : 0.0),
             p.expense,
           ),
           const SizedBox(height: 14),
@@ -410,10 +449,21 @@ class _IncomeExpenseCard extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(net >= 0 ? 'Saved' : 'Overspent', style: AppText.body(p.muted)),
               Text(
-                CurrencyFormatter.format(net.abs(), isMasked: isMasked),
-                style: AppText.bodyStrong(net >= 0 ? p.income : p.expense),
+                net >= 0 ? 'Saved' : 'Overspent',
+                style: AppText.body(p.muted),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    CurrencyFormatter.format(net.abs(), isMasked: isMasked),
+                    maxLines: 1,
+                    style: AppText.bodyStrong(net >= 0 ? p.income : p.expense),
+                  ),
+                ),
               ),
             ],
           ),
@@ -445,7 +495,10 @@ class _TrendCard extends ConsumerWidget {
         error: (_, __) => SizedBox(
           height: 100,
           child: Center(
-            child: Text('Could not load trend', style: AppText.caption(p.muted)),
+            child: Text(
+              'Could not load trend',
+              style: AppText.caption(p.muted),
+            ),
           ),
         ),
         data: (spots) {
@@ -480,8 +533,13 @@ class _TrendCard extends ConsumerWidget {
                         getTooltipItems: (touchedSpots) {
                           return touchedSpots.map((spot) {
                             return LineTooltipItem(
-                              CurrencyFormatter.format(spot.y, showDecimals: false, isMasked: isMasked),
-                              AppText.caption(p.ink).copyWith(fontWeight: FontWeight.bold),
+                              CurrencyFormatter.format(
+                                spot.y,
+                                showDecimals: false,
+                                isMasked: isMasked,
+                              ),
+                              AppText.caption(p.ink)
+                                  .copyWith(fontWeight: FontWeight.bold),
                             );
                           }).toList();
                         },
@@ -513,8 +571,14 @@ class _TrendCard extends ConsumerWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(fmt.format(range.start), style: AppText.caption(p.muted).copyWith(fontSize: 11)),
-                  Text(fmt.format(range.end), style: AppText.caption(p.muted).copyWith(fontSize: 11)),
+                  Text(
+                    fmt.format(range.start),
+                    style: AppText.caption(p.muted).copyWith(fontSize: 11),
+                  ),
+                  Text(
+                    fmt.format(range.end),
+                    style: AppText.caption(p.muted).copyWith(fontSize: 11),
+                  ),
                 ],
               ),
             ],
@@ -568,10 +632,8 @@ class _PaymentBars extends StatelessWidget {
                     const SizedBox(height: 8),
                     Text(
                       pm.paymentMethod,
-                      style: AppText.caption(p.muted).copyWith(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: AppText.caption(p.muted)
+                          .copyWith(fontSize: 11, fontWeight: FontWeight.w600),
                     ),
                     Text(
                       '${total > 0 ? (pm.totalAmount / total * 100).round() : 0}%',

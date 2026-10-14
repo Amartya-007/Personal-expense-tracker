@@ -89,13 +89,23 @@ class TransactionRow extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    isMasked
-                        ? '••••••'
-                        : '$prefix${CurrencyFormatter.format(tx.amount)}',
-                    style: AppText.amount(
-                      p.amount(isIncome: tx.isIncome, isExpense: tx.isExpense),
-                      size: 14,
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        isMasked
+                            ? '••••••'
+                            : '$prefix${CurrencyFormatter.format(tx.amount)}',
+                        maxLines: 1,
+                        style: AppText.amount(
+                          p.amount(
+                            isIncome: tx.isIncome,
+                            isExpense: tx.isExpense,
+                          ),
+                          size: 14,
+                        ),
+                      ),
                     ),
                   ),
                 ],
