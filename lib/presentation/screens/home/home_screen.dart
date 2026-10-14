@@ -284,14 +284,7 @@ class HomeScreen extends ConsumerWidget {
                 const SizedBox(height: 14),
               ],
 
-              // 2b. Quick Action Buttons
-              FadeSlideIn(
-                index: 1,
-                child: const _QuickActionsRow(),
-              ),
-              const SizedBox(height: 14),
-
-              // 2c. This month at a glance (always this month, whatever range
+              // 2b. This month at a glance (always this month, whatever range
               // Insights is showing).
               const FadeSlideIn(
                 index: 1,
@@ -506,115 +499,6 @@ class HomeScreen extends ConsumerWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Quick action shortcuts bar right under the balance hero card.
-class _QuickActionsRow extends StatelessWidget {
-  const _QuickActionsRow();
-
-  Widget _actionPill(
-    BuildContext context, {
-    required String label,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    final p = context.palette;
-    return Expanded(
-      child: Pressable(
-        // Pressable already gives the tap haptic.
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-          decoration: BoxDecoration(
-            color: p.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: p.border),
-            boxShadow: p.shadowSm,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(icon, size: 18, color: color),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppText.caption(p.ink).copyWith(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-
-    return Row(
-      children: [
-        _actionPill(
-          context,
-          label: 'Expense',
-          icon: Icons.north_east_rounded,
-          color: p.expense,
-          onTap: () => AppRoutes.pushModal(
-            context,
-            const AddTransactionScreen(initialType: 'expense'),
-          ),
-        ),
-        const SizedBox(width: 8),
-        _actionPill(
-          context,
-          label: 'Income',
-          icon: Icons.south_west_rounded,
-          color: p.income,
-          onTap: () => AppRoutes.pushModal(
-            context,
-            const AddTransactionScreen(initialType: 'income'),
-          ),
-        ),
-        const SizedBox(width: 8),
-        _actionPill(
-          context,
-          label: 'Transfer',
-          icon: Icons.swap_horiz_rounded,
-          color: p.primary,
-          onTap: () => AppRoutes.pushModal(
-            context,
-            const AddTransactionScreen(initialType: 'transfer'),
-          ),
-        ),
-        const SizedBox(width: 8),
-        _actionPill(
-          context,
-          label: 'SMS',
-          icon: Icons.mark_chat_unread_rounded,
-          color: p.secondary,
-          onTap: () => AppRoutes.push(context, const SmsReviewScreen()),
-        ),
-      ],
     );
   }
 }
