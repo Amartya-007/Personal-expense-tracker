@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -10,6 +11,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_filters.dart';
+import '../../../core/utils/text_sanitizer.dart';
 import '../../../data/models/account_model.dart';
 import '../../../data/models/category_model.dart';
 import '../../../data/models/tag_model.dart';
@@ -70,9 +72,10 @@ class _TransactionHistoryScreenState
   void _onSearchChanged(String query) {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 250), () {
+      final cleaned = TextSanitizer.singleLine(query);
       ref
           .read(transactionListProvider.notifier)
-          .setSearchQuery(query.trim().isEmpty ? null : query.trim());
+          .setSearchQuery(cleaned.isEmpty ? null : cleaned);
     });
   }
 
@@ -184,6 +187,9 @@ class _TransactionHistoryScreenState
                         controller: _searchController,
                         onChanged: _onSearchChanged,
                         textInputAction: TextInputAction.search,
+                        inputFormatters: [
+                          LengthLimitingTextInputFormatter(100),
+                        ],
                         style: AppText.body(p.ink),
                         decoration:
                             appFieldDecoration(

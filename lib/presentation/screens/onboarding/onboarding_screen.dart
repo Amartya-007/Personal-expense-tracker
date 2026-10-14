@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -9,7 +10,9 @@ import '../../../core/permissions/permission_service.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/theme/app_text.dart';
+import '../../../core/utils/amount_input.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../../core/utils/text_sanitizer.dart';
 import '../../../data/models/account_model.dart';
 import '../../providers/account_providers.dart';
 import '../../providers/auth_provider.dart';
@@ -77,9 +80,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   void _back() => _go(_step - 1);
 
   AccountModel? _accountFromFields() {
-    final name = _accountNameController.text.trim();
+    final name = TextSanitizer.singleLine(_accountNameController.text);
     if (name.isEmpty) return null;
-    final balance = double.tryParse(_balanceController.text.trim()) ?? 0.0;
+    final balance = AmountInput.parseAmount(_balanceController.text) ?? 0.0;
     final now = DateTime.now();
     return AccountModel(
       id: _uuid.v4(),
@@ -186,7 +189,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         await ref.read(accountListProvider.notifier).createAccount(acc);
       }
 
-      final name = _nameController.text.trim();
+      final name = TextSanitizer.singleLine(_nameController.text);
       if (name.isNotEmpty) {
         await ref.read(userNameProvider.notifier).setUserName(name);
       }
@@ -198,9 +201,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _finishing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not finish setup: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Could not finish setup: $e')));
       return;
     }
 
@@ -324,11 +326,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   Widget _buildWelcome(AppPalette p) {
-    Widget feature(String emoji, String title, String body) => ListRowTile(
-          emoji: emoji,
-          title: title,
-          subtitle: body,
-        );
+    Widget feature(String emoji, String title, String body) =>
+        ListRowTile(emoji: emoji, title: title, subtitle: body);
 
     return Column(
       children: [
@@ -428,6 +427,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           controller: _nameController,
           textCapitalization: TextCapitalization.words,
           textInputAction: TextInputAction.next,
+          inputFormatters: [LengthLimitingTextInputFormatter(40)],
           decoration: const InputDecoration(
             labelText: 'Your name (optional)',
             hintText: 'What should we call you?',
@@ -440,6 +440,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           controller: _accountNameController,
           focusNode: _accountNameFocusNode,
           textInputAction: TextInputAction.next,
+          inputFormatters: [LengthLimitingTextInputFormatter(40)],
           onChanged: (_) {
             if (_accountError != null) setState(() => _accountError = null);
           },
@@ -453,6 +454,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         TextField(
           controller: _balanceController,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: AmountInput.amountFormatters(),
           decoration: const InputDecoration(
             labelText: 'Current balance',
             prefixText: '₹ ',
@@ -499,17 +501,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       String subtitle,
       bool value,
       ValueChanged<bool> onChanged,
-    ) =>
-        ListRowTile(
-          emoji: emoji,
-          title: title,
-          subtitle: subtitle,
-          trailing: Switch(
-            value: value,
-            activeThumbColor: p.primary,
-            onChanged: onChanged,
-          ),
-        );
+    ) => ListRowTile(
+      emoji: emoji,
+      title: title,
+      subtitle: subtitle,
+      trailing: Switch(
+        value: value,
+        activeThumbColor: p.primary,
+        onChanged: onChanged,
+      ),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -599,8 +600,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: (_biometricSuccess ? p.income : p.primary)
-                      .withValues(alpha: 0.3),
+                  color: (_biometricSuccess ? p.income : p.primary).withValues(
+                    alpha: 0.3,
+                  ),
                   blurRadius: 24,
                   spreadRadius: 4,
                 ),

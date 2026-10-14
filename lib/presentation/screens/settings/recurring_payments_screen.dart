@@ -3,9 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
+import 'package:flutter/services.dart';
+
 import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/utils/amount_input.dart';
 import '../../../core/utils/keyboard.dart';
+import '../../../core/utils/text_sanitizer.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/account_model.dart';
@@ -174,16 +178,17 @@ class _RecurringFormState extends State<_RecurringForm> {
   }
 
   void _submit() {
-    final name = _name.text.trim();
-    final amount = double.tryParse(_amount.text.trim()) ?? 0;
+    final name = TextSanitizer.singleLine(_name.text);
     if (name.isEmpty) {
       setState(() => _error = 'Give this payment a name.');
       return;
     }
-    if (amount <= 0) {
-      setState(() => _error = 'Enter an amount greater than zero.');
+    final amtErr = AmountInput.validateAmount(_amount.text, allowZero: false);
+    if (amtErr != null) {
+      setState(() => _error = amtErr);
       return;
     }
+    final amount = AmountInput.parseAmount(_amount.text)!;
 
     Navigator.pop(
       context,
@@ -212,6 +217,8 @@ class _RecurringFormState extends State<_RecurringForm> {
           controller: _name,
           autofocus: true,
           textInputAction: TextInputAction.next,
+          maxLength: 50,
+          inputFormatters: [LengthLimitingTextInputFormatter(50)],
           onChanged: (_) => setState(() => _error = null),
           decoration: appFieldDecoration(
             p,
@@ -222,6 +229,7 @@ class _RecurringFormState extends State<_RecurringForm> {
         TextField(
           controller: _amount,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: AmountInput.amountFormatters(),
           onChanged: (_) => setState(() => _error = null),
           decoration: appFieldDecoration(p).copyWith(labelText: 'Amount (₹)'),
         ),

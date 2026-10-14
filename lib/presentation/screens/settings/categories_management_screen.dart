@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import 'package:flutter/services.dart';
+
 import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/theme/app_text.dart';
+import '../../../core/utils/text_sanitizer.dart';
 import '../../../data/models/category_model.dart';
 import '../../providers/category_providers.dart';
 import '../../providers/transaction_providers.dart';
@@ -142,7 +145,7 @@ class _CategoryFormState extends State<_CategoryForm> {
   }
 
   void _submit() {
-    final name = _name.text.trim();
+    final name = TextSanitizer.singleLine(_name.text);
     if (name.isEmpty) {
       setState(() => _showError = true);
       return;
@@ -161,13 +164,15 @@ class _CategoryFormState extends State<_CategoryForm> {
           controller: _name,
           autofocus: true,
           textInputAction: TextInputAction.done,
+          maxLength: 30,
+          inputFormatters: [LengthLimitingTextInputFormatter(30)],
           onChanged: (_) {
             if (_showError) setState(() => _showError = false);
           },
           onSubmitted: (_) => _submit(),
           decoration: InputDecoration(
             labelText: 'Category name',
-            errorText: _showError ? 'This field is required' : null,
+            errorText: _showError ? 'This field is required.' : null,
           ),
         ),
         const SizedBox(height: 14),

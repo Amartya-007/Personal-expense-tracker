@@ -10,6 +10,7 @@ import '../../../core/theme/app_haptics.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../../core/utils/text_sanitizer.dart';
 import '../../../data/models/account_model.dart';
 import '../../../data/models/sms_review_model.dart';
 import '../../../data/models/transaction_model.dart';
@@ -765,11 +766,18 @@ class _PasteFormState extends State<_PasteForm> {
     super.dispose();
   }
 
+  static const int _maxPasteLength = 2000;
+
   Future<void> _pasteFromClipboard() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final text = data?.text;
     if (text == null || text.trim().isEmpty) return;
-    setState(() => _controller.text = text);
+    // The TextField caps typing at 2000 chars; the clipboard path bypasses the
+    // formatter, so truncate here to keep memory bounded.
+    final capped = text.length > _maxPasteLength
+        ? text.substring(0, _maxPasteLength)
+        : text;
+    setState(() => _controller.text = capped);
   }
 
   @override
@@ -789,6 +797,7 @@ class _PasteFormState extends State<_PasteForm> {
           minLines: 4,
           maxLines: 8,
           keyboardType: TextInputType.multiline,
+          inputFormatters: [LengthLimitingTextInputFormatter(_maxPasteLength)],
           decoration: const InputDecoration(
             hintText: 'Rs 450.00 debited from A/c XX1234 on 05-Oct…',
           ),
@@ -805,7 +814,8 @@ class _PasteFormState extends State<_PasteForm> {
         const SizedBox(height: 8),
         PrimaryButton(
           label: 'Add to review',
-          onPressed: () => Navigator.pop(context, _controller.text),
+          onPressed: () =>
+              Navigator.pop(context, TextSanitizer.multiLine(_controller.text)),
         ),
       ],
     );
