@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_haptics.dart';
+import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/utils/keyboard.dart';
 import '../../../core/theme/app_text.dart';
@@ -25,19 +26,48 @@ import '../../widgets/app_dropdown.dart';
 import '../../widgets/app_sheets.dart';
 import '../../widgets/field_decoration.dart';
 import '../../widgets/multi_select_field.dart';
+import '../../widgets/pressable.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/segmented_tabs.dart';
 import '../../providers/settings_providers.dart';
 import '../../providers/transaction_providers.dart';
 
+/// Immutable seed used to open the shared add-transaction form pre-filled from
+/// a detected SMS. Passing one (with no [AddTransactionScreen.editTransaction])
+/// seeds the form and tags the saved [TransactionModel] with `source: 'sms'`
+/// plus its SMS linkage fields.
+class SmsPrefill {
+  final String type;
+  final double amount;
+  final String? description;
+  final String paymentMethod;
+  final DateTime date;
+  final String? accountId;
+  final String? smsMessageId;
+  final String? externalReference;
+
+  const SmsPrefill({
+    required this.type,
+    required this.amount,
+    this.description,
+    this.paymentMethod = 'UPI',
+    required this.date,
+    this.accountId,
+    this.smsMessageId,
+    this.externalReference,
+  });
+}
+
 class AddTransactionScreen extends ConsumerStatefulWidget {
   final String initialType;
   final TransactionModel? editTransaction;
+  final SmsPrefill? smsPrefill;
 
   const AddTransactionScreen({
     super.key,
     this.initialType = 'expense',
     this.editTransaction,
+    this.smsPrefill,
   });
 
   @override
@@ -67,6 +97,15 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   bool _isSaving = false;
   String? _suggestedCategoryName;
 
+  /// Whether the optional "Add details" fields are shown. Collapsed by default
+  /// for new transactions, expanded when editing. Toggling only hides widgets —
+  /// no field value is reset.
+  bool _detailsExpanded = false;
+
+  /// Best-match account id carried from an SMS prefill, used by
+  /// [_effectiveAccount] until the user explicitly picks another account.
+  String? _prefillAccountId;
+
   final Uuid _uuid = const Uuid();
   final ReceiptStorageService _receiptService = ReceiptStorageService();
   final LocationService _locationService = LocationService();
@@ -93,6 +132,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
         widget.editTransaction?.type.toLowerCase() ??
         widget.initialType.toLowerCase();
 
+    _detailsExpanded = widget.editTransaction != null;
+
     if (widget.editTransaction != null) {
       final tx = widget.editTransaction!;
       _amountController.text = tx.amount.toStringAsFixed(
@@ -104,6 +145,16 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       _noteController.text = tx.note ?? '';
       _selectedTags.addAll(tx.tags);
       _receipts.addAll(tx.receipts);
+    } else if (widget.smsPrefill != null) {
+      final prefill = widget.smsPrefill!;
+      _type = prefill.type.toLowerCase();
+      _amountController.text = prefill.amount.toStringAsFixed(
+        prefill.amount.truncateToDouble() == prefill.amount ? 0 : 2,
+      );
+      _descriptionController.text = prefill.description ?? '';
+      _selectedPaymentMethod = prefill.paymentMethod;
+      _selectedDate = prefill.date;
+      _prefillAccountId = prefill.accountId;
     }
 
     _captureLocation();
@@ -251,6 +302,9 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
         ? '${account?.name ?? "Account"} → ${destination?.name ?? "Account"}'
         : descriptionStr;
 
+    final isSmsEntry =
+        widget.editTransaction == null && widget.smsPrefill != null;
+
     final tx = TransactionModel(
       id: txId,
       type: _type,
@@ -258,6 +312,11 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       description: finalDesc,
       categoryId: categoryId,
       paymentMethod: _type == 'transfer' ? 'Bank' : _selectedPaymentMethod,
+      source: isSmsEntry ? 'sms' : 'manual',
+      smsMessageId: isSmsEntry ? widget.smsPrefill!.smsMessageId : null,
+      externalReference: isSmsEntry
+          ? widget.smsPrefill!.externalReference
+          : null,
       accountId:
           account?.id ??
           original?.accountId ??
@@ -297,7 +356,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
             ),
           ),
         );
-        Navigator.pop(context);
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
@@ -704,45 +763,6 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
 
               const SizedBox(height: 18),
 
-              // 4. Payment method (if not transfer)
-              if (_type != 'transfer') ...[
-                Text(
-                  'Payment method',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: mutedColor,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                SegmentedTabs(
-                  options: const ['UPI', 'Cash', 'Debit Card'],
-                  selected: _selectedPaymentMethod,
-                  onSelected: (method) =>
-                      setState(() => _selectedPaymentMethod = method),
-                ),
-                const SizedBox(height: 18),
-
-                // Account field (hidden if Cash is selected, matching HTML: $('#acf').style.display=APM==='Cash'?'none':'')
-                if (_selectedPaymentMethod != 'Cash') ...[
-                  Text(
-                    'Account',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: mutedColor,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  _buildAccountDropdown(
-                    value: _effectiveAccount(accounts),
-                    accounts: accounts,
-                    onChanged: (acc) => setState(() => _selectedAccount = acc),
-                  ),
-                  const SizedBox(height: 18),
-                ],
-              ],
-
               // 5. Date
               Text(
                 'Date',
@@ -919,158 +939,245 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                 ],
               ),
 
-              // 6. Optional details (Note, Tags, Location, Receipts) —
-              // available for every transaction type (Expense, Income,
-              // Transfer). Location is still captured automatically on save.
-              ...[
-                const SizedBox(height: 18),
-                Text(
-                  'Note',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: mutedColor,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: _noteController,
-                  style: TextStyle(fontSize: 15, color: inkColor),
-                  decoration: appFieldDecoration(p, hint: 'Optional'),
-                ),
-
-                const SizedBox(height: 18),
-                Text(
-                  'Tags',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: mutedColor,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                MultiSelectField(
-                  hint: 'Select tags',
-                  sheetTitle: 'Tags',
-                  emptyMessage: 'No tags yet. Add some in Settings → Tags.',
-                  options: tagNames,
-                  selected: [
-                    for (final name in tagNames)
-                      if (_hasTag(name)) name,
-                  ],
-                  onChanged: (names) => _setTags(names, savedTags),
-                ),
-
-                const SizedBox(height: 18),
-                Text(
-                  'Location',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: mutedColor,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: surfaceColor,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: linesColor),
-                  ),
+              // 6. Optional details, grouped behind an "Add details"
+              // disclosure. Collapsed by default for new transactions, expanded
+              // when editing. Payment method (+ Account) live here for non-
+              // transfer entries; Note/Tags/Location/Receipt live here for every
+              // type. Collapsing only hides widgets — nothing resets.
+              const SizedBox(height: 18),
+              Pressable(
+                onTap: () =>
+                    setState(() => _detailsExpanded = !_detailsExpanded),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Row(
                     children: [
-                      const Text('📍', style: TextStyle(fontSize: 18)),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          _locationResult?.locationName ??
-                              'Captured automatically when you save',
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            color: _locationResult != null
-                                ? inkColor
-                                : mutedColor,
-                            fontWeight: _locationResult != null
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                          ),
-                        ),
+                      Text(
+                        'Add details',
+                        style: AppText.body(p.ink)
+                            .copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const Spacer(),
+                      Icon(
+                        _detailsExpanded
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
+                        size: 20,
+                        color: p.muted,
                       ),
                     ],
                   ),
                 ),
-
-                const SizedBox(height: 18),
-                Text(
-                  'Receipt',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: mutedColor,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    ..._receipts.map((rcpt) {
-                      return Stack(
+              ),
+              AnimatedSize(
+                duration: AppMotion.fast,
+                curve: AppMotion.enter,
+                alignment: Alignment.topCenter,
+                child: _detailsExpanded
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: Image.file(
-                              File(rcpt.thumbnailPath),
-                              width: 68,
-                              height: 68,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          Positioned(
-                            right: 4,
-                            top: 4,
-                            child: GestureDetector(
-                              onTap: () =>
-                                  setState(() => _receipts.remove(rcpt)),
-                              child: Container(
-                                padding: const EdgeInsets.all(3),
-                                decoration: const BoxDecoration(
-                                  color: Colors.black54,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.close,
-                                  size: 12,
-                                  color: Colors.white,
-                                ),
+                          // Payment method (if not transfer)
+                          if (_type != 'transfer') ...[
+                            const SizedBox(height: 18),
+                            Text(
+                              'Payment method',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: mutedColor,
                               ),
                             ),
+                            const SizedBox(height: 6),
+                            SegmentedTabs(
+                              options: const ['UPI', 'Cash', 'Debit Card'],
+                              selected: _selectedPaymentMethod,
+                              onSelected: (method) => setState(
+                                () => _selectedPaymentMethod = method,
+                              ),
+                            ),
+
+                            // Account field (hidden if Cash is selected, matching HTML: $('#acf').style.display=APM==='Cash'?'none':'')
+                            if (_selectedPaymentMethod != 'Cash') ...[
+                              const SizedBox(height: 18),
+                              Text(
+                                'Account',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: mutedColor,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              _buildAccountDropdown(
+                                value: _effectiveAccount(accounts),
+                                accounts: accounts,
+                                onChanged: (acc) =>
+                                    setState(() => _selectedAccount = acc),
+                              ),
+                            ],
+                          ],
+
+                          const SizedBox(height: 18),
+                          Text(
+                            'Note',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: mutedColor,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          TextField(
+                            controller: _noteController,
+                            style: TextStyle(fontSize: 15, color: inkColor),
+                            decoration: appFieldDecoration(p, hint: 'Optional'),
+                          ),
+
+                          const SizedBox(height: 18),
+                          Text(
+                            'Tags',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: mutedColor,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          MultiSelectField(
+                            hint: 'Select tags',
+                            sheetTitle: 'Tags',
+                            emptyMessage:
+                                'No tags yet. Add some in Settings → Tags.',
+                            options: tagNames,
+                            selected: [
+                              for (final name in tagNames)
+                                if (_hasTag(name)) name,
+                            ],
+                            onChanged: (names) => _setTags(names, savedTags),
+                          ),
+
+                          const SizedBox(height: 18),
+                          Text(
+                            'Location',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: mutedColor,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: surfaceColor,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: linesColor),
+                            ),
+                            child: Row(
+                              children: [
+                                const Text(
+                                  '📍',
+                                  style: TextStyle(fontSize: 18),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    _locationResult?.locationName ??
+                                        'Captured automatically when you save',
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      color: _locationResult != null
+                                          ? inkColor
+                                          : mutedColor,
+                                      fontWeight: _locationResult != null
+                                          ? FontWeight.w600
+                                          : FontWeight.normal,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 18),
+                          Text(
+                            'Receipt',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: mutedColor,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              ..._receipts.map((rcpt) {
+                                return Stack(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(16),
+                                      child: Image.file(
+                                        File(rcpt.thumbnailPath),
+                                        width: 68,
+                                        height: 68,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                    Positioned(
+                                      right: 4,
+                                      top: 4,
+                                      child: GestureDetector(
+                                        onTap: () => setState(
+                                          () => _receipts.remove(rcpt),
+                                        ),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(3),
+                                          decoration: const BoxDecoration(
+                                            color: Colors.black54,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(
+                                            Icons.close,
+                                            size: 12,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }),
+                              InkWell(
+                                borderRadius: BorderRadius.circular(16),
+                                onTap: () => _showReceiptSourceSheet(context),
+                                child: Container(
+                                  width: 68,
+                                  height: 68,
+                                  decoration: BoxDecoration(
+                                    color: surfaceColor,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: linesColor,
+                                      style: BorderStyle.solid,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    Icons.add,
+                                    size: 26,
+                                    color: mutedColor,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
-                      );
-                    }),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(16),
-                      onTap: () => _showReceiptSourceSheet(context),
-                      child: Container(
-                        width: 68,
-                        height: 68,
-                        decoration: BoxDecoration(
-                          color: surfaceColor,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: linesColor,
-                            style: BorderStyle.solid,
-                            width: 2,
-                          ),
-                        ),
-                        child: Icon(Icons.add, size: 26, color: mutedColor),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                      )
+                    : const SizedBox(width: double.infinity),
+              ),
 
               const SizedBox(height: 32),
 
@@ -1125,6 +1232,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     final original = widget.editTransaction;
     if (original != null) return _accountById(accounts, original.accountId);
     if (accounts.isEmpty) return null;
+    final prefilled = _accountById(accounts, _prefillAccountId);
+    if (prefilled != null) return prefilled;
     return _primaryDefault(accounts) ??
         _accountById(accounts, ref.read(defaultUpiAccountProvider)) ??
         accounts.first;
