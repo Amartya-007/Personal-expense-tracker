@@ -12,7 +12,6 @@ import 'bank_parsers/boi_parser.dart';
 import 'bank_parsers/generic_bank_parser.dart';
 import 'bank_parsers/hdfc_parser.dart';
 import 'bank_parsers/sbi_parser.dart';
-import 'duplicate_detector.dart';
 import 'sms_capture_service.dart';
 
 class SmsParserService {
@@ -25,7 +24,6 @@ class SmsParserService {
   ];
 
   final SmsRepository _smsRepo = SmsRepository();
-  final DuplicateDetector _duplicateDetector = DuplicateDetector();
   final Uuid _uuid = const Uuid();
 
   // Legacy channel kept for the manual inbox scan path (SmsReviewScreen sync button).
@@ -90,18 +88,11 @@ class SmsParserService {
         unrecognized++;
         continue;
       }
-      final isDup = await _duplicateDetector.isDuplicate(
-        referenceId: parsed.referenceId,
-        smsMessageId: parsed.smsMessageId,
-        amount: parsed.amount,
-        date: parsed.date,
-      );
-      if (isDup) {
+      if (await _smsRepo.addToQueueIfNew(parsed)) {
+        added++;
+      } else {
         duplicate++;
-        continue;
       }
-      await _smsRepo.addToQueue(parsed);
-      added++;
     }
     return (added: added, duplicate: duplicate, unrecognized: unrecognized);
   }
@@ -136,16 +127,7 @@ class SmsParserService {
             messageId: msgId,
           );
           if (parsed != null) {
-            final isDup = await _duplicateDetector.isDuplicate(
-              referenceId: parsed.referenceId,
-              smsMessageId: parsed.smsMessageId,
-              amount: parsed.amount,
-              date: parsed.date,
-            );
-            if (!isDup) {
-              await _smsRepo.addToQueue(parsed);
-              addedCount++;
-            }
+            if (await _smsRepo.addToQueueIfNew(parsed)) addedCount++;
           }
         }
       }
@@ -176,7 +158,25 @@ class SmsParserService {
   ///
   /// Skipped when the user turned "Detect bank SMS" off in Settings, unless
   /// [force] is set (an explicit manual sync).
-  Future<int> processPendingMessages({bool force = false}) async {
+  Future<int> processPendingMessages({bool force = false}) {
+    // The app start and every status list (detected / confirmed / dismissed)
+    // ask for this at the same moment. They share one run instead of each
+    // reading the same pending messages. (Even if two runs did overlap,
+    // addToQueueIfNew checks and inserts atomically.)
+    final running = _processing;
+    if (running != null && !force) return running;
+
+    final run = _processPendingMessages(force: force);
+    _processing = run;
+    run.then((_) {}, onError: (_) {}).whenComplete(() {
+      if (identical(_processing, run)) _processing = null;
+    });
+    return run;
+  }
+
+  static Future<int>? _processing;
+
+  Future<int> _processPendingMessages({bool force = false}) async {
     try {
       if (!force) {
         final prefs = await SharedPreferences.getInstance();
@@ -208,16 +208,7 @@ class SmsParserService {
         );
         if (parsed == null) continue;
 
-        final isDup = await _duplicateDetector.isDuplicate(
-          referenceId: parsed.referenceId,
-          smsMessageId: parsed.smsMessageId,
-          amount: parsed.amount,
-          date: parsed.date,
-        );
-        if (isDup) continue;
-
-        await _smsRepo.addToQueue(parsed);
-        addedCount++;
+        if (await _smsRepo.addToQueueIfNew(parsed)) addedCount++;
       }
 
       // Remove all processed messages from the native pending queue in one call.

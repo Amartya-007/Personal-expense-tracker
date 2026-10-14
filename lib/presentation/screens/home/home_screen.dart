@@ -28,6 +28,7 @@ import '../../widgets/list_widgets.dart';
 import '../../widgets/pressable.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/section_header.dart';
+import '../../widgets/skeleton.dart';
 import '../../widgets/transaction_row.dart';
 import '../add_transaction/add_transaction_screen.dart';
 import '../settings/recurring_payments_screen.dart';
@@ -37,6 +38,7 @@ import '../transactions/transaction_detail_screen.dart';
 /// Tab indexes used by the "See all" links.
 const int _transactionsTab = 1;
 const int _budgetsTab = 2;
+const int _insightsTab = 3;
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -200,6 +202,7 @@ class HomeScreen extends ConsumerWidget {
     Future<void> refresh() async {
       ref.invalidate(recentTransactionsProvider);
       ref.invalidate(homeInsightsProvider);
+      ref.invalidate(homeMonthSummaryProvider);
       await Future.wait([
         ref.read(accountListProvider.notifier).loadAccounts(),
         ref.read(budgetListProvider.notifier).loadBudgets(),
@@ -223,11 +226,12 @@ class HomeScreen extends ConsumerWidget {
               MediaQuery.of(context).padding.bottom + 130,
             ),
             children: [
-              // 1. Greeting
+              // 1. Header: who this is for, and the time of day.
               FadeSlideIn(
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    _Avatar(name: userName),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -249,37 +253,6 @@ class HomeScreen extends ConsumerWidget {
                         ],
                       ),
                     ),
-                    if (smsCount > 0)
-                      Pressable(
-                        onTap: () =>
-                            AppRoutes.push(context, const SmsReviewScreen()),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: p.expense.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: p.expense.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Text('💬', style: TextStyle(fontSize: 14)),
-                              const SizedBox(width: 6),
-                              Text(
-                                '$smsCount new',
-                                style: AppText.caption(p.expense).copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
                   ],
                 ),
               ),
@@ -301,17 +274,28 @@ class HomeScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 14),
 
+              // 2a. Bank messages waiting: one clear call to action (this
+              // used to be a header pill AND a badge on a quick action).
+              if (smsCount > 0) ...[
+                FadeSlideIn(
+                  index: 1,
+                  child: _SmsAttentionCard(count: smsCount),
+                ),
+                const SizedBox(height: 14),
+              ],
+
               // 2b. Quick Action Buttons
               FadeSlideIn(
                 index: 1,
-                child: _QuickActionsRow(smsCount: smsCount),
+                child: const _QuickActionsRow(),
               ),
               const SizedBox(height: 14),
 
-              // 2c. Monthly Cashflow Snapshot
+              // 2c. This month at a glance (always this month, whatever range
+              // Insights is showing).
               const FadeSlideIn(
                 index: 1,
-                child: _MonthlyCashflowCard(),
+                child: _ThisMonthStrip(),
               ),
               const SizedBox(height: 24),
 
@@ -528,9 +512,7 @@ class HomeScreen extends ConsumerWidget {
 
 /// Quick action shortcuts bar right under the balance hero card.
 class _QuickActionsRow extends StatelessWidget {
-  final int smsCount;
-
-  const _QuickActionsRow({required this.smsCount});
+  const _QuickActionsRow();
 
   Widget _actionPill(
     BuildContext context, {
@@ -538,15 +520,12 @@ class _QuickActionsRow extends StatelessWidget {
     required IconData icon,
     required Color color,
     required VoidCallback onTap,
-    int badgeCount = 0,
   }) {
     final p = context.palette;
     return Expanded(
       child: Pressable(
-        onTap: () {
-          AppHaptics.tap();
-          onTap();
-        },
+        // Pressable already gives the tap haptic.
+        onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
           decoration: BoxDecoration(
@@ -570,26 +549,6 @@ class _QuickActionsRow extends StatelessWidget {
                     ),
                     child: Icon(icon, size: 18, color: color),
                   ),
-                  if (badgeCount > 0)
-                    Positioned(
-                      right: -4,
-                      top: -4,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: p.expense,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          '$badgeCount',
-                          style: const TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
                 ],
               ),
               const SizedBox(height: 6),
@@ -650,10 +609,9 @@ class _QuickActionsRow extends StatelessWidget {
         const SizedBox(width: 8),
         _actionPill(
           context,
-          label: 'SMS Review',
+          label: 'SMS',
           icon: Icons.mark_chat_unread_rounded,
           color: p.secondary,
-          badgeCount: smsCount,
           onTap: () => AppRoutes.push(context, const SmsReviewScreen()),
         ),
       ],
@@ -661,101 +619,229 @@ class _QuickActionsRow extends StatelessWidget {
   }
 }
 
-/// Monthly cashflow summary widget showing Income, Expense, Net.
-class _MonthlyCashflowCard extends ConsumerWidget {
-  const _MonthlyCashflowCard();
+/// This month's income, spending and net, labelled with the month. Uses its
+/// own provider, so it never shows another range by mistake; tapping opens
+/// Insights on the same month.
+class _ThisMonthStrip extends ConsumerWidget {
+  const _ThisMonthStrip();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
     final isMasked = ref.watch(privacyModeProvider);
-    final analyticsAsync = ref.watch(analyticsSummaryProvider);
 
-    return analyticsAsync.maybeWhen(
+    return ref.watch(homeMonthSummaryProvider).when(
+      // Keep the figures on screen while they refresh.
+      skipLoadingOnReload: true,
+      loading: () => const Skeleton(height: 92, radius: 20),
+      error: (_, __) => AppCard(
+        onTap: () => ref.invalidate(homeMonthSummaryProvider),
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(Icons.refresh_rounded, color: p.muted, size: 20),
+            const SizedBox(width: 10),
+            Text(
+              "Couldn't load this month. Tap to retry.",
+              style: AppText.caption(p.muted),
+            ),
+          ],
+        ),
+      ),
       data: (data) {
-        final income = data.totalIncome;
-        final expense = data.totalExpense;
-        final net = income - expense;
-        final isNetPositive = net >= 0;
-
+        final net = data.totalIncome - data.totalExpense;
+        final positive = net >= 0;
         return AppCard(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
+          onTap: () {
+            ref.read(selectedDateRangeProvider.notifier).state =
+                DateTimeRangeType.thisMonth;
+            ref.read(mainTabProvider.notifier).state = _insightsTab;
+          },
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.south_west_rounded, size: 13, color: p.income),
-                        const SizedBox(width: 3),
-                        Text('Income', style: AppText.caption(p.muted).copyWith(fontSize: 11)),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      CurrencyFormatter.format(income, isMasked: isMasked),
-                      style: AppText.bodyStrong(p.income).copyWith(fontSize: 13),
-                    ),
-                  ],
-                ),
-              ),
-              Container(width: 1, height: 28, color: p.border),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.north_east_rounded, size: 13, color: p.expense),
-                          const SizedBox(width: 3),
-                          Text('Expense', style: AppText.caption(p.muted).copyWith(fontSize: 11)),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        CurrencyFormatter.format(expense, isMasked: isMasked),
-                        style: AppText.bodyStrong(p.expense).copyWith(fontSize: 13),
-                      ),
-                    ],
+              Row(
+                children: [
+                  Text('THIS MONTH', style: AppText.overline(p.muted)),
+                  const Spacer(),
+                  Text(
+                    DateFormat('MMMM').format(DateTime.now()),
+                    style: AppText.caption(p.muted),
                   ),
-                ),
+                  Icon(Icons.chevron_right_rounded, size: 18, color: p.muted),
+                ],
               ),
-              Container(width: 1, height: 28, color: p.border),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            isNetPositive ? Icons.trending_up_rounded : Icons.trending_down_rounded,
-                            size: 13,
-                            color: isNetPositive ? p.income : p.expense,
-                          ),
-                          const SizedBox(width: 3),
-                          Text('Net', style: AppText.caption(p.muted).copyWith(fontSize: 11)),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        CurrencyFormatter.format(net.abs(), isMasked: isMasked),
-                        style: AppText.bodyStrong(isNetPositive ? p.income : p.expense).copyWith(fontSize: 13),
-                      ),
-                    ],
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  _MonthFigure(
+                    icon: Icons.south_west_rounded,
+                    label: 'Income',
+                    value: CurrencyFormatter.format(
+                      data.totalIncome,
+                      isMasked: isMasked,
+                    ),
+                    color: p.income,
                   ),
-                ),
+                  _MonthFigure(
+                    icon: Icons.north_east_rounded,
+                    label: 'Spent',
+                    value: CurrencyFormatter.format(
+                      data.totalExpense,
+                      isMasked: isMasked,
+                    ),
+                    color: p.expense,
+                  ),
+                  _MonthFigure(
+                    icon: positive
+                        ? Icons.trending_up_rounded
+                        : Icons.trending_down_rounded,
+                    label: positive ? 'Saved' : 'Over by',
+                    value: CurrencyFormatter.format(
+                      net.abs(),
+                      isMasked: isMasked,
+                    ),
+                    color: positive ? p.income : p.expense,
+                  ),
+                ],
               ),
             ],
           ),
         );
       },
-      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
+class _MonthFigure extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  const _MonthFigure({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 4),
+              Text(label, style: AppText.caption(p.muted)),
+            ],
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppText.amount(color, size: 16),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Initial in a soft circle: puts a person on the screen without needing a photo.
+class _Avatar extends StatelessWidget {
+  final String name;
+
+  const _Avatar({required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final initial = name.trim().isEmpty
+        ? null
+        : String.fromCharCodes([name.trim().runes.first]).toUpperCase();
+    return Container(
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(
+        color: p.primarySoft,
+        shape: BoxShape.circle,
+        border: Border.all(color: p.primary.withValues(alpha: 0.2)),
+      ),
+      alignment: Alignment.center,
+      child: initial == null
+          ? Icon(Icons.person_rounded, color: p.primary, size: 24)
+          : Text(
+              initial,
+              style: AppText.title(p.primary),
+            ),
+    );
+  }
+}
+
+/// Shown only while bank messages are waiting: the one place Home points at
+/// the SMS review screen.
+class _SmsAttentionCard extends StatelessWidget {
+  final int count;
+
+  const _SmsAttentionCard({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return AppCard(
+      onTap: () => AppRoutes.push(context, const SmsReviewScreen()),
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: p.secondary.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            alignment: Alignment.center,
+            child: const Text('💬', style: TextStyle(fontSize: 20)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$count bank ${count == 1 ? 'message' : 'messages'} to review',
+                  style: AppText.bodyStrong(p.ink),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Confirm them to add to your records',
+                  style: AppText.caption(p.muted),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: p.primarySoft,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              'Review',
+              style: AppText.caption(p.primary).copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

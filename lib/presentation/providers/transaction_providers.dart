@@ -369,6 +369,7 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
     _ref.invalidate(transactionDetailProvider);
     _ref.invalidate(homeInsightsProvider);
     _ref.invalidate(analyticsSummaryProvider);
+    _ref.invalidate(homeMonthSummaryProvider);
     _ref.invalidate(spendingTrendProvider);
     _ref.invalidate(tagsListProvider);
     _ref.invalidate(receiptGalleryProvider);
