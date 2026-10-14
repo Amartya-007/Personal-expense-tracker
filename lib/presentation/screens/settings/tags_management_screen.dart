@@ -13,15 +13,26 @@ class TagsManagementScreen extends ConsumerWidget {
   const TagsManagementScreen({super.key});
 
   Future<void> _add(BuildContext context, WidgetRef ref) async {
+    // `tags.name` is UNIQUE COLLATE NOCASE and the repository inserts with
+    // ConflictAlgorithm.ignore, so a duplicate silently no-ops instead of
+    // throwing. Detect it in the UI (case-insensitively) against the loaded
+    // tags so the user gets a clear message instead of nothing happening.
+    final existing = ref.read(tagsListProvider).value ?? const <TagModel>[];
     final values = await showFieldsSheet(
       context,
       title: 'Add tag',
       submitLabel: 'Add tag',
-      fields: const [
+      fields: [
         FieldSpec(
           label: 'Tag name',
           hint: 'e.g. College, Travel',
           required: true,
+          maxLength: 25,
+          showCounter: true,
+          validator: (value) =>
+              existing.any((t) => t.name.toLowerCase() == value.toLowerCase())
+              ? 'A tag with this name already exists.'
+              : null,
         ),
       ],
     );

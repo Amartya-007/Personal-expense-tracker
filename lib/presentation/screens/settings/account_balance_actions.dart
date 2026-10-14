@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/utils/amount_input.dart';
 import '../../../data/models/account_model.dart';
 import '../../providers/home_controller.dart';
 import '../../widgets/app_sheets.dart';
@@ -25,13 +26,17 @@ Future<void> editAccountBalance(
         label: 'Balance (₹)',
         numeric: true,
         required: true,
+        allowNegative: true,
+        maxValue: kMaxAmount,
         initial: account.currentBalance.toStringAsFixed(2),
       ),
     ],
   );
   if (values == null) return;
 
-  final newBalance = double.tryParse(values[0].replaceAll(',', ''));
+  // The field already blocked invalid/over-cap input inline; this parse is a
+  // defensive guard that keeps the existing "enter a valid amount" fallback.
+  final newBalance = AmountInput.parseAmount(values[0], allowNegative: true);
   if (newBalance == null) {
     messenger.showSnackBar(
       const SnackBar(content: Text('Enter a valid amount.')),

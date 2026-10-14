@@ -8,6 +8,7 @@ import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text.dart';
+import '../../../core/utils/amount_input.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/budget_model.dart';
 import '../../../services/analytics/budget_history.dart';
@@ -93,7 +94,9 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
     );
     if (values == null) return;
 
-    final amount = double.tryParse(values[0].replaceAll(',', ''));
+    // The field already blocked ≤0 and over-cap inline; this guard keeps the
+    // defensive fallback if the value is somehow bypassed.
+    final amount = AmountInput.parseAmount(values[0]);
     if (amount == null || amount <= 0) {
       messenger.showSnackBar(
         const SnackBar(content: Text('Enter a limit greater than zero.')),

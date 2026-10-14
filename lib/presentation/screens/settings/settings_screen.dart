@@ -49,6 +49,8 @@ class SettingsScreen extends ConsumerWidget {
           hint: 'What should we call you?',
           initial: current,
           required: true,
+          maxLength: 40,
+          showCounter: true,
         ),
       ],
     );

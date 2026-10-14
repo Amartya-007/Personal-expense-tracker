@@ -32,6 +32,8 @@ class AccountsManagementScreen extends ConsumerWidget {
           label: 'Account name',
           hint: 'e.g. HDFC Savings',
           required: true,
+          maxLength: 40,
+          showCounter: true,
         ),
         FieldSpec(label: 'Current balance (₹)', numeric: true, initial: '0'),
       ],
