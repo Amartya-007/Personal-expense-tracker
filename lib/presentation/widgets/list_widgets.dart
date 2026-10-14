@@ -41,6 +41,13 @@ class ListRowTile extends StatelessWidget {
   final VoidCallback? onTap;
   final Color? titleColor;
 
+  /// How many lines the title may use before ellipsising. Defaults to 2 so
+  /// a label that doesn't fit on one line next to a trailing control (a
+  /// toggle, a chevron) wraps and stays readable instead of truncating to
+  /// "Save Location with E…". Pass 1 for dense lists where a single line is
+  /// intended.
+  final int titleMaxLines;
+
   const ListRowTile({
     super.key,
     this.emoji,
@@ -50,6 +57,7 @@ class ListRowTile extends StatelessWidget {
     this.trailing,
     this.onTap,
     this.titleColor,
+    this.titleMaxLines = 2,
   });
 
   @override
@@ -91,7 +99,7 @@ class ListRowTile extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      maxLines: 1,
+                      maxLines: titleMaxLines,
                       overflow: TextOverflow.ellipsis,
                       style: AppText.body(titleColor ?? p.ink),
                     ),

@@ -952,95 +952,145 @@ class _HeroCard extends ConsumerWidget {
                 ),
                 if (accounts.isNotEmpty) ...[
                   const SizedBox(height: 14),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        for (final acc in accounts)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 10),
-                            child: Pressable(
-                              onTap: () => onEditAccount(acc),
-                              child: Container(
-                                constraints: const BoxConstraints(
-                                  minWidth: 132,
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 13,
-                                  vertical: 11,
-                                ),
-                                // Darker, not lighter, than the card: white
-                                // text keeps AA contrast on it.
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(
-                                    AppRadius.md,
-                                  ),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.12),
-                                  ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (acc.isPrimary) ...[
-                                          Icon(
-                                            Icons.star_rounded,
-                                            size: 13,
-                                            color: p.secondary,
-                                          ),
-                                          const SizedBox(width: 3),
-                                        ],
-                                        // Cap the name width so a very long
-                                        // account name truncates instead of
-                                        // stretching the chip arbitrarily wide
-                                        // (minWidth:132 above stays the floor).
-                                        ConstrainedBox(
-                                          constraints: const BoxConstraints(
-                                            maxWidth: 160,
-                                          ),
-                                          child: Text(
-                                            acc.name,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: AppText.caption(
-                                              Colors.white.withValues(
-                                                alpha: 0.9,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 2),
-                                    FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        CurrencyFormatter.format(
-                                          acc.currentBalance,
-                                          isMasked: isMasked,
-                                        ),
-                                        maxLines: 1,
-                                        style: AppText.amount(Colors.white),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
+                  _AccountChips(
+                    accounts: accounts,
+                    isMasked: isMasked,
+                    onEditAccount: onEditAccount,
                   ),
                 ],
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The per-account chips under the hero total.
+///
+/// Lays the chips out responsively: when they all fit the card width they
+/// wrap onto centred rows (so e.g. three accounts read as two side-by-side
+/// with the third centred beneath, instead of hiding off-screen), and when
+/// they don't fit they scroll horizontally with a right-edge fade cue so the
+/// user can see there is more to swipe to.
+class _AccountChips extends StatelessWidget {
+  final List<AccountModel> accounts;
+  final bool isMasked;
+  final ValueChanged<AccountModel> onEditAccount;
+
+  const _AccountChips({
+    required this.accounts,
+    required this.isMasked,
+    required this.onEditAccount,
+  });
+
+  static const double _chipMinWidth = 132;
+  static const double _chipGap = 10;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final chips = [for (final acc in accounts) _chip(context, p, acc)];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxW = constraints.maxWidth;
+        // Would the chips fit on a single row at their minimum width? If so,
+        // a wrap keeps everything visible (no hidden off-screen cards); the
+        // last row centres, giving the 2-up + 1-centred "tree" layout for
+        // three accounts.
+        final neededForOneRow =
+            accounts.length * _chipMinWidth + (accounts.length - 1) * _chipGap;
+
+        if (neededForOneRow <= maxW) {
+          return Wrap(
+            spacing: _chipGap,
+            runSpacing: _chipGap,
+            alignment: WrapAlignment.center,
+            children: chips,
+          );
+        }
+
+        // Too many / too wide to fit: scroll horizontally, with a fade on the
+        // right edge so it is obvious more cards are off-screen.
+        return ShaderMask(
+          shaderCallback: (rect) => const LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [Colors.white, Colors.white, Colors.transparent],
+            stops: [0.0, 0.9, 1.0],
+          ).createShader(rect),
+          blendMode: BlendMode.dstIn,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            // Pad the right so the last chip can clear the fade.
+            padding: const EdgeInsets.only(right: 24),
+            child: Row(
+              children: [
+                for (var i = 0; i < chips.length; i++) ...[
+                  if (i > 0) const SizedBox(width: _chipGap),
+                  chips[i],
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _chip(BuildContext context, AppPalette p, AccountModel acc) {
+    return Pressable(
+      onTap: () => onEditAccount(acc),
+      child: Container(
+        constraints: const BoxConstraints(minWidth: _chipMinWidth),
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+        // Darker, not lighter, than the card: white text keeps AA contrast.
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (acc.isPrimary) ...[
+                  Icon(Icons.star_rounded, size: 13, color: p.secondary),
+                  const SizedBox(width: 3),
+                ],
+                // Cap the name width so a very long account name truncates
+                // instead of stretching the chip arbitrarily wide (the
+                // minWidth above stays the floor).
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 160),
+                  child: Text(
+                    acc.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.caption(Colors.white.withValues(alpha: 0.9)),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                CurrencyFormatter.format(
+                  acc.currentBalance,
+                  isMasked: isMasked,
+                ),
+                maxLines: 1,
+                style: AppText.amount(Colors.white),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
