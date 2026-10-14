@@ -12,7 +12,7 @@ import 'package:mykhata/data/repositories/transaction_repository.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 /// The same SMS used to show up 2-3 times in the review queue because:
-///  * every status list (detected/confirmed/dismissed) processed the pending
+///  * every status list (detected/added/ignored) processed the pending
 ///    messages at the same moment,
 ///  * the check only looked at the transactions table, never the queue, so
 ///    every re-scan queued the message again,
@@ -166,9 +166,9 @@ void main() {
       expect(await queueSize(), 1);
     });
 
-    test('a dismissed message is not offered again by the next scan', () async {
+    test('an ignored message is not offered again by the next scan', () async {
       await repo.addToQueueIfNew(_sms('1', messageId: 'm1'));
-      await repo.updateStatus('1', 'dismissed');
+      await repo.updateStatus('1', 'ignored');
 
       expect(
         await repo.addToQueueIfNew(_sms('2', messageId: 'inbox-77')),
@@ -300,7 +300,7 @@ void main() {
       final other = _sms('other', body: 'Rs 99 debited at ANOTHER', amount: 99);
       await db.insert('sms_review_queue', other.toMap());
       final confirmed = _sms('done', messageId: 'c1').toMap()
-        ..['status'] = 'confirmed';
+        ..['status'] = 'added';
       await db.insert('sms_review_queue', confirmed);
 
       expect(await repo.collapseDuplicateDetected(), 2);
