@@ -15,13 +15,16 @@ import '../../../data/models/tag_model.dart';
 import '../../../data/models/transaction_model.dart';
 import '../../providers/account_providers.dart';
 import '../../providers/category_providers.dart';
+import '../../providers/settings_providers.dart';
 import '../../providers/tag_providers.dart';
 import '../../providers/transaction_providers.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/fade_slide_in.dart';
 import '../../widgets/filter_bottom_sheet.dart';
+import '../../widgets/pill_chips.dart';
 import '../../widgets/pressable.dart';
 import '../../widgets/skeleton.dart';
+import '../../widgets/transaction_quick_edit_sheet.dart';
 import '../../widgets/transaction_row.dart';
 import '../../widgets/undo_snackbar.dart';
 import '../add_transaction/add_transaction_screen.dart';
@@ -146,6 +149,7 @@ class _TransactionHistoryScreenState
     final activeCount = filter.activeFilterCount;
     final groups = _groupByDay(state.transactions);
     final bottom = MediaQuery.of(context).padding.bottom;
+    final isMasked = ref.watch(privacyModeProvider);
 
     return Scaffold(
       backgroundColor: p.background,
@@ -260,6 +264,9 @@ class _TransactionHistoryScreenState
               ),
             ),
 
+            // Quick-filter chips (independent toggles via the existing filter path)
+            _QuickFilterChips(filter: filter),
+
             // Active Removable Filter Chips
             if (filter.hasAnyFilter)
               _ActiveFilterChips(
@@ -285,6 +292,7 @@ class _TransactionHistoryScreenState
                 groups,
                 filter.hasAnyFilter,
                 bottom,
+                isMasked,
               ),
             ),
           ],
@@ -300,6 +308,7 @@ class _TransactionHistoryScreenState
     List<List<TransactionModel>> groups,
     bool filtered,
     double bottom,
+    bool isMasked,
   ) {
     if (state.isLoading && state.transactions.isEmpty) {
       return ListView(
@@ -353,6 +362,7 @@ class _TransactionHistoryScreenState
                     spent: groups[i]
                         .where((t) => t.isExpense)
                         .fold<double>(0.0, (sum, t) => sum + t.amount),
+                    isMasked: isMasked,
                   ),
                   TransactionListCard(
                     transactions: groups[i],
@@ -361,6 +371,8 @@ class _TransactionHistoryScreenState
                       TransactionDetailScreen(transactionId: tx.id),
                     ),
                     onDelete: _delete,
+                    onQuickEdit: (tx) =>
+                        showTransactionQuickEditSheet(context, ref, tx),
                   ),
                 ],
               ),
@@ -371,6 +383,83 @@ class _TransactionHistoryScreenState
               child: Center(child: CircularProgressIndicator()),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// A row of independent quick-filter toggles above the active-filter chips.
+/// Each chip reflects the current [filter] and applies/clears exactly one
+/// filter via the existing updateFilter path, staying in sync with
+/// [_ActiveFilterChips].
+class _QuickFilterChips extends ConsumerWidget {
+  final TransactionFilter filter;
+
+  const _QuickFilterChips({required this.filter});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(transactionListProvider.notifier);
+    final categories = ref.watch(categoriesListProvider).value ?? const [];
+
+    final thisMonthActive = filter.datePeriod == 'This Month';
+    final expensesActive = filter.type == 'expense';
+    final incomeActive = filter.type == 'income';
+
+    final chips = <Widget>[
+      PillChip(
+        label: 'This month',
+        selected: thisMonthActive,
+        onTap: () => notifier.updateFilter(
+          (f) => thisMonthActive
+              ? f.copyWith(clearDatePeriod: true, clearCustomDateRange: true)
+              : f.copyWith(datePeriod: 'This Month'),
+        ),
+      ),
+      PillChip(
+        label: 'Expenses',
+        selected: expensesActive,
+        onTap: () => notifier.updateFilter(
+          (f) => expensesActive
+              ? f.copyWith(clearType: true)
+              : f.copyWith(type: 'expense'),
+        ),
+      ),
+      PillChip(
+        label: 'Income',
+        selected: incomeActive,
+        onTap: () => notifier.updateFilter(
+          (f) => incomeActive
+              ? f.copyWith(clearType: true)
+              : f.copyWith(type: 'income'),
+        ),
+      ),
+    ];
+
+    // Optionally offer the top 1-2 categories as quick toggles.
+    for (final cat in categories.take(2)) {
+      final active = filter.categoryIds.contains(cat.id);
+      chips.add(
+        PillChip(
+          label: cat.name,
+          selected: active,
+          onTap: () => notifier.updateFilter(
+            (f) => active
+                ? f.copyWith(categoryIds: const [])
+                : f.copyWith(categoryIds: [cat.id]),
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: kMinInteractiveDimension,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(18, 8, 18, 4),
+        itemCount: chips.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) => Center(child: chips[i]),
       ),
     );
   }
@@ -789,8 +878,13 @@ class _SummaryBanner extends StatelessWidget {
 class _DayHeader extends StatelessWidget {
   final String label;
   final double spent;
+  final bool isMasked;
 
-  const _DayHeader({required this.label, required this.spent});
+  const _DayHeader({
+    required this.label,
+    required this.spent,
+    this.isMasked = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -803,7 +897,7 @@ class _DayHeader extends StatelessWidget {
           Text(label, style: AppText.bodyStrong(p.ink)),
           if (spent > 0)
             Text(
-              'Spent ${CurrencyFormatter.format(spent)}',
+              'Spent ${CurrencyFormatter.format(spent, isMasked: isMasked)}',
               style: AppText.caption(p.muted),
             ),
         ],

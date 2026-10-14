@@ -90,7 +90,9 @@ class TransactionRow extends ConsumerWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    isMasked ? '••••••' : '$prefix${CurrencyFormatter.format(tx.amount)}',
+                    isMasked
+                        ? '••••••'
+                        : '$prefix${CurrencyFormatter.format(tx.amount)}',
                     style: AppText.amount(
                       p.amount(isIncome: tx.isIncome, isExpense: tx.isExpense),
                       size: 14,
@@ -107,17 +109,21 @@ class TransactionRow extends ConsumerWidget {
   }
 }
 
-/// A card of transactions. Pass [onDelete] to enable swipe-to-delete.
+/// A card of transactions. Pass [onDelete] to enable swipe-left-to-delete and
+/// [onQuickEdit] to enable swipe-right quick-edit (Transactions history only;
+/// Home leaves it null for delete-only behaviour).
 class TransactionListCard extends StatelessWidget {
   final List<TransactionModel> transactions;
   final void Function(TransactionModel tx) onTap;
   final void Function(TransactionModel tx)? onDelete;
+  final void Function(TransactionModel tx)? onQuickEdit;
 
   const TransactionListCard({
     super.key,
     required this.transactions,
     required this.onTap,
     this.onDelete,
+    this.onQuickEdit,
   });
 
   @override
@@ -143,20 +149,47 @@ class TransactionListCard extends StatelessWidget {
 
     if (onDelete == null) return row;
 
+    final deleteBackground = Container(
+      color: p.expense,
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.only(right: 22),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.delete_outline_rounded, color: Colors.white),
+          SizedBox(width: 6),
+          Text(
+            'Delete',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+
+    if (onQuickEdit == null) {
+      return Dismissible(
+        key: ValueKey(tx.id),
+        direction: DismissDirection.endToStart,
+        background: deleteBackground,
+        onDismissed: (_) => onDelete!(tx),
+        child: row,
+      );
+    }
+
     return Dismissible(
       key: ValueKey(tx.id),
-      direction: DismissDirection.endToStart,
+      direction: DismissDirection.horizontal,
       background: Container(
-        color: p.expense,
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 22),
+        color: p.primary,
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.only(left: 22),
         child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.delete_outline_rounded, color: Colors.white),
+            Icon(Icons.edit_outlined, color: Colors.white),
             SizedBox(width: 6),
             Text(
-              'Delete',
+              'Edit',
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
@@ -165,6 +198,14 @@ class TransactionListCard extends StatelessWidget {
           ],
         ),
       ),
+      secondaryBackground: deleteBackground,
+      confirmDismiss: (dir) async {
+        if (dir == DismissDirection.startToEnd) {
+          onQuickEdit!(tx);
+          return false;
+        }
+        return true;
+      },
       onDismissed: (_) => onDelete!(tx),
       child: row,
     );

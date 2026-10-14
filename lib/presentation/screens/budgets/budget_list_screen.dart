@@ -20,9 +20,9 @@ import '../../widgets/budget_row.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/fade_slide_in.dart';
 import '../../widgets/list_widgets.dart';
+import '../../widgets/pill_chips.dart';
 import '../../widgets/pressable.dart';
 import '../../widgets/section_header.dart';
-import '../../widgets/segmented_tabs.dart';
 import '../../widgets/undo_snackbar.dart';
 import 'budget_form.dart';
 
@@ -120,8 +120,14 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
         final p = ctx.palette;
         final noun = _periodNoun[budget.period] ?? 'period';
         final percent = (budget.usedRatio * 100).round();
-        final remainingDays = (budget.endDate.difference(DateTime.now()).inDays + 1).clamp(1, 365);
-        final dailyAllowance = budget.remainingAmount > 0 ? budget.remainingAmount / remainingDays : 0.0;
+        final remainingDays =
+            (budget.endDate.difference(DateTime.now()).inDays + 1).clamp(
+              1,
+              365,
+            );
+        final dailyAllowance = budget.remainingAmount > 0
+            ? budget.remainingAmount / remainingDays
+            : 0.0;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -151,7 +157,8 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
                     const SizedBox(height: 6),
                     Text(
                       '💡 Pace: ${CurrencyFormatter.format(dailyAllowance, showDecimals: false)} / day for remaining $remainingDays days',
-                      style: AppText.caption(p.primary).copyWith(fontWeight: FontWeight.w700),
+                      style: AppText.caption(p.primary)
+                          .copyWith(fontWeight: FontWeight.w700),
                     ),
                   ],
                   const SizedBox(height: 14),
@@ -269,7 +276,7 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
               const SizedBox(height: 16),
               FadeSlideIn(
                 index: 1,
-                child: SegmentedTabs(
+                child: PillChips(
                   options: const ['Weekly', 'Monthly', 'Yearly'],
                   selected: _period[0].toUpperCase() + _period.substring(1),
                   onSelected: (label) =>
@@ -286,8 +293,9 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
                   onRetry: () =>
                       ref.read(budgetListProvider.notifier).loadBudgets(),
                   builder: (budgets) {
-                    final list =
-                        budgets.where((b) => b.period == _period).toList();
+                    final list = budgets
+                        .where((b) => b.period == _period)
+                        .toList();
                     return _buildContent(p, list, budgets, noun);
                   },
                 ),
@@ -347,7 +355,10 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
                       ),
                     ),
                     TweenAnimationBuilder<double>(
-                      tween: Tween<double>(begin: 0, end: ratio.clamp(0.0, 1.0)),
+                      tween: Tween<double>(
+                        begin: 0,
+                        end: ratio.clamp(0.0, 1.0),
+                      ),
                       duration: AppMotion.slow,
                       curve: AppMotion.enter,
                       builder: (context, v, _) => SizedBox(
