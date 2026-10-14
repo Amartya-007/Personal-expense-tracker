@@ -10,6 +10,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/budget_model.dart';
+import '../../../services/analytics/budget_history.dart';
 import '../../providers/budget_providers.dart';
 import '../../providers/category_providers.dart';
 import '../../providers/settings_providers.dart';
@@ -63,6 +64,10 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
         categories: categories,
         existing: existing,
         initialPeriod: _period,
+        onFetchSuggestion: (categoryId, period) => ref.read(
+          suggestedBudgetLimitProvider((categoryId: categoryId, period: period))
+              .future,
+        ),
       ),
     );
     if (budget == null) return;
@@ -172,6 +177,7 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
                     '${dateFormat.format(budget.startDate)} – ${dateFormat.format(budget.endDate)} · $percent% used',
                     style: AppText.caption(p.muted),
                   ),
+                  _BudgetHistoryRow(budget: budget),
                 ],
               ),
             ),
@@ -410,6 +416,42 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
           style: AppText.caption(p.muted),
         ),
       ],
+    );
+  }
+}
+
+/// Compact "last ~3 periods used-%" row for the budget detail sheet, e.g.
+/// "Oct: 92% · Sep: 78% · Aug: 110%". Recomputed from existing analytics data;
+/// stays quiet (renders nothing) when there is no prior spend to show.
+class _BudgetHistoryRow extends ConsumerWidget {
+  final BudgetModel budget;
+
+  const _BudgetHistoryRow({required this.budget});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+    final historyAsync = ref.watch(
+      budgetHistoryProvider((
+        categoryId: budget.categoryId,
+        period: budget.period,
+        limit: budget.amount,
+      )),
+    );
+
+    return historyAsync.maybeWhen(
+      data: (history) {
+        final shown = history.where((h) => h.percent > 0).toList();
+        if (shown.isEmpty) return const SizedBox.shrink();
+        final text = shown
+            .map((h) => '${h.label}: ${formatUsagePercent(h.percent)}')
+            .join('  ·  ');
+        return Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.sm),
+          child: Text('History  $text', style: AppText.caption(p.muted)),
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
     );
   }
 }
