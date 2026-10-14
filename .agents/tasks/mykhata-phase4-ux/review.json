@@ -1,0 +1,41 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "severity": "info",
+      "detail": "Criterion 1 met: Accounts-management rows (accounts_management_screen.dart) now set ListRowTile.onTap -> editAccountBalance(context, ref, acc). The shared helper account_balance_actions.dart delegates to homeControllerProvider.updateAccountBalance, so the adjustment is recorded through the exact same provider path the Home hero chip uses (onEditAccount -> editAccountBalance). Home's old inline _editBalance was removed and replaced by the same helper, so there is no duplicated adjustment math and the Home chip still works.",
+      "file": "lib/presentation/screens/settings/account_balance_actions.dart"
+    },
+    {
+      "severity": "info",
+      "detail": "Criterion 2 met: _BillsDueAttentionCard is emitted on Home only when billsDue > 0, where billsDue = dueWithinDays(active recurring with nextDueDate in [startOfToday, +7d] inclusive). Tapping it AppRoutes.push(RecurringPaymentsScreen). Attention order is SMS -> bills-due -> budget-exceeded, each wrapped in its own `if (...) [...]` so the zone collapses to nothing when all are clear. The 'Upcoming recurring' section is untouched.",
+      "file": "lib/presentation/screens/home/home_screen.dart"
+    },
+    {
+      "severity": "info",
+      "detail": "Criterion 3 met: homeOverviewProvider is a plain Provider<HomeOverview> composing existing providers (accountListProvider fold, homeMonthSummaryProvider, smsQueueProvider('detected'), recurringListProvider via dueWithinDays, budgetListProvider predicate overAmount>0||usedRatio>=1.0) through the pure combineHomeOverview step. No new SQL. Hero total, attention zone, and month figures read from this one snapshot; number meanings are unchanged (monthNet = income - expense as before); _ThisMonthStrip still reads homeMonthSummaryProvider with skipLoadingOnReload so no-flicker is preserved.",
+      "file": "lib/presentation/providers/home_overview_provider.dart"
+    },
+    {
+      "severity": "info",
+      "detail": "Criterion 4 met: suggestedBudgetLimitProvider derives the limit from previous-period spend via shiftNowBack + BudgetRepository.currentWindow + AnalyticsService.getAnalytics.categoryBreakdown (existing analytics, no new SQL). The form shows an accept-or-overwrite _SuggestionHint; prefill is tap-only (_acceptSuggestion), so a value the user typed is never clobbered, and a _suggestionToken guards stale fetches. _BudgetHistoryRow renders a compact used-% history below the progress bar inside _showBudgetDetail, from budgetHistoryProvider over existing data, hidden when no prior spend. No sub-item skipped.",
+      "file": "lib/presentation/providers/budget_providers.dart"
+    },
+    {
+      "severity": "info",
+      "detail": "Criterion 5 met: no DB migration or schema change introduced. All new logic reads existing persisted fields through existing methods (getAnalytics, currentWindow, recurringListProvider, updateAccountBalance). The budget_history helper and shiftNowBack are pure date/percentage math with no DB access.",
+      "file": "lib/services/analytics/budget_history.dart"
+    },
+    {
+      "severity": "info",
+      "detail": "Criterion 6 met: Phase-3 calm preserved — new widgets reuse AppCard/AppText/AppSpacing with no new gradients or heavy shadows (bills-due card and suggestion hint use the existing single-edge-signal pattern). Navigation, bottom nav, and the FAB/speed-dial are not restructured; the only navigation added is a push to the existing RecurringPaymentsScreen.",
+      "file": "lib/presentation/screens/home/home_screen.dart"
+    },
+    {
+      "severity": "info",
+      "detail": "Criterion 7 met: `flutter analyze` reports 'No issues found!' and `flutter test` passes with 'All tests passed!' (123 tests, exit 0), including the 20 new cases across test/unit/budget_history_test.dart, test/unit/recurring_due_test.dart, and test/unit/home_overview_test.dart.",
+      "file": "test/unit/budget_history_test.dart"
+    }
+  ],
+  "summary": "APPROVED. All seven criteria hold. FEAT-001: Accounts rows expose an Adjust-balance onTap through the shared editAccountBalance helper that routes to homeControllerProvider.updateAccountBalance (same path as the Home chip, no duplicated math); the conditional bills-due attention card (pure 7-day dueWithinDays selector) sits in SMS -> bills-due -> budget-exceeded order and taps to RecurringPaymentsScreen with the Upcoming-recurring section unchanged; homeOverviewProvider composes existing providers (no new SQL) into one snapshot read by the hero total, month strip, and attention zone with number meanings unchanged and skipLoadingOnReload no-flicker preserved. FEAT-002: the suggested limit comes from previous-period spend via existing analytics as a tap-only, no-clobber hint, and the budget detail sheet shows a lightweight used-% history from existing data (no sub-item skipped). No DB migration or schema change was introduced, Phase-3 calm and navigation/FAB are intact, `flutter analyze` is clean, and `flutter test` is green (123 tests)."
+}
