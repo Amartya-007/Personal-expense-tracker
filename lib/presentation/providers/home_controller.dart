@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/utils/amount_input.dart';
 import '../../data/models/recurring_payment_model.dart';
 import 'account_providers.dart';
 import 'budget_providers.dart';
@@ -11,9 +13,18 @@ class HomeController extends StateNotifier<AsyncValue<void>> {
   HomeController(this._ref) : super(const AsyncValue.data(null));
 
   Future<bool> updateAccountBalance(String accountId, double newBalance) async {
+    // Defense-in-depth: reject a NaN/Infinite or over-cap balance even if a
+    // field is bypassed. Balances may be negative, so bound the magnitude.
+    if (newBalance.isNaN ||
+        newBalance.isInfinite ||
+        newBalance.abs() > kMaxAmount) {
+      return false;
+    }
     state = const AsyncValue.loading();
     try {
-      await _ref.read(accountListProvider.notifier).updateAccountBalanceDirect(accountId, newBalance);
+      await _ref
+          .read(accountListProvider.notifier)
+          .updateAccountBalanceDirect(accountId, newBalance);
       _ref.invalidate(accountListProvider);
       _ref.invalidate(recentTransactionsProvider);
       state = const AsyncValue.data(null);
@@ -24,7 +35,10 @@ class HomeController extends StateNotifier<AsyncValue<void>> {
     }
   }
 
-  Future<bool> processPaymentAction(RecurringPaymentModel item, String action) async {
+  Future<bool> processPaymentAction(
+    RecurringPaymentModel item,
+    String action,
+  ) async {
     state = const AsyncValue.loading();
     try {
       final repo = _ref.read(recurringPaymentRepositoryProvider);
@@ -42,6 +56,7 @@ class HomeController extends StateNotifier<AsyncValue<void>> {
   }
 }
 
-final homeControllerProvider = StateNotifierProvider<HomeController, AsyncValue<void>>((ref) {
-  return HomeController(ref);
-});
+final homeControllerProvider =
+    StateNotifierProvider<HomeController, AsyncValue<void>>((ref) {
+      return HomeController(ref);
+    });

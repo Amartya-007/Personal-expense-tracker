@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/logging/app_logger.dart';
+import '../../core/utils/amount_input.dart';
 import '../../core/utils/date_filters.dart';
 import '../../data/models/transaction_model.dart';
 import '../../data/repositories/transaction_repository.dart';
@@ -66,7 +67,9 @@ class TransactionFilter {
 
   bool get hasAdvancedFilters =>
       (type != null && type!.isNotEmpty) ||
-      (datePeriod != null && datePeriod!.isNotEmpty && datePeriod != DateFilters.all) ||
+      (datePeriod != null &&
+          datePeriod!.isNotEmpty &&
+          datePeriod != DateFilters.all) ||
       customDateRange != null ||
       minAmount != null ||
       maxAmount != null ||
@@ -85,7 +88,11 @@ class TransactionFilter {
   int get activeFilterCount {
     int count = 0;
     if (type != null && type!.isNotEmpty) count++;
-    if (datePeriod != null && datePeriod!.isNotEmpty && datePeriod != DateFilters.all) count++;
+    if (datePeriod != null &&
+        datePeriod!.isNotEmpty &&
+        datePeriod != DateFilters.all) {
+      count++;
+    }
     if (minAmount != null || maxAmount != null) count++;
     if (categoryIds.isNotEmpty) count++;
     if (tagIds.isNotEmpty) count++;
@@ -134,7 +141,9 @@ class TransactionFilter {
       searchQuery: clearSearch ? null : (searchQuery ?? this.searchQuery),
       type: clearType ? null : (type ?? this.type),
       datePeriod: clearDatePeriod ? null : (datePeriod ?? this.datePeriod),
-      customDateRange: clearCustomDateRange ? null : (customDateRange ?? this.customDateRange),
+      customDateRange: clearCustomDateRange
+          ? null
+          : (customDateRange ?? this.customDateRange),
       minAmount: clearMinAmount ? null : (minAmount ?? this.minAmount),
       maxAmount: clearMaxAmount ? null : (maxAmount ?? this.maxAmount),
       categoryIds: categoryIds ?? this.categoryIds,
@@ -174,9 +183,12 @@ class TransactionState {
   // Legacy getters for backward compatibility
   String? get searchQuery => filter.searchQuery;
   String? get type => filter.type;
-  String? get categoryId => filter.categoryIds.isNotEmpty ? filter.categoryIds.first : null;
-  String? get accountId => filter.accountIds.isNotEmpty ? filter.accountIds.first : null;
-  String? get paymentMethod => filter.paymentMethods.isNotEmpty ? filter.paymentMethods.first : null;
+  String? get categoryId =>
+      filter.categoryIds.isNotEmpty ? filter.categoryIds.first : null;
+  String? get accountId =>
+      filter.accountIds.isNotEmpty ? filter.accountIds.first : null;
+  String? get paymentMethod =>
+      filter.paymentMethods.isNotEmpty ? filter.paymentMethods.first : null;
   DateTimeRange? get dateRange => filter.effectiveDateRange;
 
   TransactionState copyWith({
@@ -205,7 +217,7 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
   final Ref _ref;
 
   TransactionListNotifier(this._repository, this._ref)
-      : super(TransactionState()) {
+    : super(TransactionState()) {
     fetchInitial();
   }
 
@@ -258,7 +270,8 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
 
       if (requestId != _requestId || !mounted) return;
       final txs = results[0] as List<TransactionModel>;
-      final summary = results[1] as ({int count, double totalExpense, double totalIncome});
+      final summary =
+          results[1] as ({int count, double totalExpense, double totalIncome});
 
       state = state.copyWith(
         transactions: txs,
@@ -380,7 +393,20 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
     _refreshDependents();
   }
 
+  /// Defense-in-depth guard so an invalid/over-cap amount can never be saved
+  /// even if a field is bypassed (e.g. SMS prefill or a future caller). The UI
+  /// already validates; this is the single save-boundary backstop.
+  void _assertValidAmount(double amount) {
+    if (amount.isNaN ||
+        amount.isInfinite ||
+        amount <= 0 ||
+        amount > kMaxAmount) {
+      throw ArgumentError.value(amount, 'amount', 'Invalid transaction amount');
+    }
+  }
+
   Future<void> createTransaction(TransactionModel tx) async {
+    _assertValidAmount(tx.amount);
     await _repository.createTransaction(tx);
     if (tx.isExpense) unawaited(BudgetAlertService.evaluate());
     await fetchInitial();
@@ -388,6 +414,7 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
   }
 
   Future<void> updateTransaction(TransactionModel tx) async {
+    _assertValidAmount(tx.amount);
     await _repository.updateTransaction(tx);
     if (tx.isExpense) unawaited(BudgetAlertService.evaluate());
     await fetchInitial();

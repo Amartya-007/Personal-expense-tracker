@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
@@ -9,7 +10,9 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_haptics.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/utils/amount_input.dart';
 import '../../../core/utils/keyboard.dart';
+import '../../../core/utils/text_sanitizer.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/account_model.dart';
@@ -109,6 +112,11 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   LocationResult? _locationResult;
   bool _isSaving = false;
   String? _suggestedCategoryName;
+
+  // Inline field errors (shown under the field, mirroring budget_form's
+  // pattern) instead of a Snackbar.
+  String? _amountError;
+  String? _descriptionError;
 
   /// Whether the optional "Add details" fields are shown. Collapsed by default
   /// for new transactions, expanded when editing. Toggling only hides widgets —
@@ -256,21 +264,20 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     if (_isSaving) return;
 
     final amountStr = _amountController.text.trim();
-    final descriptionStr = _descriptionController.text.trim();
+    final descriptionStr = TextSanitizer.singleLine(
+      _descriptionController.text,
+    );
 
-    final amount = double.tryParse(amountStr) ?? 0.0;
-    if (amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid amount.')),
-      );
+    final amtErr = AmountInput.validateAmount(amountStr, allowZero: false);
+    if (amtErr != null) {
+      setState(() => _amountError = amtErr);
       _amountFocusNode.requestFocus();
       return;
     }
+    final amount = AmountInput.parseAmount(amountStr)!;
 
     if (_type != 'transfer' && descriptionStr.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter "What\'s it for?".')),
-      );
+      setState(() => _descriptionError = 'Enter a value.');
       _descriptionFocusNode.requestFocus();
       return;
     }
@@ -344,8 +351,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           (accounts.isNotEmpty ? accounts.first.id : ''),
       destinationAccountId: _type == 'transfer' ? destination?.id : null,
       date: _selectedDate,
-      note: _noteController.text.trim().isNotEmpty
-          ? _noteController.text.trim()
+      note: TextSanitizer.multiLine(_noteController.text).isNotEmpty
+          ? TextSanitizer.multiLine(_noteController.text)
           : null,
       latitude: _locationResult?.latitude ?? widget.editTransaction?.latitude,
       longitude:
@@ -503,6 +510,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
+                inputFormatters: AmountInput.amountFormatters(),
                 textInputAction: TextInputAction.next,
                 style: TextStyle(
                   fontSize: 44,
@@ -510,6 +518,11 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   letterSpacing: -1,
                   color: amountColor,
                 ),
+                onChanged: (_) {
+                  if (_amountError != null) {
+                    setState(() => _amountError = null);
+                  }
+                },
                 decoration: InputDecoration(
                   prefixText: '₹',
                   prefixStyle: TextStyle(
@@ -524,6 +537,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                     color: mutedColor.withValues(alpha: 0.4),
                   ),
                   filled: false,
+                  errorText: _amountError,
                   border: UnderlineInputBorder(
                     borderSide: BorderSide(color: linesColor, width: 3),
                   ),
@@ -557,10 +571,18 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                                   _amountController.text.trim(),
                                 ) ??
                                 0.0;
-                            final updated = current + addAmount;
+                            // Chips must not push the running total past the
+                            // cap (they bypass the field's formatters).
+                            final updated = (current + addAmount).clamp(
+                              0.0,
+                              kMaxAmount,
+                            );
                             _amountController.text = updated.toStringAsFixed(
                               updated.truncateToDouble() == updated ? 0 : 2,
                             );
+                            if (_amountError != null) {
+                              setState(() => _amountError = null);
+                            }
                           },
                           child: Container(
                             padding: const EdgeInsets.symmetric(
@@ -640,6 +662,10 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                           controller: _descriptionController,
                           focusNode: _descriptionFocusNode,
                           textInputAction: TextInputAction.next,
+                          maxLength: 60,
+                          inputFormatters: [
+                            LengthLimitingTextInputFormatter(60),
+                          ],
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
@@ -650,9 +676,13 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                             hint: _type == 'income'
                                 ? 'Salary, freelance…'
                                 : 'Momos, charger, pen…',
-                          ),
-                          onChanged: (val) =>
-                              _onDescriptionChanged(val, categories),
+                          ).copyWith(errorText: _descriptionError),
+                          onChanged: (val) {
+                            if (_descriptionError != null) {
+                              setState(() => _descriptionError = null);
+                            }
+                            _onDescriptionChanged(val, categories);
+                          },
                         ),
                         if (_suggestedCategoryName != null &&
                             _type == 'expense')
@@ -1052,6 +1082,11 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                           const SizedBox(height: 6),
                           TextField(
                             controller: _noteController,
+                            maxLength: 500,
+                            maxLines: null,
+                            inputFormatters: [
+                              LengthLimitingTextInputFormatter(500),
+                            ],
                             style: TextStyle(fontSize: 15, color: inkColor),
                             decoration: appFieldDecoration(p, hint: 'Optional'),
                           ),

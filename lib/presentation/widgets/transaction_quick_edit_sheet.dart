@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_palette.dart';
 import '../../core/theme/app_text.dart';
+import '../../core/utils/amount_input.dart';
 import '../../data/models/category_model.dart';
 import '../../data/models/transaction_model.dart';
 import '../providers/category_providers.dart';
@@ -42,7 +43,7 @@ class _QuickEditForm extends StatefulWidget {
 class _QuickEditFormState extends State<_QuickEditForm> {
   late final TextEditingController _amountController;
   CategoryModel? _category;
-  bool _amountError = false;
+  String? _amountErrorText;
 
   @override
   void initState() {
@@ -59,11 +60,15 @@ class _QuickEditFormState extends State<_QuickEditForm> {
   }
 
   void _save() {
-    final amount = double.tryParse(_amountController.text.replaceAll(',', ''));
-    if (amount == null || amount <= 0) {
-      setState(() => _amountError = true);
+    final err = AmountInput.validateAmount(
+      _amountController.text,
+      allowZero: false,
+    );
+    if (err != null) {
+      setState(() => _amountErrorText = err);
       return;
     }
+    final amount = AmountInput.parseAmount(_amountController.text)!;
     final picked = _category;
     final updated = widget.tx.copyWith(
       categoryId: picked?.id,
@@ -111,16 +116,17 @@ class _QuickEditFormState extends State<_QuickEditForm> {
           controller: _amountController,
           autofocus: false,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: AmountInput.amountFormatters(),
           textInputAction: TextInputAction.done,
           onChanged: (_) {
-            if (_amountError) setState(() => _amountError = false);
+            if (_amountErrorText != null) {
+              setState(() => _amountErrorText = null);
+            }
           },
           onSubmitted: (_) => _save(),
           decoration: InputDecoration(
             labelText: 'Amount (₹)',
-            errorText: _amountError
-                ? 'Enter an amount greater than zero'
-                : null,
+            errorText: _amountErrorText,
           ),
         ),
         const SizedBox(height: 16),

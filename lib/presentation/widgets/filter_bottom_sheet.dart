@@ -4,6 +4,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_palette.dart';
 import '../../core/theme/app_text.dart';
+import '../../core/utils/amount_input.dart';
 import '../../core/utils/date_filters.dart';
 import '../../data/models/account_model.dart';
 import '../../data/models/category_model.dart';
@@ -67,13 +68,20 @@ class _FilterFormState extends State<_FilterForm> {
     text: widget.initialFilter.maxAmount?.toStringAsFixed(0) ?? '',
   );
 
-  late final TextEditingController _categorySearchController = TextEditingController();
+  late final TextEditingController _categorySearchController =
+      TextEditingController();
   late String _categorySearch = '';
 
-  late final Set<String> _selectedCategoryIds = {...widget.initialFilter.categoryIds};
+  late final Set<String> _selectedCategoryIds = {
+    ...widget.initialFilter.categoryIds,
+  };
   late final Set<String> _selectedTagIds = {...widget.initialFilter.tagIds};
-  late final Set<String> _selectedAccountIds = {...widget.initialFilter.accountIds};
-  late final Set<String> _selectedPayments = {...widget.initialFilter.paymentMethods};
+  late final Set<String> _selectedAccountIds = {
+    ...widget.initialFilter.accountIds,
+  };
+  late final Set<String> _selectedPayments = {
+    ...widget.initialFilter.paymentMethods,
+  };
 
   late bool? _hasReceipt = widget.initialFilter.hasReceipt;
   late bool? _isRecurring = widget.initialFilter.isRecurring;
@@ -126,11 +134,9 @@ class _FilterFormState extends State<_FilterForm> {
     final now = DateTime.now();
     final picked = await showDateRangePicker(
       context: context,
-      initialDateRange: _customRange ??
-          DateTimeRange(
-            start: DateTime(now.year, now.month, 1),
-            end: now,
-          ),
+      initialDateRange:
+          _customRange ??
+          DateTimeRange(start: DateTime(now.year, now.month, 1), end: now),
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
       builder: (context, child) {
@@ -180,10 +186,7 @@ class _FilterFormState extends State<_FilterForm> {
         decoration: BoxDecoration(
           color: selected ? p.primary : p.surface2,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? p.primary : p.border,
-            width: 1,
-          ),
+          border: Border.all(color: selected ? p.primary : p.border, width: 1),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -264,9 +267,11 @@ class _FilterFormState extends State<_FilterForm> {
     final p = context.palette;
 
     final filteredCategories = widget.categories
-        .where((c) =>
-            _categorySearch.isEmpty ||
-            c.name.toLowerCase().contains(_categorySearch.toLowerCase()))
+        .where(
+          (c) =>
+              _categorySearch.isEmpty ||
+              c.name.toLowerCase().contains(_categorySearch.toLowerCase()),
+        )
         .toList();
 
     return SingleChildScrollView(
@@ -283,32 +288,38 @@ class _FilterFormState extends State<_FilterForm> {
               _buildChip(
                 label: 'Newest First',
                 selected: _sortBy == TransactionSortOption.dateDesc,
-                onTap: () => setState(() => _sortBy = TransactionSortOption.dateDesc),
+                onTap: () =>
+                    setState(() => _sortBy = TransactionSortOption.dateDesc),
               ),
               _buildChip(
                 label: 'Oldest First',
                 selected: _sortBy == TransactionSortOption.dateAsc,
-                onTap: () => setState(() => _sortBy = TransactionSortOption.dateAsc),
+                onTap: () =>
+                    setState(() => _sortBy = TransactionSortOption.dateAsc),
               ),
               _buildChip(
                 label: 'Highest Amount',
                 selected: _sortBy == TransactionSortOption.amountDesc,
-                onTap: () => setState(() => _sortBy = TransactionSortOption.amountDesc),
+                onTap: () =>
+                    setState(() => _sortBy = TransactionSortOption.amountDesc),
               ),
               _buildChip(
                 label: 'Lowest Amount',
                 selected: _sortBy == TransactionSortOption.amountAsc,
-                onTap: () => setState(() => _sortBy = TransactionSortOption.amountAsc),
+                onTap: () =>
+                    setState(() => _sortBy = TransactionSortOption.amountAsc),
               ),
               _buildChip(
                 label: 'Title A-Z',
                 selected: _sortBy == TransactionSortOption.titleAsc,
-                onTap: () => setState(() => _sortBy = TransactionSortOption.titleAsc),
+                onTap: () =>
+                    setState(() => _sortBy = TransactionSortOption.titleAsc),
               ),
               _buildChip(
                 label: 'Title Z-A',
                 selected: _sortBy == TransactionSortOption.titleDesc,
-                onTap: () => setState(() => _sortBy = TransactionSortOption.titleDesc),
+                onTap: () =>
+                    setState(() => _sortBy = TransactionSortOption.titleDesc),
               ),
             ],
           ),
@@ -358,7 +369,11 @@ class _FilterFormState extends State<_FilterForm> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: _pickDateRange,
-                    icon: Icon(Icons.calendar_month_rounded, size: 16, color: p.primary),
+                    icon: Icon(
+                      Icons.calendar_month_rounded,
+                      size: 16,
+                      color: p.primary,
+                    ),
                     label: Text(
                       _customRange != null
                           ? '${_customRange!.start.day}/${_customRange!.start.month}/${_customRange!.start.year} - ${_customRange!.end.day}/${_customRange!.end.month}/${_customRange!.end.year}'
@@ -379,22 +394,30 @@ class _FilterFormState extends State<_FilterForm> {
             children: [
               _buildChip(
                 label: '< ₹500',
-                selected: _maxAmountController.text == '500' && _minAmountController.text.isEmpty,
+                selected:
+                    _maxAmountController.text == '500' &&
+                    _minAmountController.text.isEmpty,
                 onTap: () => _applyPresetAmount(null, 500),
               ),
               _buildChip(
                 label: '₹500 - ₹2,000',
-                selected: _minAmountController.text == '500' && _maxAmountController.text == '2000',
+                selected:
+                    _minAmountController.text == '500' &&
+                    _maxAmountController.text == '2000',
                 onTap: () => _applyPresetAmount(500, 2000),
               ),
               _buildChip(
                 label: '₹2,000 - ₹10,000',
-                selected: _minAmountController.text == '2000' && _maxAmountController.text == '10000',
+                selected:
+                    _minAmountController.text == '2000' &&
+                    _maxAmountController.text == '10000',
                 onTap: () => _applyPresetAmount(2000, 10000),
               ),
               _buildChip(
                 label: '> ₹10,000',
-                selected: _minAmountController.text == '10000' && _maxAmountController.text.isEmpty,
+                selected:
+                    _minAmountController.text == '10000' &&
+                    _maxAmountController.text.isEmpty,
                 onTap: () => _applyPresetAmount(10000, null),
               ),
             ],
@@ -405,12 +428,18 @@ class _FilterFormState extends State<_FilterForm> {
               Expanded(
                 child: TextField(
                   controller: _minAmountController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: AmountInput.amountFormatters(),
                   style: AppText.body(p.ink),
                   decoration: appFieldDecoration(p).copyWith(
                     hintText: 'Min Amount',
                     prefixText: '₹ ',
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                   ),
                 ),
               ),
@@ -418,12 +447,18 @@ class _FilterFormState extends State<_FilterForm> {
               Expanded(
                 child: TextField(
                   controller: _maxAmountController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: AmountInput.amountFormatters(),
                   style: AppText.body(p.ink),
                   decoration: appFieldDecoration(p).copyWith(
                     hintText: 'Max Amount',
                     prefixText: '₹ ',
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                   ),
                 ),
               ),
@@ -433,7 +468,11 @@ class _FilterFormState extends State<_FilterForm> {
             const SizedBox(height: 6),
             Text(
               _amountError!,
-              style: TextStyle(color: p.expense, fontSize: 12.5, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: p.expense,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
 
@@ -446,7 +485,10 @@ class _FilterFormState extends State<_FilterForm> {
             decoration: appFieldDecoration(p).copyWith(
               hintText: 'Search categories...',
               prefixIcon: Icon(Icons.search_rounded, size: 18, color: p.muted),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 10,
+              ),
             ),
           ),
           const SizedBox(height: 10),
@@ -584,35 +626,46 @@ class _FilterFormState extends State<_FilterForm> {
                 label: 'With Receipt',
                 emoji: '🧾',
                 selected: _hasReceipt == true,
-                onTap: () => setState(() => _hasReceipt = _hasReceipt == true ? null : true),
+                onTap: () => setState(
+                  () => _hasReceipt = _hasReceipt == true ? null : true,
+                ),
               ),
               _buildChip(
                 label: 'Without Receipt',
                 selected: _hasReceipt == false,
-                onTap: () => setState(() => _hasReceipt = _hasReceipt == false ? null : false),
+                onTap: () => setState(
+                  () => _hasReceipt = _hasReceipt == false ? null : false,
+                ),
               ),
               _buildChip(
                 label: 'Recurring Only',
                 emoji: '🔄',
                 selected: _isRecurring == true,
-                onTap: () => setState(() => _isRecurring = _isRecurring == true ? null : true),
+                onTap: () => setState(
+                  () => _isRecurring = _isRecurring == true ? null : true,
+                ),
               ),
               _buildChip(
                 label: 'Non-Recurring',
                 selected: _isRecurring == false,
-                onTap: () => setState(() => _isRecurring = _isRecurring == false ? null : false),
+                onTap: () => setState(
+                  () => _isRecurring = _isRecurring == false ? null : false,
+                ),
               ),
               _buildChip(
                 label: 'With Note',
                 emoji: '📝',
                 selected: _hasNote == true,
-                onTap: () => setState(() => _hasNote = _hasNote == true ? null : true),
+                onTap: () =>
+                    setState(() => _hasNote = _hasNote == true ? null : true),
               ),
               _buildChip(
                 label: 'With Location',
                 emoji: '📍',
                 selected: _hasLocation == true,
-                onTap: () => setState(() => _hasLocation = _hasLocation == true ? null : true),
+                onTap: () => setState(
+                  () => _hasLocation = _hasLocation == true ? null : true,
+                ),
               ),
             ],
           ),

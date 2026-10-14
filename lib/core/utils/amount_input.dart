@@ -47,6 +47,13 @@ class AmountInput {
     final trimmed = raw.trim().replaceAll(',', '');
     if (trimmed.isEmpty) return 'Enter a valid amount.';
 
+    // Only digits, an optional leading '-', and a single '.' are acceptable.
+    // This rejects scientific notation ('12e9'), stray symbols, etc. even if a
+    // field's formatters are bypassed (paste/save boundary).
+    if (!RegExp(r'^-?\d*\.?\d*$').hasMatch(trimmed)) {
+      return 'Enter a valid amount.';
+    }
+
     // Too many decimal places.
     final dot = trimmed.indexOf('.');
     if (dot != -1 && trimmed.length - dot - 1 > kAmountDecimals) {
@@ -71,6 +78,7 @@ class AmountInput {
   static double? parseAmount(String raw, {bool allowNegative = false}) {
     final trimmed = raw.trim().replaceAll(',', '');
     if (trimmed.isEmpty) return null;
+    if (!RegExp(r'^-?\d*\.?\d*$').hasMatch(trimmed)) return null;
     final value = double.tryParse(trimmed);
     if (value == null || value.isNaN || value.isInfinite) return null;
     if (!allowNegative && value < 0) return null;

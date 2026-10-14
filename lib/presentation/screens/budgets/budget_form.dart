@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/theme/app_text.dart';
+import '../../../core/utils/amount_input.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/budget_model.dart';
 import '../../../data/models/category_model.dart';
@@ -110,12 +111,12 @@ class _BudgetFormState extends State<BudgetForm> {
   }
 
   void _submit() {
-    final amount =
-        double.tryParse(_amount.text.trim().replaceAll(',', '')) ?? 0;
-    if (amount <= 0) {
-      setState(() => _error = 'Enter a limit greater than zero.');
+    final err = AmountInput.validateAmount(_amount.text, allowZero: false);
+    if (err != null) {
+      setState(() => _error = err);
       return;
     }
+    final amount = AmountInput.parseAmount(_amount.text)!;
     if (_hasBudget(_category, _period)) {
       setState(
         () => _error =
@@ -182,6 +183,7 @@ class _BudgetFormState extends State<BudgetForm> {
         TextField(
           controller: _amount,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: AmountInput.amountFormatters(),
           onChanged: (_) {
             if (_error != null) setState(() => _error = null);
           },
