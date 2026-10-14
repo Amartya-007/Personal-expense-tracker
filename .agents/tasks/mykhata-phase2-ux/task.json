@@ -1,7 +1,0 @@
-{
-  "task_id": "task-mykhata-phase2-ux",
-  "task_description": "Phase 2 of the MyKhata 2.0 UX redesign (branch redesign/mykhata-2.0): (1) collapse optional add-transaction fields behind an 'Add details' disclosure, (2) route SMS single-confirm through the shared add form via an optional prefill, (3) SMS batch 'Add all N high-confidence', (4) Transactions quick-filter chips + verify per-day totals, (5) swipe-right quick-edit on history rows, (6) unify Budgets/Insights time-range control styling. Reuse existing design system; no token/nav changes; all existing tests must pass. No worktree, no push.",
-  "status": "completed",
-  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003"],
-  "blocked_reason": null
-}
