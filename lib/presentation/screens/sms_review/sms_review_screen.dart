@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/navigation/app_routes.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/theme/app_haptics.dart';
 import '../../../core/theme/app_motion.dart';
@@ -12,6 +13,7 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/account_model.dart';
 import '../../../data/models/sms_review_model.dart';
 import '../../../data/models/transaction_model.dart';
+import '../add_transaction/add_transaction_screen.dart';
 import '../../providers/account_providers.dart';
 import '../../providers/sms_review_providers.dart';
 import '../../providers/settings_providers.dart';
@@ -64,7 +66,9 @@ class _SmsReviewScreenState extends ConsumerState<SmsReviewScreen>
       final count = await ref.read(smsQueueProvider(tab).notifier).scanInbox();
       ref.invalidate(smsPermissionProvider);
       messenger.showSnackBar(
-        SnackBar(content: Text('Scanned inbox. Found $count new transactions.')),
+        SnackBar(
+          content: Text('Scanned inbox. Found $count new transactions.'),
+        ),
       );
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('Scan failed: $e')));
@@ -88,10 +92,13 @@ class _SmsReviewScreenState extends ConsumerState<SmsReviewScreen>
     final parts = <String>[
       if (r.added > 0) '${r.added} added to review',
       if (r.duplicate > 0) '${r.duplicate} already there',
-      if (r.unrecognized > 0) '${r.unrecognized} not recognised as a bank message',
+      if (r.unrecognized > 0)
+        '${r.unrecognized} not recognised as a bank message',
     ];
     messenger.showSnackBar(
-      SnackBar(content: Text(parts.isEmpty ? 'Nothing to add.' : parts.join(' · '))),
+      SnackBar(
+        content: Text(parts.isEmpty ? 'Nothing to add.' : parts.join(' · ')),
+      ),
     );
     if (r.added > 0) {
       ref.read(smsQueueStatusTabProvider.notifier).state = 'detected';
@@ -224,8 +231,9 @@ class _SmsReviewScreenState extends ConsumerState<SmsReviewScreen>
                     message: activeTab == 'detected'
                         ? 'New bank messages show up here automatically. You can also scan your inbox or paste one.'
                         : 'Messages you ${activeTab == 'added' ? 'add' : 'ignore'} will be listed here.',
-                    actionLabel:
-                        activeTab == 'detected' ? 'Paste a message' : null,
+                    actionLabel: activeTab == 'detected'
+                        ? 'Paste a message'
+                        : null,
                     onAction: activeTab == 'detected' ? _showPasteSheet : null,
                   );
                 }
@@ -297,14 +305,76 @@ class _MessageList extends ConsumerWidget {
     return DateFormat('EEE, d MMM').format(date);
   }
 
+  /// Directly books one transaction per confidently-matched detected message
+  /// (never opens the form — see plan D3). Guards re-entry with
+  /// [smsBatchProcessingProvider] so taps during the run are ignored.
+  Future<void> _addAll(
+    BuildContext context,
+    WidgetRef ref,
+    List<SmsReviewModel> matched,
+    List<AccountModel> accounts,
+  ) async {
+    if (ref.read(smsBatchProcessingProvider)) return;
+    final messenger = ScaffoldMessenger.of(context);
+    ref.read(smsBatchProcessingProvider.notifier).state = true;
+    var added = 0;
+    try {
+      final txNotifier = ref.read(transactionListProvider.notifier);
+      final repo = ref.read(smsRepositoryProvider);
+      for (final sms in matched) {
+        final account = smsBestMatchAccount(sms, accounts);
+        if (account == null) continue;
+        final tx = TransactionModel(
+          id: const Uuid().v4(),
+          type: sms.isDebit ? 'expense' : 'income',
+          amount: sms.amount,
+          description: sms.merchant ?? 'SMS Transaction',
+          paymentMethod: 'UPI',
+          accountId: account.id,
+          date: sms.date,
+          source: 'sms',
+          smsMessageId: sms.smsMessageId,
+          externalReference: sms.referenceId,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        await txNotifier.createTransaction(tx);
+        await repo.updateStatus(sms.id, 'added');
+        added++;
+      }
+      // Reload the queue once, after the whole batch.
+      await ref.read(smsQueueProvider(tab).notifier).loadQueue();
+      AppHaptics.success();
+      messenger.showSnackBar(
+        SnackBar(content: Text('Added $added transactions.')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to add transactions: $e')),
+      );
+    } finally {
+      ref.read(smsBatchProcessingProvider.notifier).state = false;
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
     final isMasked = ref.watch(privacyModeProvider);
 
-    final spent = items.where((m) => m.isDebit).fold<double>(0, (a, m) => a + m.amount);
-    final received =
-        items.where((m) => !m.isDebit).fold<double>(0, (a, m) => a + m.amount);
+    final spent = items
+        .where((m) => m.isDebit)
+        .fold<double>(0, (a, m) => a + m.amount);
+    final received = items
+        .where((m) => !m.isDebit)
+        .fold<double>(0, (a, m) => a + m.amount);
+
+    final accounts =
+        ref.watch(accountListProvider).value ?? const <AccountModel>[];
+    final matched = tab == 'detected'
+        ? items.where((m) => smsBestMatchAccount(m, accounts) != null).toList()
+        : const <SmsReviewModel>[];
+    final processing = ref.watch(smsBatchProcessingProvider);
 
     final children = <Widget>[];
     if (tab == 'detected') {
@@ -312,32 +382,54 @@ class _MessageList extends ConsumerWidget {
         FadeSlideIn(
           child: AppCard(
             padding: const EdgeInsets.all(16),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('TO REVIEW', style: AppText.overline(p.muted)),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${items.length} ${items.length == 1 ? 'message' : 'messages'}',
-                        style: AppText.title(p.ink),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('TO REVIEW', style: AppText.overline(p.muted)),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${items.length} ${items.length == 1 ? 'message' : 'messages'}',
+                            style: AppText.title(p.ink),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
+                    _Total(
+                      label: 'Spent',
+                      value: CurrencyFormatter.format(
+                        spent,
+                        isMasked: isMasked,
+                      ),
+                      color: p.expense,
+                    ),
+                    const SizedBox(width: 18),
+                    _Total(
+                      label: 'Received',
+                      value: CurrencyFormatter.format(
+                        received,
+                        isMasked: isMasked,
+                      ),
+                      color: p.income,
+                    ),
+                  ],
+                ),
+                if (matched.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: PrimaryButton(
+                      label: 'Add all ${matched.length}',
+                      loading: processing,
+                      onPressed: () => _addAll(context, ref, matched, accounts),
+                    ),
                   ),
-                ),
-                _Total(
-                  label: 'Spent',
-                  value: CurrencyFormatter.format(spent, isMasked: isMasked),
-                  color: p.expense,
-                ),
-                const SizedBox(width: 18),
-                _Total(
-                  label: 'Received',
-                  value: CurrencyFormatter.format(received, isMasked: isMasked),
-                  color: p.income,
-                ),
+                ],
               ],
             ),
           ),
@@ -414,18 +506,10 @@ class _SmsCardState extends ConsumerState<_SmsCard> {
   SmsReviewModel get sms => widget.sms;
 
   /// Best-effort match of the SMS bank to one of the user's accounts, so
-  /// money isn't always booked against the first account.
-  AccountModel? _match(List<AccountModel> accounts) {
-    final bank = (sms.bankName ?? '').toLowerCase().trim();
-    if (bank.isEmpty) return null;
-    for (final a in accounts) {
-      final name = a.name.toLowerCase();
-      if (name.contains(bank) || (name.length >= 3 && bank.contains(name))) {
-        return a;
-      }
-    }
-    return null;
-  }
+  /// money isn't always booked against the first account. Delegates to the
+  /// shared [smsBestMatchAccount] so the card and the batch action agree.
+  AccountModel? _match(List<AccountModel> accounts) =>
+      smsBestMatchAccount(sms, accounts);
 
   Future<void> _setStatus(String status) async {
     try {
@@ -436,8 +520,8 @@ class _SmsCardState extends ConsumerState<_SmsCard> {
   }
 
   Future<void> _confirm(AccountModel? account) async {
-    // A second tap while the first is still saving used to create the same
-    // transaction twice.
+    // A second tap while the first is still opening the form used to push it
+    // twice.
     if (_busy) return;
     final messenger = ScaffoldMessenger.of(context);
     if (account == null) {
@@ -449,31 +533,30 @@ class _SmsCardState extends ConsumerState<_SmsCard> {
       return;
     }
     setState(() => _busy = true);
-    final tx = TransactionModel(
-      id: const Uuid().v4(),
-      type: sms.isDebit ? 'expense' : 'income',
-      amount: sms.amount,
-      description: sms.merchant ?? 'SMS Transaction',
-      paymentMethod: 'UPI',
-      accountId: account.id,
-      date: sms.date,
-      source: 'sms',
-      smsMessageId: sms.smsMessageId,
-      externalReference: sms.referenceId,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
     try {
-      await ref.read(transactionListProvider.notifier).createTransaction(tx);
-      await ref
-          .read(smsQueueProvider(widget.tab).notifier)
-          .updateStatus(sms.id, 'added');
-      AppHaptics.success();
-      messenger.showSnackBar(SnackBar(content: Text('Added to ${account.name}.')));
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Failed to add transaction: $e')),
+      // Route the single confirm through the shared add form so the user can
+      // review/edit before saving. The SMS is only marked 'added' once the
+      // form reports a successful save (pop with a truthy result).
+      final saved = await AppRoutes.pushModal<bool>(
+        context,
+        AddTransactionScreen(
+          smsPrefill: SmsPrefill(
+            type: sms.isDebit ? 'expense' : 'income',
+            amount: sms.amount,
+            description: sms.merchant,
+            paymentMethod: 'UPI',
+            date: sms.date,
+            accountId: account.id,
+            smsMessageId: sms.smsMessageId,
+            externalReference: sms.referenceId,
+          ),
+        ),
       );
+      if (saved == true) {
+        await ref
+            .read(smsQueueProvider(widget.tab).notifier)
+            .updateStatus(sms.id, 'added');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -557,9 +640,8 @@ class _SmsCardState extends ConsumerState<_SmsCard> {
                 children: [
                   Text(
                     _showOriginal ? 'Hide message' : 'View original message',
-                    style: AppText.caption(p.primary).copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: AppText.caption(p.primary)
+                        .copyWith(fontWeight: FontWeight.w700),
                   ),
                   Icon(
                     _showOriginal
