@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mykhata/core/database/database_helper.dart';
 import 'package:mykhata/data/models/account_model.dart';
@@ -19,7 +18,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 ///  * the background receiver and the inbox scan give the same SMS different
 ///    ids, so an id check alone could not catch it.
 
-class _TempIO extends IOOverrides {
+base class _TempIO extends IOOverrides {
   final Directory dir;
   _TempIO(this.dir);
 
@@ -31,7 +30,8 @@ final _t0 = DateTime(2026, 3, 10, 14, 30);
 
 SmsReviewModel _sms(
   String id, {
-  String body = 'Rs 250.00 debited from A/c XX1234 at CAFE on 10-03-26. Avl bal 9000',
+  String body =
+      'Rs 250.00 debited from A/c XX1234 at CAFE on 10-03-26. Avl bal 9000',
   double amount = 250,
   String direction = 'debit',
   String? messageId,
@@ -99,7 +99,9 @@ void main() {
 
   Future<int> queueSize() async {
     final db = await DatabaseHelper.instance.database;
-    final rows = await db.rawQuery('SELECT COUNT(*) AS n FROM sms_review_queue');
+    final rows = await db.rawQuery(
+      'SELECT COUNT(*) AS n FROM sms_review_queue',
+    );
     return rows.first['n'] as int;
   }
 
@@ -128,34 +130,34 @@ void main() {
   group('Same message must be queued once', () {
     test('same id twice', () async {
       expect(await repo.addToQueueIfNew(_sms('1', messageId: 'm1')), isTrue);
-      expect(
-        await repo.addToQueueIfNew(_sms('2', messageId: 'm1')),
-        isFalse,
-      );
+      expect(await repo.addToQueueIfNew(_sms('2', messageId: 'm1')), isFalse);
       expect(await queueSize(), 1);
     });
 
-    test('background receiver and inbox scan: different ids, same text',
-        () async {
-      // Background receiver: hashed id, text as delivered.
-      expect(
-        await repo.addToQueueIfNew(_sms('1', messageId: 'native-hash-9f3a')),
-        isTrue,
-      );
-      // Inbox scan: Android row id, same text with different spacing/case.
-      expect(
-        await repo.addToQueueIfNew(
-          _sms(
-            '2',
-            messageId: '4821',
-            body: 'RS 250.00  debited from a/c xx1234 at cafe on 10-03-26.\n'
-                'Avl bal 9000',
+    test(
+      'background receiver and inbox scan: different ids, same text',
+      () async {
+        // Background receiver: hashed id, text as delivered.
+        expect(
+          await repo.addToQueueIfNew(_sms('1', messageId: 'native-hash-9f3a')),
+          isTrue,
+        );
+        // Inbox scan: Android row id, same text with different spacing/case.
+        expect(
+          await repo.addToQueueIfNew(
+            _sms(
+              '2',
+              messageId: '4821',
+              body:
+                  'RS 250.00  debited from a/c xx1234 at cafe on 10-03-26.\n'
+                  'Avl bal 9000',
+            ),
           ),
-        ),
-        isFalse,
-      );
-      expect(await queueSize(), 1);
-    });
+          isFalse,
+        );
+        expect(await queueSize(), 1);
+      },
+    );
 
     test('five callers racing with the same message insert it once', () async {
       final results = await Future.wait([
@@ -203,7 +205,12 @@ void main() {
     test('a refund may reuse the payment reference', () async {
       expect(
         await repo.addToQueueIfNew(
-          _sms('1', messageId: 'a', ref: 'REF9', body: 'Rs 500 debited. Ref REF9'),
+          _sms(
+            '1',
+            messageId: 'a',
+            ref: 'REF9',
+            body: 'Rs 500 debited. Ref REF9',
+          ),
         ),
         isTrue,
       );
@@ -226,13 +233,23 @@ void main() {
     test('same bank reference and direction is the same payment', () async {
       expect(
         await repo.addToQueueIfNew(
-          _sms('1', messageId: 'a', ref: 'REF7', body: 'Bank alert: Rs 250 debited, ref REF7'),
+          _sms(
+            '1',
+            messageId: 'a',
+            ref: 'REF7',
+            body: 'Bank alert: Rs 250 debited, ref REF7',
+          ),
         ),
         isTrue,
       );
       expect(
         await repo.addToQueueIfNew(
-          _sms('2', messageId: 'b', ref: 'REF7', body: 'UPI: paid Rs 250 to CAFE, ref REF7'),
+          _sms(
+            '2',
+            messageId: 'b',
+            ref: 'REF7',
+            body: 'UPI: paid Rs 250 to CAFE, ref REF7',
+          ),
         ),
         isFalse,
       );
@@ -240,52 +257,65 @@ void main() {
   });
 
   group('Transactions the person already has', () {
-    test('a manual expense of the same amount at the same time is skipped',
-        () async {
-      await addTransaction(id: 'm', type: 'expense', amount: 250);
-      expect(await repo.addToQueueIfNew(_sms('1', messageId: 'a')), isFalse);
-    });
+    test(
+      'a manual expense of the same amount at the same time is skipped',
+      () async {
+        await addTransaction(id: 'm', type: 'expense', amount: 250);
+        expect(await repo.addToQueueIfNew(_sms('1', messageId: 'a')), isFalse);
+      },
+    );
 
-    test('a manual expense does not hide a refund of the same amount',
-        () async {
-      await addTransaction(id: 'm', type: 'expense', amount: 250);
-      expect(
-        await repo.addToQueueIfNew(
-          _sms('1', messageId: 'a', direction: 'credit', body: 'Rs 250 credited'),
-        ),
-        isTrue,
-      );
-    });
+    test(
+      'a manual expense does not hide a refund of the same amount',
+      () async {
+        await addTransaction(id: 'm', type: 'expense', amount: 250);
+        expect(
+          await repo.addToQueueIfNew(
+            _sms(
+              '1',
+              messageId: 'a',
+              direction: 'credit',
+              body: 'Rs 250 credited',
+            ),
+          ),
+          isTrue,
+        );
+      },
+    );
 
-    test('an SMS-sourced transaction does not hide a different payment',
-        () async {
-      await addTransaction(
-        id: 'from-sms',
-        type: 'expense',
-        amount: 250,
-        smsMessageId: 'earlier-sms',
-      );
-      expect(
-        await repo.addToQueueIfNew(
-          _sms('1', messageId: 'a', body: 'Rs 250 debited at another shop'),
-        ),
-        isTrue,
-      );
-    });
+    test(
+      'an SMS-sourced transaction does not hide a different payment',
+      () async {
+        await addTransaction(
+          id: 'from-sms',
+          type: 'expense',
+          amount: 250,
+          smsMessageId: 'earlier-sms',
+        );
+        expect(
+          await repo.addToQueueIfNew(
+            _sms('1', messageId: 'a', body: 'Rs 250 debited at another shop'),
+          ),
+          isTrue,
+        );
+      },
+    );
 
-    test('a message that already became a transaction is not queued again',
-        () async {
-      await addTransaction(
-        id: 'from-sms',
-        type: 'expense',
-        amount: 250,
-        smsMessageId: 'same-sms',
-      );
-      expect(
-        await repo.addToQueueIfNew(_sms('1', messageId: 'same-sms')),
-        isFalse,
-      );
-    });
+    test(
+      'a message that already became a transaction is not queued again',
+      () async {
+        await addTransaction(
+          id: 'from-sms',
+          type: 'expense',
+          amount: 250,
+          smsMessageId: 'same-sms',
+        );
+        expect(
+          await repo.addToQueueIfNew(_sms('1', messageId: 'same-sms')),
+          isFalse,
+        );
+      },
+    );
   });
 
   group('Copies queued before the fix', () {
@@ -294,7 +324,9 @@ void main() {
       // Written straight to the table, as the old code did.
       for (var i = 0; i < 3; i++) {
         final row = _sms('dup$i', messageId: 'x$i').toMap();
-        row['created_at'] = _t0.add(Duration(seconds: i)).millisecondsSinceEpoch;
+        row['created_at'] = _t0
+            .add(Duration(seconds: i))
+            .millisecondsSinceEpoch;
         await db.insert('sms_review_queue', row);
       }
       final other = _sms('other', body: 'Rs 99 debited at ANOTHER', amount: 99);

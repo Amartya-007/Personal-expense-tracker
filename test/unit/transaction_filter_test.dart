@@ -8,7 +8,6 @@ import 'package:mykhata/data/models/transaction_model.dart';
 import 'package:mykhata/data/repositories/transaction_repository.dart';
 import 'package:mykhata/presentation/providers/transaction_providers.dart';
 import 'package:path/path.dart' as p;
-import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
