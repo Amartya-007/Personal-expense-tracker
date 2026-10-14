@@ -65,7 +65,8 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
     final readable = BackupService.describeSavedLocation(savedPath);
     // Android often reports an internal document id (like "/document/msf:123")
     // that means nothing to a person: only show a path when it is a real one.
-    final isRealPath = readable.startsWith('Internal storage/') ||
+    final isRealPath =
+        readable.startsWith('Internal storage/') ||
         readable.startsWith('/storage/') ||
         readable.startsWith('/sdcard');
     final where = isRealPath
@@ -89,30 +90,29 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
   }
 
   Future<void> _createBackup() => _run(() async {
-        // Opens Android's "save file" dialog so the backup lands somewhere
-        // the user can find it (e.g. Downloads), not in private app storage.
-        final savedPath = await _backupService.exportBackupForUser();
-        if (savedPath == null) {
-          _toast('Backup cancelled. Nothing was saved.');
-          return;
-        }
-        _announceSaved('Backup', savedPath);
-      }, 'Backup failed');
+    // Opens Android's "save file" dialog so the backup lands somewhere
+    // the user can find it (e.g. Downloads), not in private app storage.
+    final savedPath = await _backupService.exportBackupForUser();
+    if (savedPath == null) {
+      _toast('Backup cancelled. Nothing was saved.');
+      return;
+    }
+    _announceSaved('Backup', savedPath);
+  }, 'Backup failed');
 
   Future<void> _restoreBackup() async {
-    final result = await FilePicker.platform.pickFiles(
+    final picked = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['zip'],
     );
-    final path = result?.files.single.path;
+    final path = picked?.path;
     if (path == null || !mounted) return;
 
     // Restoring replaces everything, so never do it without asking.
     final ok = await confirmDestructive(
       context,
       title: 'Replace all data?',
-      message:
-          'Restoring this backup replaces the transactions, accounts and receipts currently in MyKhata. This cannot be undone.',
+      message: 'Restoring this backup replaces the transactions, accounts and receipts currently in MyKhata. This cannot be undone.',
       confirmLabel: 'Restore',
     );
     if (!ok) return;
@@ -125,35 +125,37 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
         await refreshAllAppData(ref);
         _toast('Backup restored successfully.');
       } else {
-        _toast('Restore failed. The file may be damaged or not a MyKhata backup.');
+        _toast(
+          'Restore failed. The file may be damaged or not a MyKhata backup.',
+        );
       }
     }, 'Restore failed');
   }
 
   Future<void> _exportCsv() => _run(() async {
-        final savedPath = await _exportService.exportCsvForUser();
-        if (savedPath == null) {
-          _toast('Export cancelled. Nothing was saved.');
-          return;
-        }
-        _announceSaved('CSV', savedPath);
-      }, 'Export failed');
+    final savedPath = await _exportService.exportCsvForUser();
+    if (savedPath == null) {
+      _toast('Export cancelled. Nothing was saved.');
+      return;
+    }
+    _announceSaved('CSV', savedPath);
+  }, 'Export failed');
 
   Future<void> _exportPdf() => _run(() async {
-        final savedPath = await _exportService.exportPdfForUser();
-        if (savedPath == null) {
-          _toast('Export cancelled. Nothing was saved.');
-          return;
-        }
-        _announceSaved('PDF report', savedPath);
-      }, 'PDF export failed');
+    final savedPath = await _exportService.exportPdfForUser();
+    if (savedPath == null) {
+      _toast('Export cancelled. Nothing was saved.');
+      return;
+    }
+    _announceSaved('PDF report', savedPath);
+  }, 'PDF export failed');
 
   Future<void> _importCsv() async {
-    final result = await FilePicker.platform.pickFiles(
+    final picked = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['csv'],
     );
-    final path = result?.files.single.path;
+    final path = picked?.path;
     if (path == null || !mounted) return;
 
     setState(() => _busy = true);
@@ -286,7 +288,8 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
                       ListRowTile(
                         emoji: '📥',
                         title: 'Import transactions from CSV',
-                        subtitle: 'You will see a preview before anything is added',
+                        subtitle:
+                            'You will see a preview before anything is added',
                         onTap: _importCsv,
                       ),
                     ],
@@ -312,14 +315,14 @@ class _ImportPreview extends StatelessWidget {
     final ready = preview.validTransactions.length;
 
     Widget stat(String label, int value, Color color) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Row(
-            children: [
-              Expanded(child: Text(label, style: AppText.body(p.ink))),
-              Text('$value', style: AppText.bodyStrong(color)),
-            ],
-          ),
-        );
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: AppText.body(p.ink))),
+          Text('$value', style: AppText.bodyStrong(color)),
+        ],
+      ),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -343,7 +346,9 @@ class _ImportPreview extends StatelessWidget {
         const SizedBox(height: 18),
         ElevatedButton(
           onPressed: ready == 0 ? null : () => Navigator.pop(context, true),
-          child: Text(ready == 0 ? 'Nothing to import' : 'Import $ready transactions'),
+          child: Text(
+            ready == 0 ? 'Nothing to import' : 'Import $ready transactions',
+          ),
         ),
         const SizedBox(height: 8),
         TextButton(

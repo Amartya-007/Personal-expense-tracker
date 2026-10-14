@@ -189,19 +189,24 @@ class BackupService {
       // Never hand the user a backup that cannot be restored.
       await verifyBackupArchive(zipFile);
 
-      final savedPath = await FilePicker.platform.saveFile(
+      final savedUri = await FilePicker.saveFile(
         dialogTitle: 'Save MyKhata backup',
         fileName: p.basename(zipFile.path),
         type: FileType.any,
         bytes: await zipFile.readAsBytes(),
       );
 
-      if (savedPath == null) {
+      if (savedUri == null) {
         await AppLogger.i('Backup export cancelled by the user');
         return null;
       }
       await AppLogger.i('Backup exported to a user-selected location');
-      return savedPath;
+      // file_picker 13 returns a Uri; keep a file-system path when the scheme
+      // is `file`, otherwise hand back the Uri string (e.g. Android SAF
+      // `content://` targets) for display.
+      return savedUri.isScheme('file')
+          ? savedUri.toFilePath()
+          : savedUri.toString();
     } catch (e, stack) {
       await AppLogger.e('Backup export failed', error: e, stackTrace: stack);
       rethrow;
@@ -267,7 +272,9 @@ class BackupService {
     final docsDir = await _getDocsDirectory();
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final tempDir = Directory(p.join(docsDir.path, 'restore_temp_$timestamp'));
-    final safetyDir = Directory(p.join(docsDir.path, 'restore_safety_$timestamp'));
+    final safetyDir = Directory(
+      p.join(docsDir.path, 'restore_safety_$timestamp'),
+    );
 
     try {
       if (await tempDir.exists()) await tempDir.delete(recursive: true);
@@ -294,7 +301,9 @@ class BackupService {
       // Stage 2: Validate manifest and staged DB checksum
       final manifestFile = File(p.join(tempDir.path, 'manifest.json'));
       if (!await manifestFile.exists()) {
-        await AppLogger.w('Restore rejected: manifest.json missing in backup archive.');
+        await AppLogger.w(
+          'Restore rejected: manifest.json missing in backup archive.',
+        );
         return false;
       }
 
@@ -303,7 +312,9 @@ class BackupService {
 
       final stagedDbFile = File(p.join(tempDir.path, AppConstants.dbFileName));
       if (!await stagedDbFile.exists()) {
-        await AppLogger.w('Restore rejected: ${AppConstants.dbFileName} missing in backup package.');
+        await AppLogger.w(
+          'Restore rejected: ${AppConstants.dbFileName} missing in backup package.',
+        );
         return false;
       }
 
@@ -325,14 +336,18 @@ class BackupService {
         final checkRes = await testDb.rawQuery('PRAGMA quick_check');
         if (checkRes.isEmpty || checkRes.first.values.first != 'ok') {
           await testDb.close();
-          await AppLogger.w('Restore rejected: SQLite PRAGMA quick_check failed.');
+          await AppLogger.w(
+            'Restore rejected: SQLite PRAGMA quick_check failed.',
+          );
           return false;
         }
         await testDb.close();
         testDb = null;
       } catch (e) {
         if (testDb != null && testDb.isOpen) await testDb.close();
-        await AppLogger.w('Restore rejected: Staged DB integrity check failed: $e');
+        await AppLogger.w(
+          'Restore rejected: Staged DB integrity check failed: $e',
+        );
         return false;
       }
 
@@ -351,12 +366,16 @@ class BackupService {
 
         final activeDbFile = File(activeDbPath);
         if (await activeDbFile.exists()) {
-          await activeDbFile.copy(p.join(safetyDir.path, AppConstants.dbFileName));
+          await activeDbFile.copy(
+            p.join(safetyDir.path, AppConstants.dbFileName),
+          );
         }
 
         final activeReceiptsDir = Directory(p.join(docsDir.path, 'receipts'));
         if (await activeReceiptsDir.exists()) {
-          final safetyReceiptsDir = Directory(p.join(safetyDir.path, 'receipts'));
+          final safetyReceiptsDir = Directory(
+            p.join(safetyDir.path, 'receipts'),
+          );
           await safetyReceiptsDir.create(recursive: true);
           await for (final entity in activeReceiptsDir.list(recursive: true)) {
             if (entity is File) {
@@ -401,7 +420,10 @@ class BackupService {
           }
           await stagedDbFile.copy(activeDbPath);
         } catch (_) {
-          await activeFile.writeAsBytes(await stagedDbFile.readAsBytes(), flush: true);
+          await activeFile.writeAsBytes(
+            await stagedDbFile.readAsBytes(),
+            flush: true,
+          );
         }
 
         // Replace receipts
@@ -412,7 +434,10 @@ class BackupService {
           }
           await for (final entity in stagedReceipts.list(recursive: true)) {
             if (entity is File) {
-              final relativePath = p.relative(entity.path, from: stagedReceipts.path);
+              final relativePath = p.relative(
+                entity.path,
+                from: stagedReceipts.path,
+              );
               final targetPath = p.join(activeReceiptsDir.path, relativePath);
               final targetFile = File(targetPath);
               await targetFile.parent.create(recursive: true);
@@ -429,28 +454,47 @@ class BackupService {
         }
       }
 
-      await AppLogger.i('Successfully restored full backup package from ${zipFile.path}');
+      await AppLogger.i(
+        'Successfully restored full backup package from ${zipFile.path}',
+      );
       return true;
     } catch (e, stack) {
-      await AppLogger.e('Backup restore failed, attempting rollback', error: e, stackTrace: stack);
+      await AppLogger.e(
+        'Backup restore failed, attempting rollback',
+        error: e,
+        stackTrace: stack,
+      );
       // Rollback from safety backup
       try {
         final docsDir = await _getDocsDirectory();
-        final safetyDbFile = File(p.join(safetyDir.path, AppConstants.dbFileName));
-        final activeDbPath = DatabaseHelper.customDatabasePath ??
+        final safetyDbFile = File(
+          p.join(safetyDir.path, AppConstants.dbFileName),
+        );
+        final activeDbPath =
+            DatabaseHelper.customDatabasePath ??
             p.join(docsDir.path, AppConstants.dbFileName);
 
         if (await safetyDbFile.exists() && activeDbPath != ':memory:') {
           await DatabaseHelper.instance.close();
-          try { await databaseFactory.deleteDatabase(activeDbPath); } catch (_) {}
+          try {
+            await databaseFactory.deleteDatabase(activeDbPath);
+          } catch (_) {}
 
           final walFile = File('$activeDbPath-wal');
           final shmFile = File('$activeDbPath-shm');
           if (await walFile.exists()) {
-            try { await walFile.delete(); } catch (_) { await walFile.writeAsBytes([], flush: true); }
+            try {
+              await walFile.delete();
+            } catch (_) {
+              await walFile.writeAsBytes([], flush: true);
+            }
           }
           if (await shmFile.exists()) {
-            try { await shmFile.delete(); } catch (_) { await shmFile.writeAsBytes([], flush: true); }
+            try {
+              await shmFile.delete();
+            } catch (_) {
+              await shmFile.writeAsBytes([], flush: true);
+            }
           }
 
           final activeFile = File(activeDbPath);
@@ -458,7 +502,10 @@ class BackupService {
             if (await activeFile.exists()) await activeFile.delete();
             await safetyDbFile.copy(activeDbPath);
           } catch (_) {
-            await activeFile.writeAsBytes(await safetyDbFile.readAsBytes(), flush: true);
+            await activeFile.writeAsBytes(
+              await safetyDbFile.readAsBytes(),
+              flush: true,
+            );
           }
 
           await DatabaseHelper.instance.database;

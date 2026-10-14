@@ -38,14 +38,25 @@ class ExportService {
   /// reach it) to the system save dialog, then removes the private copy.
   Future<String?> _saveForUser(File staged, String dialogTitle) async {
     try {
-      return await FilePicker.platform.saveFile(
+      final savedUri = await FilePicker.saveFile(
         dialogTitle: dialogTitle,
         fileName: p.basename(staged.path),
         type: FileType.any,
         bytes: await staged.readAsBytes(),
       );
+      if (savedUri == null) return null;
+      // file_picker 13 returns a Uri; keep a file-system path when the scheme
+      // is `file`, otherwise hand back the Uri string (e.g. Android SAF
+      // `content://` targets) for display.
+      return savedUri.isScheme('file')
+          ? savedUri.toFilePath()
+          : savedUri.toString();
     } catch (e, st) {
-      await AppLogger.e('Saving export for the user failed', error: e, stackTrace: st);
+      await AppLogger.e(
+        'Saving export for the user failed',
+        error: e,
+        stackTrace: st,
+      );
       rethrow;
     } finally {
       try {
@@ -61,7 +72,8 @@ class ExportService {
       final startMs = startDate?.millisecondsSinceEpoch ?? 0;
       final endMs = endDate?.millisecondsSinceEpoch ?? 9999999999999;
 
-      final rows = await db.rawQuery('''
+      final rows = await db.rawQuery(
+        '''
         SELECT 
           t.id, t.date, t.type, t.amount, t.description,
           c.name as category, t.payment_method, a.name as account,
@@ -72,7 +84,9 @@ class ExportService {
         LEFT JOIN accounts da ON t.destination_account_id = da.id
         WHERE t.deleted_at IS NULL AND t.date >= ? AND t.date <= ?
         ORDER BY t.date DESC
-      ''', [startMs, endMs]);
+      ''',
+        [startMs, endMs],
+      );
 
       final csvData = <List<dynamic>>[
         [
@@ -94,7 +108,8 @@ class ExportService {
 
       for (final r in rows) {
         final dateMs = (r['date'] as num).toInt();
-        final dateStr = DateTime.fromMillisecondsSinceEpoch(dateMs).toIso8601String();
+        final dateStr = DateTime.fromMillisecondsSinceEpoch(dateMs)
+            .toIso8601String();
         csvData.add([
           r['id'],
           dateStr,
@@ -173,7 +188,9 @@ class ExportService {
       );
 
       await file.writeAsString(jsonEncode(exportData));
-      await AppLogger.i('Exported complete JSON application data to ${file.path}');
+      await AppLogger.i(
+        'Exported complete JSON application data to ${file.path}',
+      );
       return file;
     } catch (e, st) {
       await AppLogger.e('exportToJson failed', error: e, stackTrace: st);
