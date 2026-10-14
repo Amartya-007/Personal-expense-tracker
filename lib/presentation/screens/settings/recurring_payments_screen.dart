@@ -88,9 +88,17 @@ class RecurringPaymentsScreen extends ConsumerWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              CurrencyFormatter.format(r.amount),
-              style: AppText.bodyStrong(p.expense),
+            // Let a large (e.g. crore) amount scale down within the capped
+            // trailing width instead of overflowing beside the delete button.
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Text(
+                  CurrencyFormatter.format(r.amount),
+                  style: AppText.bodyStrong(p.expense),
+                ),
+              ),
             ),
             IconButton(
               tooltip: 'Delete',
