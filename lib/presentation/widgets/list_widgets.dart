@@ -107,7 +107,16 @@ class ListRowTile extends StatelessWidget {
                   ],
                 ),
               ),
-              if (tail != null) ...[const SizedBox(width: 8), tail],
+              if (tail != null) ...[
+                const SizedBox(width: 8),
+                // Cap the trailing width so a wide trailing (two buttons, an
+                // amount + delete, a crore total) can't squeeze the Expanded
+                // title down to a one-character ellipsis.
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 180),
+                  child: tail,
+                ),
+              ],
             ],
           ),
         ),

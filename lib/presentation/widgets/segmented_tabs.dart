@@ -77,12 +77,23 @@ class SegmentedTabs extends StatelessWidget {
                           minHeight: kMinInteractiveDimension,
                         ),
                         alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
                         child: AnimatedDefaultTextStyle(
                           duration: AppMotion.fast,
-                          style: AppText.caption(
-                            option == selected ? p.ink : p.muted,
-                          ).copyWith(fontSize: 12.5, fontWeight: FontWeight.w700),
-                          child: Text(option),
+                          style:
+                              AppText.caption(
+                                option == selected ? p.ink : p.muted,
+                              ).copyWith(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                          // A long option ('Debit Card', 'Detected · 999')
+                          // scales down to fit its equal-width third instead of
+                          // overflowing it.
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(option, maxLines: 1),
+                          ),
                         ),
                       ),
                     ),

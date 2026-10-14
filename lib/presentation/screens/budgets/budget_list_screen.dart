@@ -144,13 +144,18 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    budget.overAmount > 0
-                        ? 'Over by ${CurrencyFormatter.format(budget.overAmount)}'
-                        : CurrencyFormatter.format(budget.remainingAmount),
-                    style: AppText.display(
-                      budget.overAmount > 0 ? p.expense : p.ink,
-                    ).copyWith(fontSize: 30),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      budget.overAmount > 0
+                          ? 'Over by ${CurrencyFormatter.format(budget.overAmount)}'
+                          : CurrencyFormatter.format(budget.remainingAmount),
+                      maxLines: 1,
+                      style: AppText.display(
+                        budget.overAmount > 0 ? p.expense : p.ink,
+                      ).copyWith(fontSize: 30),
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -384,16 +389,23 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
                       style: AppText.caption(p.muted),
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      CurrencyFormatter.format(
-                        over ? totalSpent - totalLimit : totalLeft,
-                        isMasked: isMasked,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        CurrencyFormatter.format(
+                          over ? totalSpent - totalLimit : totalLeft,
+                          isMasked: isMasked,
+                        ),
+                        maxLines: 1,
+                        style: AppText.display(over ? p.expense : p.ink),
                       ),
-                      style: AppText.display(over ? p.expense : p.ink),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'of ${CurrencyFormatter.format(totalLimit, isMasked: isMasked)} budgeted',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: AppText.caption(p.muted),
                     ),
                   ],

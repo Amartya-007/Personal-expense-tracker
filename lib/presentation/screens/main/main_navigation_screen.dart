@@ -61,9 +61,10 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen>
       vsync: this,
       duration: const Duration(milliseconds: 320),
     );
-    _fabRotation = Tween<double>(begin: 0.0, end: 135 * (math.pi / 180)).animate(
-      CurvedAnimation(parent: _fabController, curve: AppMotion.enter),
-    );
+    _fabRotation = Tween<double>(
+      begin: 0.0,
+      end: 135 * (math.pi / 180),
+    ).animate(CurvedAnimation(parent: _fabController, curve: AppMotion.enter));
     _overlayOpacity = CurvedAnimation(
       parent: _fabController,
       curve: Curves.easeInOut,
@@ -323,11 +324,7 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen>
               animation: _fabRotation,
               builder: (context, child) =>
                   Transform.rotate(angle: _fabRotation.value, child: child),
-              child: const Icon(
-                Icons.add,
-                size: 32,
-                color: Color(0xFF2A1D00),
-              ),
+              child: const Icon(Icons.add, size: 32, color: Color(0xFF2A1D00)),
             ),
           ),
         ),
@@ -613,16 +610,19 @@ class _NavButton extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 3),
+            // "Transactions" ellipsised even at normal width at fontSize 10.
+            // Scale the label down within its Expanded slot so the full word
+            // shows at normal width and shrinks gracefully at large text scale,
+            // rather than truncating.
             AnimatedDefaultTextStyle(
               duration: AppMotion.fast,
               style: AppText.caption(color).copyWith(
                 fontSize: 10,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
               ),
-              child: Text(
-                item.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(item.title, maxLines: 1),
               ),
             ),
           ],
