@@ -25,7 +25,6 @@ import '../../widgets/skeleton.dart';
 import '../../widgets/transaction_row.dart';
 import '../../widgets/undo_snackbar.dart';
 import '../add_transaction/add_transaction_screen.dart';
-import '../settings/recently_deleted_screen.dart';
 import 'transaction_detail_screen.dart';
 
 class TransactionHistoryScreen extends ConsumerStatefulWidget {
@@ -154,25 +153,11 @@ class _TransactionHistoryScreenState
         bottom: false,
         child: Column(
           children: [
-            // Title and shortcut to Recently deleted
+            // Title (Recently deleted lives in Settings → Data).
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Transactions', style: AppText.display(p.ink)),
-                  Pressable(
-                    onTap: () =>
-                        AppRoutes.push(context, const RecentlyDeletedScreen()),
-                    child: Semantics(
-                      button: true,
-                      label: 'Recently deleted',
-                      child: _SquareButton(
-                        child: const Text('🗑', style: TextStyle(fontSize: 18)),
-                      ),
-                    ),
-                  ),
-                ],
+                children: [Text('Transactions', style: AppText.display(p.ink))],
               ),
             ),
 
@@ -197,7 +182,8 @@ class _TransactionHistoryScreenState
                           textInputAction: TextInputAction.search,
                           style: AppText.body(p.ink),
                           decoration: InputDecoration(
-                            hintText: 'Search merchant, note, amount, category...',
+                            hintText:
+                                'Search merchant, note, amount, category...',
                             filled: false,
                             border: InputBorder.none,
                             enabledBorder: InputBorder.none,
@@ -213,7 +199,10 @@ class _TransactionHistoryScreenState
                             suffixIcon: value.text.isNotEmpty
                                 ? IconButton(
                                     tooltip: 'Clear search',
-                                    icon: const Icon(Icons.close_rounded, size: 18),
+                                    icon: const Icon(
+                                      Icons.close_rounded,
+                                      size: 18,
+                                    ),
                                     onPressed: _clearSearch,
                                   )
                                 : null,
@@ -233,7 +222,11 @@ class _TransactionHistoryScreenState
                         children: [
                           _SquareButton(
                             size: 52,
-                            child: Icon(Icons.tune_rounded, size: 20, color: p.ink),
+                            child: Icon(
+                              Icons.tune_rounded,
+                              size: 20,
+                              color: p.ink,
+                            ),
                           ),
                           if (activeCount > 0)
                             Positioned(
@@ -331,9 +324,9 @@ class _TransactionHistoryScreenState
         onAction: filtered
             ? _clearAll
             : () => AppRoutes.pushModal(
-                  context,
-                  const AddTransactionScreen(initialType: 'expense'),
-                ),
+                context,
+                const AddTransactionScreen(initialType: 'expense'),
+              ),
       );
     }
 
@@ -405,131 +398,156 @@ class _ActiveFilterChips extends ConsumerWidget {
 
     // Search chip
     if (filter.hasSearch) {
-      chips.add(_RemovableChip(
-        label: 'Search: "${filter.searchQuery}"',
-        onRemove: () {
-          searchController.clear();
-          ref.read(transactionListProvider.notifier).setSearchQuery(null);
-        },
-      ));
+      chips.add(
+        _RemovableChip(
+          label: 'Search: "${filter.searchQuery}"',
+          onRemove: () {
+            searchController.clear();
+            ref.read(transactionListProvider.notifier).setSearchQuery(null);
+          },
+        ),
+      );
     }
 
     // Type chip
     if (filter.type != null && filter.type!.isNotEmpty) {
       final label = filter.type![0].toUpperCase() + filter.type!.substring(1);
-      chips.add(_RemovableChip(
-        label: 'Type: $label',
-        onRemove: () {
-          ref.read(transactionListProvider.notifier).updateFilter(
-                (f) => f.copyWith(clearType: true),
-              );
-        },
-      ));
+      chips.add(
+        _RemovableChip(
+          label: 'Type: $label',
+          onRemove: () {
+            ref
+                .read(transactionListProvider.notifier)
+                .updateFilter((f) => f.copyWith(clearType: true));
+          },
+        ),
+      );
     }
 
     // Date chip
-    if (filter.datePeriod != null && filter.datePeriod!.isNotEmpty && filter.datePeriod != DateFilters.all) {
+    if (filter.datePeriod != null &&
+        filter.datePeriod!.isNotEmpty &&
+        filter.datePeriod != DateFilters.all) {
       String dateLabel = 'Date: ${filter.datePeriod}';
       if (filter.datePeriod == 'Custom' && filter.customDateRange != null) {
         final start = filter.customDateRange!.start;
         final end = filter.customDateRange!.end;
-        dateLabel = 'Date: ${start.day}/${start.month} - ${end.day}/${end.month}';
+        dateLabel =
+            'Date: ${start.day}/${start.month} - ${end.day}/${end.month}';
       }
-      chips.add(_RemovableChip(
-        label: dateLabel,
-        onRemove: () {
-          ref.read(transactionListProvider.notifier).updateFilter(
-                (f) => f.copyWith(clearDatePeriod: true, clearCustomDateRange: true),
-              );
-        },
-      ));
+      chips.add(
+        _RemovableChip(
+          label: dateLabel,
+          onRemove: () {
+            ref
+                .read(transactionListProvider.notifier)
+                .updateFilter(
+                  (f) => f.copyWith(
+                    clearDatePeriod: true,
+                    clearCustomDateRange: true,
+                  ),
+                );
+          },
+        ),
+      );
     }
 
     // Amount chip
     if (filter.minAmount != null || filter.maxAmount != null) {
       String amtLabel = 'Amount: ';
       if (filter.minAmount != null && filter.maxAmount != null) {
-        amtLabel += '₹${filter.minAmount!.toStringAsFixed(0)} - ₹${filter.maxAmount!.toStringAsFixed(0)}';
+        amtLabel +=
+            '₹${filter.minAmount!.toStringAsFixed(0)} - ₹${filter.maxAmount!.toStringAsFixed(0)}';
       } else if (filter.minAmount != null) {
         amtLabel += '> ₹${filter.minAmount!.toStringAsFixed(0)}';
       } else {
         amtLabel += '< ₹${filter.maxAmount!.toStringAsFixed(0)}';
       }
-      chips.add(_RemovableChip(
-        label: amtLabel,
-        onRemove: () {
-          ref.read(transactionListProvider.notifier).updateFilter(
-                (f) => f.copyWith(clearMinAmount: true, clearMaxAmount: true),
-              );
-        },
-      ));
+      chips.add(
+        _RemovableChip(
+          label: amtLabel,
+          onRemove: () {
+            ref
+                .read(transactionListProvider.notifier)
+                .updateFilter(
+                  (f) => f.copyWith(clearMinAmount: true, clearMaxAmount: true),
+                );
+          },
+        ),
+      );
     }
 
     // Categories chip
     if (filter.categoryIds.isNotEmpty) {
       final firstId = filter.categoryIds.first;
       final catMatch = categories.cast<CategoryModel?>().firstWhere(
-            (c) => c?.id == firstId,
-            orElse: () => null,
-          );
+        (c) => c?.id == firstId,
+        orElse: () => null,
+      );
       String name = firstId == 'uncategorized'
           ? 'Uncategorized'
           : (catMatch?.name ?? 'Category');
       if (filter.categoryIds.length > 1) {
         name += ' (+${filter.categoryIds.length - 1})';
       }
-      chips.add(_RemovableChip(
-        label: 'Category: $name',
-        onRemove: () {
-          ref.read(transactionListProvider.notifier).updateFilter(
-                (f) => f.copyWith(categoryIds: const []),
-              );
-        },
-      ));
+      chips.add(
+        _RemovableChip(
+          label: 'Category: $name',
+          onRemove: () {
+            ref
+                .read(transactionListProvider.notifier)
+                .updateFilter((f) => f.copyWith(categoryIds: const []));
+          },
+        ),
+      );
     }
 
     // Tags chip
     if (filter.tagIds.isNotEmpty) {
       final firstId = filter.tagIds.first;
       final tagMatch = tags.cast<TagModel?>().firstWhere(
-            (t) => t?.id == firstId,
-            orElse: () => null,
-          );
+        (t) => t?.id == firstId,
+        orElse: () => null,
+      );
       String name = '#${tagMatch?.name ?? 'tag'}';
       if (filter.tagIds.length > 1) {
         name += ' (+${filter.tagIds.length - 1})';
       }
-      chips.add(_RemovableChip(
-        label: 'Tag: $name',
-        onRemove: () {
-          ref.read(transactionListProvider.notifier).updateFilter(
-                (f) => f.copyWith(tagIds: const []),
-              );
-        },
-      ));
+      chips.add(
+        _RemovableChip(
+          label: 'Tag: $name',
+          onRemove: () {
+            ref
+                .read(transactionListProvider.notifier)
+                .updateFilter((f) => f.copyWith(tagIds: const []));
+          },
+        ),
+      );
     }
 
     // Accounts chip
     if (filter.accountIds.isNotEmpty) {
       final firstId = filter.accountIds.first;
       final accMatch = accounts.cast<AccountModel?>().firstWhere(
-            (a) => a?.id == firstId,
-            orElse: () => null,
-          );
+        (a) => a?.id == firstId,
+        orElse: () => null,
+      );
       String name = firstId == 'primary'
           ? 'Primary Account'
           : (accMatch?.name ?? 'Account');
       if (filter.accountIds.length > 1) {
         name += ' (+${filter.accountIds.length - 1})';
       }
-      chips.add(_RemovableChip(
-        label: 'Account: $name',
-        onRemove: () {
-          ref.read(transactionListProvider.notifier).updateFilter(
-                (f) => f.copyWith(accountIds: const []),
-              );
-        },
-      ));
+      chips.add(
+        _RemovableChip(
+          label: 'Account: $name',
+          onRemove: () {
+            ref
+                .read(transactionListProvider.notifier)
+                .updateFilter((f) => f.copyWith(accountIds: const []));
+          },
+        ),
+      );
     }
 
     // Payment methods chip
@@ -538,59 +556,69 @@ class _ActiveFilterChips extends ConsumerWidget {
       if (filter.paymentMethods.length > 1) {
         name += ' (+${filter.paymentMethods.length - 1})';
       }
-      chips.add(_RemovableChip(
-        label: 'Payment: $name',
-        onRemove: () {
-          ref.read(transactionListProvider.notifier).updateFilter(
-                (f) => f.copyWith(paymentMethods: const []),
-              );
-        },
-      ));
+      chips.add(
+        _RemovableChip(
+          label: 'Payment: $name',
+          onRemove: () {
+            ref
+                .read(transactionListProvider.notifier)
+                .updateFilter((f) => f.copyWith(paymentMethods: const []));
+          },
+        ),
+      );
     }
 
     // Additional Filter chips
     if (filter.hasReceipt != null) {
-      chips.add(_RemovableChip(
-        label: filter.hasReceipt! ? 'With Receipt' : 'Without Receipt',
-        onRemove: () {
-          ref.read(transactionListProvider.notifier).updateFilter(
-                (f) => f.copyWith(clearReceipt: true),
-              );
-        },
-      ));
+      chips.add(
+        _RemovableChip(
+          label: filter.hasReceipt! ? 'With Receipt' : 'Without Receipt',
+          onRemove: () {
+            ref
+                .read(transactionListProvider.notifier)
+                .updateFilter((f) => f.copyWith(clearReceipt: true));
+          },
+        ),
+      );
     }
 
     if (filter.isRecurring != null) {
-      chips.add(_RemovableChip(
-        label: filter.isRecurring! ? 'Recurring Only' : 'Non-Recurring',
-        onRemove: () {
-          ref.read(transactionListProvider.notifier).updateFilter(
-                (f) => f.copyWith(clearRecurring: true),
-              );
-        },
-      ));
+      chips.add(
+        _RemovableChip(
+          label: filter.isRecurring! ? 'Recurring Only' : 'Non-Recurring',
+          onRemove: () {
+            ref
+                .read(transactionListProvider.notifier)
+                .updateFilter((f) => f.copyWith(clearRecurring: true));
+          },
+        ),
+      );
     }
 
     if (filter.hasNote != null) {
-      chips.add(_RemovableChip(
-        label: 'With Note',
-        onRemove: () {
-          ref.read(transactionListProvider.notifier).updateFilter(
-                (f) => f.copyWith(clearNote: true),
-              );
-        },
-      ));
+      chips.add(
+        _RemovableChip(
+          label: 'With Note',
+          onRemove: () {
+            ref
+                .read(transactionListProvider.notifier)
+                .updateFilter((f) => f.copyWith(clearNote: true));
+          },
+        ),
+      );
     }
 
     if (filter.hasLocation != null) {
-      chips.add(_RemovableChip(
-        label: 'With Location',
-        onRemove: () {
-          ref.read(transactionListProvider.notifier).updateFilter(
-                (f) => f.copyWith(clearLocation: true),
-              );
-        },
-      ));
+      chips.add(
+        _RemovableChip(
+          label: 'With Location',
+          onRemove: () {
+            ref
+                .read(transactionListProvider.notifier)
+                .updateFilter((f) => f.copyWith(clearLocation: true));
+          },
+        ),
+      );
     }
 
     // Sort option chip
@@ -615,14 +643,18 @@ class _ActiveFilterChips extends ConsumerWidget {
         case TransactionSortOption.dateDesc:
           break;
       }
-      chips.add(_RemovableChip(
-        label: 'Sort: $sortName',
-        onRemove: () {
-          ref.read(transactionListProvider.notifier).updateFilter(
-                (f) => f.copyWith(sortBy: TransactionSortOption.dateDesc),
-              );
-        },
-      ));
+      chips.add(
+        _RemovableChip(
+          label: 'Sort: $sortName',
+          onRemove: () {
+            ref
+                .read(transactionListProvider.notifier)
+                .updateFilter(
+                  (f) => f.copyWith(sortBy: TransactionSortOption.dateDesc),
+                );
+          },
+        ),
+      );
     }
 
     if (chips.isEmpty) return const SizedBox.shrink();
@@ -642,12 +674,14 @@ class _ActiveFilterChips extends ConsumerWidget {
                 onTap: onClearAll,
                 borderRadius: BorderRadius.circular(16),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   child: Text(
                     'Clear All',
-                    style: AppText.caption(p.primary).copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: AppText.caption(p.primary)
+                        .copyWith(fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
@@ -681,7 +715,8 @@ class _RemovableChip extends StatelessWidget {
         children: [
           Text(
             label,
-            style: AppText.caption(p.primary).copyWith(fontWeight: FontWeight.w600),
+            style: AppText.caption(p.primary)
+                .copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(width: 2),
           GestureDetector(
@@ -732,14 +767,16 @@ class _SummaryBanner extends StatelessWidget {
               if (totalExpense > 0) ...[
                 Text(
                   'Exp: ${CurrencyFormatter.format(totalExpense)}',
-                  style: AppText.caption(p.expense).copyWith(fontWeight: FontWeight.w600),
+                  style: AppText.caption(p.expense)
+                      .copyWith(fontWeight: FontWeight.w600),
                 ),
                 if (totalIncome > 0) const SizedBox(width: 8),
               ],
               if (totalIncome > 0)
                 Text(
                   'Inc: ${CurrencyFormatter.format(totalIncome)}',
-                  style: AppText.caption(p.income).copyWith(fontWeight: FontWeight.w600),
+                  style: AppText.caption(p.income)
+                      .copyWith(fontWeight: FontWeight.w600),
                 ),
             ],
           ),

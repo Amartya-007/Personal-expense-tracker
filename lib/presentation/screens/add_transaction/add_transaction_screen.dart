@@ -214,7 +214,9 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     final account = _effectiveAccount(accounts);
     final destination = _effectiveDestination(accounts);
     if (_type == 'transfer') {
-      if (account == null || destination == null || account.id == destination.id) {
+      if (account == null ||
+          destination == null ||
+          account.id == destination.id) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Choose two different accounts.')),
         );
@@ -222,7 +224,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       }
     }
 
-    final categories = ref
+    final categories =
+        ref
             .read(
               _type == 'income'
                   ? incomeCategoriesProvider
@@ -237,9 +240,9 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     final categoryId = _type == 'transfer'
         ? null
         : (category?.id ??
-            (original != null && original.type.toLowerCase() == _type
-                ? original.categoryId
-                : null));
+              (original != null && original.type.toLowerCase() == _type
+                  ? original.categoryId
+                  : null));
 
     setState(() => _isSaving = true);
 
@@ -328,7 +331,9 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     final tagNames = <String>[
       for (final tag in savedTags) tag.name,
       for (final tag in _selectedTags)
-        if (!savedTags.any((s) => s.name.toLowerCase() == tag.name.toLowerCase()))
+        if (!savedTags.any(
+          (s) => s.name.toLowerCase() == tag.name.toLowerCase(),
+        ))
           tag.name,
     ];
     final categoriesAsync = ref.watch(
@@ -467,14 +472,21 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                           borderRadius: BorderRadius.circular(12),
                           onTap: () {
                             AppHaptics.tap();
-                            final current = double.tryParse(_amountController.text.trim()) ?? 0.0;
+                            final current =
+                                double.tryParse(
+                                  _amountController.text.trim(),
+                                ) ??
+                                0.0;
                             final updated = current + addAmount;
                             _amountController.text = updated.toStringAsFixed(
                               updated.truncateToDouble() == updated ? 0 : 2,
                             );
                           },
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
                             decoration: BoxDecoration(
                               color: p.surface2,
                               borderRadius: BorderRadius.circular(12),
@@ -482,9 +494,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                             ),
                             child: Text(
                               '+₹$addAmount',
-                              style: AppText.caption(p.primary).copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
+                              style: AppText.caption(p.primary)
+                                  .copyWith(fontWeight: FontWeight.w700),
                             ),
                           ),
                         ),
@@ -496,7 +507,10 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                         _amountController.clear();
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: p.surface2,
                           borderRadius: BorderRadius.circular(12),
@@ -504,9 +518,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                         ),
                         child: Text(
                           'Clear',
-                          style: AppText.caption(p.muted).copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: AppText.caption(p.muted)
+                              .copyWith(fontWeight: FontWeight.w600),
                         ),
                       ),
                     ),
@@ -552,7 +565,12 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                             fontWeight: FontWeight.w600,
                             color: inkColor,
                           ),
-                          decoration: appFieldDecoration(p, hint: _type == 'income' ? 'Salary, freelance…' : 'Momos, charger, pen…'),
+                          decoration: appFieldDecoration(
+                            p,
+                            hint: _type == 'income'
+                                ? 'Salary, freelance…'
+                                : 'Momos, charger, pen…',
+                          ),
                           onChanged: (val) =>
                               _onDescriptionChanged(val, categories),
                         ),
@@ -614,14 +632,22 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                                   },
                                   child: AnimatedContainer(
                                     duration: const Duration(milliseconds: 150),
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: _effectiveCategory(categories)?.id == cat.id
+                                      color:
+                                          _effectiveCategory(categories)?.id ==
+                                              cat.id
                                           ? p.primary
                                           : p.surface,
                                       borderRadius: BorderRadius.circular(14),
                                       border: Border.all(
-                                        color: _effectiveCategory(categories)?.id == cat.id
+                                        color:
+                                            _effectiveCategory(categories)
+                                                    ?.id ==
+                                                cat.id
                                             ? p.primary
                                             : p.border,
                                       ),
@@ -629,15 +655,23 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Text(AppColors.getCategoryEmoji(cat.name), style: const TextStyle(fontSize: 14)),
+                                        Text(
+                                          AppColors.getCategoryEmoji(cat.name),
+                                          style: const TextStyle(fontSize: 14),
+                                        ),
                                         const SizedBox(width: 6),
                                         Text(
                                           cat.name,
-                                          style: AppText.caption(
-                                            _effectiveCategory(categories)?.id == cat.id
-                                                ? p.onPrimary
-                                                : p.ink,
-                                          ).copyWith(fontWeight: FontWeight.w600),
+                                          style:
+                                              AppText.caption(
+                                                _effectiveCategory(categories)
+                                                            ?.id ==
+                                                        cat.id
+                                                    ? p.onPrimary
+                                                    : p.ink,
+                                              ).copyWith(
+                                                fontWeight: FontWeight.w600,
+                                              ),
                                         ),
                                       ],
                                     ),
@@ -731,17 +765,28 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 11),
                         decoration: BoxDecoration(
-                          color: DateUtils.isSameDay(_selectedDate, DateTime.now()) ? p.primarySoft : p.surface,
+                          color:
+                              DateUtils.isSameDay(_selectedDate, DateTime.now())
+                              ? p.primarySoft
+                              : p.surface,
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
-                            color: DateUtils.isSameDay(_selectedDate, DateTime.now()) ? p.primary : p.border,
+                            color:
+                                DateUtils.isSameDay(
+                                  _selectedDate,
+                                  DateTime.now(),
+                                )
+                                ? p.primary
+                                : p.border,
                           ),
                         ),
                         alignment: Alignment.center,
                         child: Text(
                           'Today',
                           style: AppText.caption(
-                            DateUtils.isSameDay(_selectedDate, DateTime.now()) ? p.primary : p.ink,
+                            DateUtils.isSameDay(_selectedDate, DateTime.now())
+                                ? p.primary
+                                : p.ink,
                           ).copyWith(fontWeight: FontWeight.w700),
                         ),
                       ),
@@ -753,22 +798,49 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                       borderRadius: BorderRadius.circular(14),
                       onTap: () {
                         AppHaptics.tap();
-                        setState(() => _selectedDate = DateTime.now().subtract(const Duration(days: 1)));
+                        setState(
+                          () => _selectedDate = DateTime.now().subtract(
+                            const Duration(days: 1),
+                          ),
+                        );
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 11),
                         decoration: BoxDecoration(
-                          color: DateUtils.isSameDay(_selectedDate, DateTime.now().subtract(const Duration(days: 1))) ? p.primarySoft : p.surface,
+                          color:
+                              DateUtils.isSameDay(
+                                _selectedDate,
+                                DateTime.now().subtract(
+                                  const Duration(days: 1),
+                                ),
+                              )
+                              ? p.primarySoft
+                              : p.surface,
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
-                            color: DateUtils.isSameDay(_selectedDate, DateTime.now().subtract(const Duration(days: 1))) ? p.primary : p.border,
+                            color:
+                                DateUtils.isSameDay(
+                                  _selectedDate,
+                                  DateTime.now().subtract(
+                                    const Duration(days: 1),
+                                  ),
+                                )
+                                ? p.primary
+                                : p.border,
                           ),
                         ),
                         alignment: Alignment.center,
                         child: Text(
                           'Yesterday',
                           style: AppText.caption(
-                            DateUtils.isSameDay(_selectedDate, DateTime.now().subtract(const Duration(days: 1))) ? p.primary : p.ink,
+                            DateUtils.isSameDay(
+                                  _selectedDate,
+                                  DateTime.now().subtract(
+                                    const Duration(days: 1),
+                                  ),
+                                )
+                                ? p.primary
+                                : p.ink,
                           ).copyWith(fontWeight: FontWeight.w700),
                         ),
                       ),
@@ -787,26 +859,57 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                           firstDate: DateTime(2020),
                           lastDate: DateTime.now(),
                         );
-                        if (picked != null) setState(() => _selectedDate = picked);
+                        if (picked != null) {
+                          setState(() => _selectedDate = picked);
+                        }
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 11),
                         decoration: BoxDecoration(
-                          color: (!DateUtils.isSameDay(_selectedDate, DateTime.now()) && !DateUtils.isSameDay(_selectedDate, DateTime.now().subtract(const Duration(days: 1)))) ? p.primarySoft : p.surface,
+                          color:
+                              (!DateUtils.isSameDay(
+                                    _selectedDate,
+                                    DateTime.now(),
+                                  ) &&
+                                  !DateUtils.isSameDay(
+                                    _selectedDate,
+                                    DateTime.now().subtract(
+                                      const Duration(days: 1),
+                                    ),
+                                  ))
+                              ? p.primarySoft
+                              : p.surface,
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
-                            color: (!DateUtils.isSameDay(_selectedDate, DateTime.now()) && !DateUtils.isSameDay(_selectedDate, DateTime.now().subtract(const Duration(days: 1)))) ? p.primary : p.border,
+                            color:
+                                (!DateUtils.isSameDay(
+                                      _selectedDate,
+                                      DateTime.now(),
+                                    ) &&
+                                    !DateUtils.isSameDay(
+                                      _selectedDate,
+                                      DateTime.now().subtract(
+                                        const Duration(days: 1),
+                                      ),
+                                    ))
+                                ? p.primary
+                                : p.border,
                           ),
                         ),
                         alignment: Alignment.center,
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.calendar_month_rounded, size: 14, color: p.primary),
+                            Icon(
+                              Icons.calendar_month_rounded,
+                              size: 14,
+                              color: p.primary,
+                            ),
                             const SizedBox(width: 4),
                             Text(
                               '${_selectedDate.day} ${_getMonthName(_selectedDate.month)}',
-                              style: AppText.caption(p.ink).copyWith(fontWeight: FontWeight.w600),
+                              style: AppText.caption(p.ink)
+                                  .copyWith(fontWeight: FontWeight.w600),
                             ),
                           ],
                         ),
@@ -816,8 +919,10 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                 ],
               ),
 
-              // 6. Expense-Only Sections (Note, Tags, Location, Receipts)
-              if (_type == 'expense') ...[
+              // 6. Optional details (Note, Tags, Location, Receipts) —
+              // available for every transaction type (Expense, Income,
+              // Transfer). Location is still captured automatically on save.
+              ...[
                 const SizedBox(height: 18),
                 Text(
                   'Note',
@@ -1059,9 +1164,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     return categories.isEmpty ? null : categories.first;
   }
 
-  bool _hasTag(String name) => _selectedTags.any(
-        (t) => t.name.toLowerCase() == name.toLowerCase(),
-      );
+  bool _hasTag(String name) =>
+      _selectedTags.any((t) => t.name.toLowerCase() == name.toLowerCase());
 
   /// Applies the chosen tag names. Tags the transaction already has keep
   /// their identity, a saved tag is reused (same id), and unknown names become

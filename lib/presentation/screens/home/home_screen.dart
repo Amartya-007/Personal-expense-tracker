@@ -10,6 +10,7 @@ import '../../../core/theme/app_palette.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/account_model.dart';
+import '../../../data/models/budget_model.dart';
 import '../../../data/models/recurring_payment_model.dart';
 import '../../providers/account_providers.dart';
 import '../../providers/budget_providers.dart';
@@ -18,7 +19,6 @@ import '../../providers/insights_providers.dart';
 import '../../providers/recurring_providers.dart';
 import '../../providers/sms_review_providers.dart';
 import '../../providers/transaction_providers.dart';
-import '../../widgets/budget_row.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_sheets.dart';
 import '../../widgets/async_section.dart';
@@ -238,9 +238,8 @@ class HomeScreen extends ConsumerWidget {
                         children: [
                           Text(
                             _getGreeting(),
-                            style: AppText.caption(p.muted).copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style: AppText.caption(p.muted)
+                                .copyWith(fontWeight: FontWeight.w600),
                           ),
                           const SizedBox(height: 2),
                           Text(
@@ -265,7 +264,8 @@ class HomeScreen extends ConsumerWidget {
                   value: accountsAsync,
                   skeletonHeight: 150,
                   errorLabel: 'Could not load accounts',
-                  onRetry: () => ref.read(accountListProvider.notifier).loadAccounts(),
+                  onRetry: () =>
+                      ref.read(accountListProvider.notifier).loadAccounts(),
                   builder: (accounts) => _HeroCard(
                     accounts: accounts,
                     onEditAccount: (acc) => _editBalance(context, ref, acc),
@@ -284,60 +284,30 @@ class HomeScreen extends ConsumerWidget {
                 const SizedBox(height: 14),
               ],
 
+              // 2a-ii. Budget alert: budgets surface on Home only when a limit
+              // is reached or exceeded, as a compact tappable card in the
+              // attention zone. The full list lives on the Budgets tab.
+              ...() {
+                final exceeded = (budgetsAsync.value ?? const <BudgetModel>[])
+                    .where((b) => b.overAmount > 0 || b.usedRatio >= 1.0)
+                    .toList();
+                if (exceeded.isEmpty) return const <Widget>[];
+                return <Widget>[
+                  FadeSlideIn(
+                    index: 1,
+                    child: _BudgetAlertCard(
+                      exceeded: exceeded,
+                      onTap: () => ref.read(mainTabProvider.notifier).state =
+                          _budgetsTab,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ];
+              }(),
+
               // 2b. This month at a glance (always this month, whatever range
               // Insights is showing).
-              const FadeSlideIn(
-                index: 1,
-                child: _ThisMonthStrip(),
-              ),
-              const SizedBox(height: 24),
-
-              // 3. Budgets
-              FadeSlideIn(
-                index: 2,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SectionHeader(
-                      title: 'Budgets',
-                      actionLabel: 'See all',
-                      onAction: () =>
-                          ref.read(mainTabProvider.notifier).state = _budgetsTab,
-                    ),
-                    AsyncSection(
-                      value: budgetsAsync,
-                      errorLabel: 'Could not load budgets',
-                      onRetry: () => ref.read(budgetListProvider.notifier).loadBudgets(),
-                      builder: (budgets) {
-                        if (budgets.isEmpty) {
-                          return EmptyState(
-                            compact: true,
-                            emoji: '🎯',
-                            title: 'No budgets yet',
-                            message: 'Set a limit and get warned before you cross it.',
-                            actionLabel: 'Create a budget',
-                            onAction: () => ref
-                                .read(mainTabProvider.notifier)
-                                .state = _budgetsTab,
-                          );
-                        }
-                        final shown = budgets.take(3).toList();
-                        return SettingsGroup(
-                          children: [
-                            for (final b in shown)
-                              BudgetRow(
-                                budget: b,
-                                onTap: () => ref
-                                    .read(mainTabProvider.notifier)
-                                    .state = _budgetsTab,
-                              ),
-                          ],
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
+              const FadeSlideIn(index: 1, child: _ThisMonthStrip()),
               const SizedBox(height: 24),
 
               // 4. Recent transactions
@@ -349,9 +319,8 @@ class HomeScreen extends ConsumerWidget {
                     SectionHeader(
                       title: 'Recent transactions',
                       actionLabel: 'See all',
-                      onAction: () => ref
-                          .read(mainTabProvider.notifier)
-                          .state = _transactionsTab,
+                      onAction: () => ref.read(mainTabProvider.notifier).state =
+                          _transactionsTab,
                     ),
                     AsyncSection(
                       value: recentTxsAsync,
@@ -364,11 +333,14 @@ class HomeScreen extends ConsumerWidget {
                             compact: true,
                             emoji: '🧾',
                             title: 'No transactions yet',
-                            message: 'Record your first expense to see it here.',
+                            message:
+                                'Record your first expense to see it here.',
                             actionLabel: 'Add expense',
                             onAction: () => AppRoutes.pushModal(
                               context,
-                              const AddTransactionScreen(initialType: 'expense'),
+                              const AddTransactionScreen(
+                                initialType: 'expense',
+                              ),
                             ),
                           );
                         }
@@ -514,87 +486,93 @@ class _ThisMonthStrip extends ConsumerWidget {
     final p = context.palette;
     final isMasked = ref.watch(privacyModeProvider);
 
-    return ref.watch(homeMonthSummaryProvider).when(
-      // Keep the figures on screen while they refresh.
-      skipLoadingOnReload: true,
-      loading: () => const Skeleton(height: 92, radius: 20),
-      error: (_, __) => AppCard(
-        onTap: () => ref.invalidate(homeMonthSummaryProvider),
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(Icons.refresh_rounded, color: p.muted, size: 20),
-            const SizedBox(width: 10),
-            Text(
-              "Couldn't load this month. Tap to retry.",
-              style: AppText.caption(p.muted),
+    return ref
+        .watch(homeMonthSummaryProvider)
+        .when(
+          // Keep the figures on screen while they refresh.
+          skipLoadingOnReload: true,
+          loading: () => const Skeleton(height: 92, radius: 20),
+          error: (_, __) => AppCard(
+            onTap: () => ref.invalidate(homeMonthSummaryProvider),
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Icon(Icons.refresh_rounded, color: p.muted, size: 20),
+                const SizedBox(width: 10),
+                Text(
+                  "Couldn't load this month. Tap to retry.",
+                  style: AppText.caption(p.muted),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
-      data: (data) {
-        final net = data.totalIncome - data.totalExpense;
-        final positive = net >= 0;
-        return AppCard(
-          onTap: () {
-            ref.read(selectedDateRangeProvider.notifier).state =
-                DateTimeRangeType.thisMonth;
-            ref.read(mainTabProvider.notifier).state = _insightsTab;
-          },
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text('THIS MONTH', style: AppText.overline(p.muted)),
-                  const Spacer(),
-                  Text(
-                    DateFormat('MMMM').format(DateTime.now()),
-                    style: AppText.caption(p.muted),
-                  ),
-                  Icon(Icons.chevron_right_rounded, size: 18, color: p.muted),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  _MonthFigure(
-                    icon: Icons.south_west_rounded,
-                    label: 'Income',
-                    value: CurrencyFormatter.format(
-                      data.totalIncome,
-                      isMasked: isMasked,
-                    ),
-                    color: p.income,
-                  ),
-                  _MonthFigure(
-                    icon: Icons.north_east_rounded,
-                    label: 'Spent',
-                    value: CurrencyFormatter.format(
-                      data.totalExpense,
-                      isMasked: isMasked,
-                    ),
-                    color: p.expense,
-                  ),
-                  _MonthFigure(
-                    icon: positive
-                        ? Icons.trending_up_rounded
-                        : Icons.trending_down_rounded,
-                    label: positive ? 'Saved' : 'Over by',
-                    value: CurrencyFormatter.format(
-                      net.abs(),
-                      isMasked: isMasked,
-                    ),
-                    color: positive ? p.income : p.expense,
-                  ),
-                ],
-              ),
-            ],
           ),
+          data: (data) {
+            final net = data.totalIncome - data.totalExpense;
+            final positive = net >= 0;
+            return AppCard(
+              onTap: () {
+                ref.read(selectedDateRangeProvider.notifier).state =
+                    DateTimeRangeType.thisMonth;
+                ref.read(mainTabProvider.notifier).state = _insightsTab;
+              },
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text('THIS MONTH', style: AppText.overline(p.muted)),
+                      const Spacer(),
+                      Text(
+                        DateFormat('MMMM').format(DateTime.now()),
+                        style: AppText.caption(p.muted),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 18,
+                        color: p.muted,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      _MonthFigure(
+                        icon: Icons.south_west_rounded,
+                        label: 'Income',
+                        value: CurrencyFormatter.format(
+                          data.totalIncome,
+                          isMasked: isMasked,
+                        ),
+                        color: p.income,
+                      ),
+                      _MonthFigure(
+                        icon: Icons.north_east_rounded,
+                        label: 'Spent',
+                        value: CurrencyFormatter.format(
+                          data.totalExpense,
+                          isMasked: isMasked,
+                        ),
+                        color: p.expense,
+                      ),
+                      _MonthFigure(
+                        icon: positive
+                            ? Icons.trending_up_rounded
+                            : Icons.trending_down_rounded,
+                        label: positive ? 'Saved' : 'Over by',
+                        value: CurrencyFormatter.format(
+                          net.abs(),
+                          isMasked: isMasked,
+                        ),
+                        color: positive ? p.income : p.expense,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
         );
-      },
-    );
   }
 }
 
@@ -661,10 +639,83 @@ class _Avatar extends StatelessWidget {
       alignment: Alignment.center,
       child: initial == null
           ? Icon(Icons.person_rounded, color: p.primary, size: 24)
-          : Text(
-              initial,
-              style: AppText.title(p.primary),
+          : Text(initial, style: AppText.title(p.primary)),
+    );
+  }
+}
+
+/// Shown only when at least one budget has reached or crossed its limit: a
+/// compact alert in the attention zone that jumps to the Budgets tab. Budgets
+/// are no longer previewed on Home — only flagged when they need attention.
+class _BudgetAlertCard extends ConsumerWidget {
+  final List<BudgetModel> exceeded;
+  final VoidCallback onTap;
+
+  const _BudgetAlertCard({required this.exceeded, required this.onTap});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+    final isMasked = ref.watch(privacyModeProvider);
+
+    final String title;
+    final String subtitle;
+    if (exceeded.length == 1) {
+      final b = exceeded.first;
+      final name = b.categoryName ?? 'Budget';
+      if (b.overAmount > 0) {
+        title = '$name budget exceeded';
+        subtitle =
+            'Over by ${CurrencyFormatter.format(b.overAmount, isMasked: isMasked)}';
+      } else {
+        title = '$name budget at its limit';
+        subtitle = 'Limit reached';
+      }
+    } else {
+      title = '${exceeded.length} budgets over limit';
+      subtitle = 'Tap to review your budgets';
+    }
+
+    return AppCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: p.expense.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(14),
             ),
+            alignment: Alignment.center,
+            child: const Text('🎯', style: TextStyle(fontSize: 20)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.bodyStrong(p.ink),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.caption(p.expense),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(Icons.chevron_right_rounded, size: 18, color: p.muted),
+        ],
+      ),
     );
   }
 }
@@ -719,9 +770,8 @@ class _SmsAttentionCard extends StatelessWidget {
             ),
             child: Text(
               'Review',
-              style: AppText.caption(p.primary).copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+              style: AppText.caption(p.primary)
+                  .copyWith(fontWeight: FontWeight.w800),
             ),
           ),
         ],
@@ -741,7 +791,10 @@ class _HeroCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
     final isMasked = ref.watch(privacyModeProvider);
-    final total = accounts.fold<double>(0.0, (sum, a) => sum + a.currentBalance);
+    final total = accounts.fold<double>(
+      0.0,
+      (sum, a) => sum + a.currentBalance,
+    );
 
     return AppCard(
       gradient: p.heroGradient,
@@ -788,7 +841,9 @@ class _HeroCard extends ConsumerWidget {
                     begin: Alignment.topLeft,
                     end: const Alignment(0.2, 0.1),
                   ),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.14),
+                  ),
                 ),
               ),
             ),
@@ -803,8 +858,9 @@ class _HeroCard extends ConsumerWidget {
                   children: [
                     Text(
                       'Total tracked balance',
-                      style: AppText.caption(Colors.white.withValues(alpha: 0.9))
-                          .copyWith(fontWeight: FontWeight.w600),
+                      style: AppText.caption(
+                        Colors.white.withValues(alpha: 0.9),
+                      ).copyWith(fontWeight: FontWeight.w600),
                     ),
                     Pressable(
                       onTap: () {
@@ -816,7 +872,9 @@ class _HeroCard extends ConsumerWidget {
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.2),
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.15),
+                          ),
                         ),
                         child: Icon(
                           isMasked
@@ -839,10 +897,8 @@ class _HeroCard extends ConsumerWidget {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       CurrencyFormatter.format(value, isMasked: isMasked),
-                      style: AppText.display(Colors.white).copyWith(
-                        fontSize: 36,
-                        letterSpacing: -1.0,
-                      ),
+                      style: AppText.display(Colors.white)
+                          .copyWith(fontSize: 36, letterSpacing: -1.0),
                     ),
                   ),
                 ),
@@ -858,7 +914,9 @@ class _HeroCard extends ConsumerWidget {
                             child: Pressable(
                               onTap: () => onEditAccount(acc),
                               child: Container(
-                                constraints: const BoxConstraints(minWidth: 132),
+                                constraints: const BoxConstraints(
+                                  minWidth: 132,
+                                ),
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 13,
                                   vertical: 11,
@@ -896,7 +954,10 @@ class _HeroCard extends ConsumerWidget {
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      CurrencyFormatter.format(acc.currentBalance, isMasked: isMasked),
+                                      CurrencyFormatter.format(
+                                        acc.currentBalance,
+                                        isMasked: isMasked,
+                                      ),
                                       style: AppText.amount(Colors.white),
                                     ),
                                   ],
