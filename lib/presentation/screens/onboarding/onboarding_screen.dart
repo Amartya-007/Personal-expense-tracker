@@ -57,6 +57,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   final List<AccountModel> _queuedAccounts = [];
   String? _accountError;
+  String? _balanceError;
 
   bool _notifEnabled = true;
   bool _locEnabled = true;
@@ -97,6 +98,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       _queuedAccounts.isNotEmpty ||
       _accountNameController.text.trim().isNotEmpty;
 
+  /// Balance may be left empty (= 0) but, if typed, must be a valid amount.
+  String? _validateBalance(String raw) => raw.trim().isEmpty
+      ? null
+      : AmountInput.validateAmount(raw, allowZero: true);
+
   AccountModel? _accountFromFields() {
     final name = TextSanitizer.singleLine(_accountNameController.text);
     if (name.isEmpty) return null;
@@ -122,6 +128,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   void _addAnotherAccount() {
+    final balErr = _validateBalance(_balanceController.text);
+    if (balErr != null) {
+      setState(() => _balanceError = balErr);
+      return;
+    }
     final acc = _accountFromFields();
     if (acc == null) {
       setState(() => _accountError = 'Enter an account name first.');
@@ -132,6 +143,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       _accountNameController.clear();
       _balanceController.clear();
       _accountError = null;
+      _balanceError = null;
     });
     _accountNameFocusNode.requestFocus();
   }
@@ -139,6 +151,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   void _continueFromAccount() {
     // Include whatever is typed in the fields, even if accounts are already
     // queued (it used to be dropped in that case).
+    final balErr = _validateBalance(_balanceController.text);
+    if (balErr != null) {
+      setState(() => _balanceError = balErr);
+      return;
+    }
     if (_accountNameController.text.trim().isEmpty && _queuedAccounts.isEmpty) {
       setState(() => _accountError = 'Add at least one account to continue.');
       return;
@@ -540,10 +557,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             focusNode: _accountNameFocusNode,
             textInputAction: TextInputAction.next,
             inputFormatters: [LengthLimitingTextInputFormatter(40)],
-            onChanged: (_) {
-              // Live-enable Continue and clear a stale error (mockup chk()).
+            onChanged: (v) {
+              // Live: re-enable Continue and update the message per keystroke.
               setState(() {
-                if (_accountError != null) _accountError = null;
+                _accountError =
+                    (v.trim().isEmpty && _queuedAccounts.isEmpty)
+                    ? 'Enter an account name.'
+                    : null;
               });
             },
             decoration: InputDecoration(
@@ -560,13 +580,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             controller: _balanceController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: AmountInput.amountFormatters(),
+            onChanged: (v) =>
+                setState(() => _balanceError = _validateBalance(v)),
             style: const TextStyle(
               fontFeatures: [FontFeature.tabularFigures()],
             ),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Current balance',
               prefixText: '₹ ',
               hintText: '0',
+              errorText: _balanceError,
             ),
           ),
         ),
