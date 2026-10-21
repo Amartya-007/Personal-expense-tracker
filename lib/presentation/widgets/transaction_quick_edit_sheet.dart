@@ -118,11 +118,13 @@ class _QuickEditFormState extends State<_QuickEditForm> {
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: AmountInput.amountFormatters(),
           textInputAction: TextInputAction.done,
-          onChanged: (_) {
-            if (_amountErrorText != null) {
-              setState(() => _amountErrorText = null);
-            }
-          },
+          // Live validation on every keystroke.
+          onChanged: (val) => setState(
+            () => _amountErrorText = AmountInput.validateAmount(
+              val,
+              allowZero: false,
+            ),
+          ),
           onSubmitted: (_) => _save(),
           decoration: InputDecoration(
             labelText: 'Amount (₹)',

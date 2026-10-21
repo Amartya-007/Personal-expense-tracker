@@ -277,10 +277,17 @@ class _FieldsFormState extends State<_FieldsForm> {
             textInputAction: i == widget.fields.length - 1
                 ? TextInputAction.done
                 : TextInputAction.next,
+            // Live validation: re-check this field on every keystroke so the
+            // message appears/clears immediately (no need to press Save).
             onChanged: (_) {
-              if (_errors.containsKey(i)) {
-                setState(() => _errors.remove(i));
-              }
+              final err = _validateField(i);
+              setState(() {
+                if (err == null) {
+                  _errors.remove(i);
+                } else {
+                  _errors[i] = err;
+                }
+              });
             },
             onSubmitted: (_) {
               if (i == widget.fields.length - 1) _submit();

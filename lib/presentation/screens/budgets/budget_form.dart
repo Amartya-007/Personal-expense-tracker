@@ -107,7 +107,18 @@ class _BudgetFormState extends State<BudgetForm> {
   void _acceptSuggestion(double value) {
     _amount.text = value.toStringAsFixed(0);
     _amount.selection = TextSelection.collapsed(offset: _amount.text.length);
-    if (_error != null) setState(() => _error = null);
+    setState(() => _error = _liveError(checkAmount: true));
+  }
+
+  /// Live error for the form: a duplicate category/period budget is reported
+  /// as soon as it is selected; the amount is checked on every keystroke
+  /// (only once the user has typed, so a fresh form isn't born red).
+  String? _liveError({required bool checkAmount}) {
+    if (_hasBudget(_category, _period)) {
+      return 'You already have a $_period budget for ${_category.name}.';
+    }
+    if (!checkAmount) return null;
+    return AmountInput.validateAmount(_amount.text, allowZero: false);
   }
 
   void _submit() {
@@ -156,7 +167,7 @@ class _BudgetFormState extends State<BudgetForm> {
           onSelected: (label) {
             setState(() {
               _period = label.toLowerCase();
-              _error = null;
+              _error = _liveError(checkAmount: _amount.text.isNotEmpty);
             });
             _refreshSuggestion();
           },
@@ -174,7 +185,7 @@ class _BudgetFormState extends State<BudgetForm> {
           onChanged: (c) {
             setState(() {
               _category = c;
-              _error = null;
+              _error = _liveError(checkAmount: _amount.text.isNotEmpty);
             });
             _refreshSuggestion();
           },
@@ -184,9 +195,8 @@ class _BudgetFormState extends State<BudgetForm> {
           controller: _amount,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: AmountInput.amountFormatters(),
-          onChanged: (_) {
-            if (_error != null) setState(() => _error = null);
-          },
+          onChanged: (_) =>
+              setState(() => _error = _liveError(checkAmount: true)),
           onSubmitted: (_) => _submit(),
           decoration: appFieldDecoration(
             p,

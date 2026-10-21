@@ -518,11 +518,14 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   letterSpacing: -1,
                   color: amountColor,
                 ),
-                onChanged: (_) {
-                  if (_amountError != null) {
-                    setState(() => _amountError = null);
-                  }
-                },
+                // Validate live on every keystroke (typed or pasted) so the
+                // error appears/disappears immediately, not only on Save.
+                onChanged: (val) => setState(
+                  () => _amountError = AmountInput.validateAmount(
+                    val,
+                    allowZero: false,
+                  ),
+                ),
                 decoration: InputDecoration(
                   prefixText: '₹',
                   prefixStyle: TextStyle(
@@ -678,8 +681,12 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                                 : 'Momos, charger, pen…',
                           ).copyWith(errorText: _descriptionError),
                           onChanged: (val) {
-                            if (_descriptionError != null) {
-                              setState(() => _descriptionError = null);
+                            // Live: flag an emptied/blank field right away.
+                            final err = val.trim().isEmpty
+                                ? 'Enter a value.'
+                                : null;
+                            if (err != _descriptionError) {
+                              setState(() => _descriptionError = err);
                             }
                             _onDescriptionChanged(val, categories);
                           },

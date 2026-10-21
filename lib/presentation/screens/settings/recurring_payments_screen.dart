@@ -138,7 +138,8 @@ class _RecurringFormState extends State<_RecurringForm> {
   late String _accountId = widget.accounts.first.id;
   late String _categoryId = widget.categories.first.id;
   late DateTime _firstDue = _defaultDue('monthly');
-  String? _error;
+  String? _nameError;
+  String? _amountError;
 
   @override
   void dispose() {
@@ -177,15 +178,19 @@ class _RecurringFormState extends State<_RecurringForm> {
     if (picked != null) setState(() => _firstDue = picked);
   }
 
+  String? _validateName(String raw) => TextSanitizer.singleLine(raw).isEmpty
+      ? 'Give this payment a name.'
+      : null;
+
   void _submit() {
     final name = TextSanitizer.singleLine(_name.text);
-    if (name.isEmpty) {
-      setState(() => _error = 'Give this payment a name.');
-      return;
-    }
+    final nameErr = _validateName(_name.text);
     final amtErr = AmountInput.validateAmount(_amount.text, allowZero: false);
-    if (amtErr != null) {
-      setState(() => _error = amtErr);
+    if (nameErr != null || amtErr != null) {
+      setState(() {
+        _nameError = nameErr;
+        _amountError = amtErr;
+      });
       return;
     }
     final amount = AmountInput.parseAmount(_amount.text)!;
@@ -219,19 +224,27 @@ class _RecurringFormState extends State<_RecurringForm> {
           textInputAction: TextInputAction.next,
           maxLength: 50,
           inputFormatters: [LengthLimitingTextInputFormatter(50)],
-          onChanged: (_) => setState(() => _error = null),
+          // Live validation on every keystroke.
+          onChanged: (v) => setState(() => _nameError = _validateName(v)),
           decoration: appFieldDecoration(
             p,
             hint: 'e.g. Netflix, Rent',
-          ).copyWith(labelText: 'Name'),
+          ).copyWith(labelText: 'Name', errorText: _nameError),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _amount,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: AmountInput.amountFormatters(),
-          onChanged: (_) => setState(() => _error = null),
-          decoration: appFieldDecoration(p).copyWith(labelText: 'Amount (₹)'),
+          onChanged: (v) => setState(
+            () => _amountError = AmountInput.validateAmount(
+              v,
+              allowZero: false,
+            ),
+          ),
+          decoration: appFieldDecoration(
+            p,
+          ).copyWith(labelText: 'Amount (₹)', errorText: _amountError),
         ),
         const SizedBox(height: 14),
         Text('Repeats', style: AppText.section(p.muted)),
@@ -285,10 +298,6 @@ class _RecurringFormState extends State<_RecurringForm> {
             ),
           ),
         ),
-        if (_error != null) ...[
-          const SizedBox(height: 10),
-          Text(_error!, style: AppText.caption(p.expense)),
-        ],
         const SizedBox(height: 16),
         PrimaryButton(label: 'Add payment', onPressed: _submit),
       ],

@@ -166,8 +166,10 @@ class _CategoryFormState extends State<_CategoryForm> {
           textInputAction: TextInputAction.done,
           maxLength: 30,
           inputFormatters: [LengthLimitingTextInputFormatter(30)],
-          onChanged: (_) {
-            if (_showError) setState(() => _showError = false);
+          // Live: flag a blank name immediately after the user edits it.
+          onChanged: (v) {
+            final blank = TextSanitizer.singleLine(v).isEmpty;
+            if (blank != _showError) setState(() => _showError = blank);
           },
           onSubmitted: (_) => _submit(),
           decoration: InputDecoration(
