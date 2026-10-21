@@ -20,8 +20,8 @@ import '../insights/insights_screen.dart';
 import '../settings/settings_screen.dart';
 import '../transactions/transaction_history_screen.dart';
 
-/// Tabs on which the "add transaction" speed-dial is shown.
-const Set<int> _fabTabs = {0, 1};
+/// Tabs on which the "add transaction" speed-dial is shown (Home only).
+const Set<int> _fabTabs = {0};
 
 const double _navHeight = 66;
 const double _fabSize = 58;
@@ -139,7 +139,7 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen>
     final dialBottom = fabBottom + _fabSize + 14;
     final showFab = _fabTabs.contains(currentIndex);
 
-    // The speed-dial belongs to the Home/Transactions tabs, close it if the
+    // The speed-dial belongs to the Home tab only, close it if the
     // tab changes some other way (e.g. a shortcut intent).
     ref.listen<int>(mainTabProvider, (previous, next) {
       if (!_fabTabs.contains(next)) _closeFab();
