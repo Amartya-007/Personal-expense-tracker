@@ -147,4 +147,26 @@ void main() {
     expect(find.byType(AddTransactionScreen), findsOneWidget);
     expect(find.byType(SnackBar), findsNothing);
   });
+
+  testWidgets('(live) errors appear and clear while typing, without Save', (
+    tester,
+  ) async {
+    await pumpScreen(tester);
+
+    // Zero is flagged immediately — no Save tap.
+    await tester.enterText(amountField(), '0');
+    await tester.pump();
+    expect(find.text('Enter an amount greater than zero.'), findsOneWidget);
+
+    // Fixing the value clears the message right away.
+    await tester.enterText(amountField(), '250');
+    await tester.pump();
+    expect(find.text('Enter an amount greater than zero.'), findsNothing);
+    expect(find.text('Enter a valid amount.'), findsNothing);
+
+    // Emptying the field after typing is flagged live too.
+    await tester.enterText(amountField(), '');
+    await tester.pump();
+    expect(find.text('Enter a valid amount.'), findsOneWidget);
+  });
 }

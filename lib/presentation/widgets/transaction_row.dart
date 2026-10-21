@@ -89,7 +89,13 @@ class TransactionRow extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Flexible(
+                  // Non-flex trailing: it must NOT be a Flexible next to the
+                  // Expanded title (equal flex split the free space 50/50, which
+                  // pushed the amount to the middle of the row and truncated
+                  // long titles early). Capped width + FittedBox keeps huge
+                  // amounts from squeezing the title.
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 140),
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerRight,

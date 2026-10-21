@@ -926,7 +926,9 @@ class _DayHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 18, 4, 8),
+      // Same 18dp page margin as the title, search bar and cards (the list
+      // already supplies it), so headers line up with everything else.
+      padding: const EdgeInsets.fromLTRB(2, 18, 2, 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
