@@ -26,6 +26,7 @@ import '../sms_review/sms_review_screen.dart';
 import 'accounts_management_screen.dart';
 import 'backup_restore_screen.dart';
 import 'categories_management_screen.dart';
+import 'logs_screen.dart';
 import 'receipt_gallery_screen.dart';
 import 'recently_deleted_screen.dart';
 import 'recurring_payments_screen.dart';
@@ -474,6 +475,12 @@ class SettingsScreen extends ConsumerWidget {
                 title: 'Appearance',
                 subtitle: themeMode == ThemeMode.dark ? 'Dark' : 'Light',
                 onTap: () => _showAppearanceSheet(context),
+              ),
+              ListRowTile(
+                emoji: '📋',
+                title: 'Logs',
+                subtitle: 'View app activity and errors',
+                onTap: () => AppRoutes.push(context, const LogsScreen()),
               ),
               ListRowTile(
                 emoji: 'ℹ️',

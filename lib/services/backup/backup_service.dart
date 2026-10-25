@@ -11,6 +11,7 @@ import 'package:sqflite/sqflite.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/database/database_helper.dart';
 import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 
 class BackupService {
   Future<Directory> _getDocsDirectory() async {
@@ -30,6 +31,7 @@ class BackupService {
   /// Creates a complete restorable snapshot archive containing SQLite database,
   /// receipt files, and manifest metadata.
   Future<File> createFullBackupPackage() async {
+    AppLogger.info('Backup started', category: LogCategory.backup);
     try {
       final docsDir = await _getDocsDirectory();
       final receiptsDir = Directory(p.join(docsDir.path, 'receipts'));
@@ -135,10 +137,19 @@ class BackupService {
 
       if (await zipPrepDir.exists()) await zipPrepDir.delete(recursive: true);
 
-      await AppLogger.i('Created full backup archive at $zipPath');
+      await AppLogger.info(
+        'Backup archive created',
+        category: LogCategory.backup,
+        details: '$receiptFileCount receipts included',
+      );
       return zipFile;
     } catch (e, stack) {
-      await AppLogger.e('Backup creation failed', error: e, stackTrace: stack);
+      await AppLogger.error(
+        'Backup creation failed',
+        error: e,
+        stackTrace: stack,
+        category: LogCategory.backup,
+      );
       rethrow;
     }
   }
@@ -197,10 +208,16 @@ class BackupService {
       );
 
       if (savedUri == null) {
-        await AppLogger.i('Backup export cancelled by the user');
+        await AppLogger.info(
+          'Backup export cancelled by the user',
+          category: LogCategory.backup,
+        );
         return null;
       }
-      await AppLogger.i('Backup exported to a user-selected location');
+      await AppLogger.info(
+        'Backup exported to a user-selected location',
+        category: LogCategory.backup,
+      );
       // file_picker 13 returns a Uri; keep a file-system path when the scheme
       // is `file`, otherwise hand back the Uri string (e.g. Android SAF
       // `content://` targets) for display.
@@ -208,7 +225,12 @@ class BackupService {
           ? savedUri.toFilePath()
           : savedUri.toString();
     } catch (e, stack) {
-      await AppLogger.e('Backup export failed', error: e, stackTrace: stack);
+      await AppLogger.error(
+        'Backup export failed',
+        error: e,
+        stackTrace: stack,
+        category: LogCategory.backup,
+      );
       rethrow;
     } finally {
       // The copy in app storage was only a staging file; the user now has
@@ -248,7 +270,10 @@ class BackupService {
       }
 
       await created.delete();
-      await AppLogger.i('Created safety backup before a destructive operation');
+      await AppLogger.info(
+        'Created safety backup before a destructive operation',
+        category: LogCategory.backup,
+      );
       return target;
     } catch (_) {
       // Leave nothing half-made behind.
@@ -269,6 +294,7 @@ class BackupService {
 
   /// Restores a full backup with 5-stage safety, integrity validation, and automatic rollback.
   Future<bool> restoreFullBackupPackage(File zipFile) async {
+    AppLogger.info('Restore started', category: LogCategory.restore);
     final docsDir = await _getDocsDirectory();
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final tempDir = Directory(p.join(docsDir.path, 'restore_temp_$timestamp'));
@@ -283,7 +309,10 @@ class BackupService {
       // Stage 1: Extract zip archive to tempDir
       final bytes = await zipFile.readAsBytes();
       if (bytes.isEmpty) {
-        await AppLogger.w('Restore rejected: Backup archive is empty.');
+        await AppLogger.warning(
+          'Restore rejected: Backup archive is empty.',
+          category: LogCategory.restore,
+        );
         return false;
       }
 
@@ -301,8 +330,9 @@ class BackupService {
       // Stage 2: Validate manifest and staged DB checksum
       final manifestFile = File(p.join(tempDir.path, 'manifest.json'));
       if (!await manifestFile.exists()) {
-        await AppLogger.w(
+        await AppLogger.warning(
           'Restore rejected: manifest.json missing in backup archive.',
+          category: LogCategory.restore,
         );
         return false;
       }
@@ -312,8 +342,9 @@ class BackupService {
 
       final stagedDbFile = File(p.join(tempDir.path, AppConstants.dbFileName));
       if (!await stagedDbFile.exists()) {
-        await AppLogger.w(
+        await AppLogger.warning(
           'Restore rejected: ${AppConstants.dbFileName} missing in backup package.',
+          category: LogCategory.restore,
         );
         return false;
       }
@@ -322,8 +353,9 @@ class BackupService {
       if (expectedChecksum != null && expectedChecksum.isNotEmpty) {
         final actualChecksum = await _computeFileSha256(stagedDbFile);
         if (actualChecksum != expectedChecksum) {
-          await AppLogger.w(
-            'Restore rejected: Database checksum mismatch (expected $expectedChecksum, got $actualChecksum).',
+          await AppLogger.warning(
+            'Restore rejected: database checksum mismatch',
+            category: LogCategory.restore,
           );
           return false;
         }
@@ -336,8 +368,9 @@ class BackupService {
         final checkRes = await testDb.rawQuery('PRAGMA quick_check');
         if (checkRes.isEmpty || checkRes.first.values.first != 'ok') {
           await testDb.close();
-          await AppLogger.w(
+          await AppLogger.warning(
             'Restore rejected: SQLite PRAGMA quick_check failed.',
+            category: LogCategory.restore,
           );
           return false;
         }
@@ -345,8 +378,10 @@ class BackupService {
         testDb = null;
       } catch (e) {
         if (testDb != null && testDb.isOpen) await testDb.close();
-        await AppLogger.w(
-          'Restore rejected: Staged DB integrity check failed: $e',
+        await AppLogger.warning(
+          'Restore rejected: staged database integrity check failed',
+          category: LogCategory.restore,
+          error: e,
         );
         return false;
       }
@@ -454,15 +489,17 @@ class BackupService {
         }
       }
 
-      await AppLogger.i(
-        'Successfully restored full backup package from ${zipFile.path}',
+      await AppLogger.info(
+        'Backup restored successfully',
+        category: LogCategory.restore,
       );
       return true;
     } catch (e, stack) {
-      await AppLogger.e(
+      await AppLogger.error(
         'Backup restore failed, attempting rollback',
         error: e,
         stackTrace: stack,
+        category: LogCategory.restore,
       );
       // Rollback from safety backup
       try {
@@ -511,7 +548,11 @@ class BackupService {
           await DatabaseHelper.instance.database;
         }
       } catch (rollbackErr) {
-        await AppLogger.e('Rollback failed', error: rollbackErr);
+        await AppLogger.error(
+          'Rollback failed',
+          error: rollbackErr,
+          category: LogCategory.restore,
+        );
       }
       return false;
     } finally {

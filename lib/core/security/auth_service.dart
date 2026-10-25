@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../constants/app_constants.dart';
 import '../logging/app_logger.dart';
+import '../logging/log_category.dart';
 
 class AuthService {
   final LocalAuthentication _auth = LocalAuthentication();
@@ -39,7 +40,11 @@ class AuthService {
   Future<void> setBiometricsEnabled(bool enabled) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(AppConstants.prefBiometricsEnabled, enabled);
-    await AppLogger.i('Biometric setting changed to $enabled');
+    await AppLogger.info(
+      'Biometric setting changed',
+      category: LogCategory.settings,
+      details: enabled ? 'enabled' : 'disabled',
+    );
   }
 
   Future<bool> authenticate({
@@ -55,14 +60,20 @@ class AuthService {
       );
       return didAuthenticate;
     } on PlatformException catch (e, stack) {
-      await AppLogger.e(
+      await AppLogger.error(
         'Authentication failed with platform error',
         error: e,
         stackTrace: stack,
+        category: LogCategory.app,
       );
       return false;
     } catch (e, stack) {
-      await AppLogger.e('Authentication failed', error: e, stackTrace: stack);
+      await AppLogger.error(
+        'Authentication failed',
+        error: e,
+        stackTrace: stack,
+        category: LogCategory.app,
+      );
       return false;
     }
   }

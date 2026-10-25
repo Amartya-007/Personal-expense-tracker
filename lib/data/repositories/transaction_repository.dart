@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../core/database/database_helper.dart';
 import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 import '../models/receipt_model.dart';
 import '../models/tag_model.dart';
 import '../models/transaction_model.dart';
@@ -485,7 +486,7 @@ class TransactionRepository {
       await learnCategoryRule(tx.description.trim(), tx.categoryId!);
     }
 
-    await AppLogger.i('Created transaction: ${tx.description} (₹${tx.amount})');
+    await AppLogger.info('Transaction created', category: LogCategory.transactions, details: 'id ${tx.id}, type ${tx.type}');
   }
 
   Future<void> updateTransaction(TransactionModel newTx) async {
@@ -585,7 +586,7 @@ class TransactionRepository {
         }, conflictAlgorithm: ConflictAlgorithm.replace);
       }
     });
-    await AppLogger.i('Updated transaction ${newTx.id}');
+    await AppLogger.info('Updated transaction ${newTx.id}', category: LogCategory.transactions);
   }
 
   Future<void> softDeleteTransaction(String id) async {
@@ -613,7 +614,7 @@ class TransactionRepository {
         whereArgs: [id],
       );
     });
-    await AppLogger.i('Soft-deleted transaction $id');
+    await AppLogger.info('Soft-deleted transaction $id', category: LogCategory.transactions);
   }
 
   Future<void> restoreTransaction(String id) async {
@@ -643,7 +644,7 @@ class TransactionRepository {
         whereArgs: [id],
       );
     });
-    await AppLogger.i('Restored transaction $id');
+    await AppLogger.info('Restored transaction $id', category: LogCategory.transactions);
   }
 
   Future<void> permanentlyDeleteTransaction(String id) async {
@@ -693,8 +694,9 @@ class TransactionRepository {
       );
       await txn.delete('transactions', where: 'id = ?', whereArgs: [id]);
     });
-    await AppLogger.i(
+    await AppLogger.info(
       'Permanently deleted transaction $id and cleaned up receipts and splits',
+      category: LogCategory.transactions,
     );
   }
 

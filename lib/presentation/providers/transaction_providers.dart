@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 import '../../core/utils/amount_input.dart';
 import '../../core/utils/date_filters.dart';
 import '../../data/models/transaction_model.dart';
@@ -282,7 +283,12 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
         hasMore: txs.length >= 30,
       );
     } catch (e, st) {
-      await AppLogger.e('fetchInitial failed', error: e, stackTrace: st);
+      await AppLogger.error(
+        'fetchInitial failed',
+        error: e,
+        stackTrace: st,
+        category: LogCategory.transactions,
+      );
       if (requestId == _requestId && mounted) {
         state = state.copyWith(isLoading: false);
       }
@@ -322,7 +328,12 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
         hasMore: newTxs.length >= 30,
       );
     } catch (e, st) {
-      await AppLogger.e('fetchMore failed', error: e, stackTrace: st);
+      await AppLogger.error(
+        'fetchMore failed',
+        error: e,
+        stackTrace: st,
+        category: LogCategory.transactions,
+      );
     } finally {
       _fetchingMore = false;
     }
@@ -405,17 +416,37 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
     }
   }
 
+  /// Runs a transaction write; logs (without any transaction data) and
+  /// rethrows if it fails, so the caller still sees the error.
+  Future<void> _logFailure(String action, Future<void> Function() run) async {
+    try {
+      await run();
+    } catch (e, st) {
+      await AppLogger.error(
+        'Transaction $action failed',
+        category: LogCategory.transactions,
+        error: e,
+        stackTrace: st,
+      );
+      rethrow;
+    }
+  }
+
   Future<void> createTransaction(TransactionModel tx) async {
-    _assertValidAmount(tx.amount);
-    await _repository.createTransaction(tx);
+    await _logFailure('create', () async {
+      _assertValidAmount(tx.amount);
+      await _repository.createTransaction(tx);
+    });
     if (tx.isExpense) unawaited(BudgetAlertService.evaluate());
     await fetchInitial();
     _refreshDependents();
   }
 
   Future<void> updateTransaction(TransactionModel tx) async {
-    _assertValidAmount(tx.amount);
-    await _repository.updateTransaction(tx);
+    await _logFailure('update', () async {
+      _assertValidAmount(tx.amount);
+      await _repository.updateTransaction(tx);
+    });
     if (tx.isExpense) unawaited(BudgetAlertService.evaluate());
     await fetchInitial();
     _refreshDependents();
@@ -426,7 +457,7 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
       transactions: state.transactions.where((t) => t.id != id).toList(),
     );
     try {
-      await _repository.softDeleteTransaction(id);
+      await _logFailure('delete', () => _repository.softDeleteTransaction(id));
     } catch (_) {
       await fetchInitial();
       rethrow;
@@ -436,13 +467,16 @@ class TransactionListNotifier extends StateNotifier<TransactionState> {
   }
 
   Future<void> restoreTransaction(String id) async {
-    await _repository.restoreTransaction(id);
+    await _logFailure('restore', () => _repository.restoreTransaction(id));
     await fetchInitial();
     _refreshDependents();
   }
 
   Future<void> permanentlyDeleteTransaction(String id) async {
-    await _repository.permanentlyDeleteTransaction(id);
+    await _logFailure(
+      'permanent delete',
+      () => _repository.permanentlyDeleteTransaction(id),
+    );
     _ref.invalidate(recentlyDeletedTransactionsProvider);
   }
 }

@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import '../../core/database/database_helper.dart';
 import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 import '../models/sms_review_model.dart';
 
 class SmsRepository {
@@ -20,7 +21,7 @@ class SmsRepository {
   Future<void> addToQueue(SmsReviewModel item) async {
     final db = await _dbHelper.database;
     await db.insert('sms_review_queue', item.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-    await AppLogger.i('Added SMS to review queue: ${item.merchant} - ₹${item.amount}');
+    await AppLogger.info('SMS added to review queue', category: LogCategory.sms, details: 'id ${item.id}');
   }
 
   Future<void> updateStatus(String id, String status) async {
@@ -31,7 +32,7 @@ class SmsRepository {
       where: 'id = ?',
       whereArgs: [id],
     );
-    await AppLogger.i('Updated SMS review status for $id to $status');
+    await AppLogger.info('Updated SMS review status for $id to $status', category: LogCategory.sms);
   }
 
   /// Lowercased with whitespace collapsed, so the same message read by the
@@ -55,7 +56,7 @@ class SmsRepository {
       await txn.insert('sms_review_queue', item.toMap());
       return true;
     });
-    if (added) await AppLogger.i('Queued SMS ${item.id} for review');
+    if (added) await AppLogger.info('Queued SMS ${item.id} for review', category: LogCategory.sms);
     return added;
   }
 

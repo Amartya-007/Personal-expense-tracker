@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/constants/app_constants.dart';
 import 'core/logging/app_logger.dart';
+import 'core/logging/log_category.dart';
 import 'core/theme/app_haptics.dart';
 import 'core/theme/app_theme.dart';
 import 'presentation/providers/auth_provider.dart';
@@ -22,11 +23,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   FlutterError.onError = (details) {
-    AppLogger.e(
-      'Flutter framework error: ${details.exceptionAsString()}',
-      error: details.exception,
-      stackTrace: details.stack,
-    );
+    AppLogger.error('Flutter framework error', error: details.exception, stackTrace: details.stack);
   };
 
   await runZonedGuarded(
@@ -34,12 +31,19 @@ void main() async {
       try {
         await NotificationService.init();
       } catch (e, st) {
-        await AppLogger.e(
+        await AppLogger.error(
           'NotificationService.init failed',
           error: e,
           stackTrace: st,
+          category: LogCategory.app,
         );
       }
+
+      AppLogger.info(
+        'App started',
+        category: LogCategory.app,
+        details: 'version ${AppConstants.appVersion}',
+      );
 
       final prefs = await SharedPreferences.getInstance();
       final bool isOnboardingComplete =
@@ -53,7 +57,7 @@ void main() async {
       );
     },
     (error, stack) {
-      AppLogger.e('Uncaught async error', error: error, stackTrace: stack);
+      AppLogger.error('Uncaught async error', error: error, stackTrace: stack, category: LogCategory.app);
     },
   );
 }

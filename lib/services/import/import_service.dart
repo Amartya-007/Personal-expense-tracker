@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../core/database/database_helper.dart';
 import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 import '../../data/models/account_model.dart';
 import '../../data/models/category_model.dart';
 import '../../data/models/transaction_model.dart';
@@ -66,6 +67,7 @@ class ImportService {
 
   /// Previews a CSV file for import without writing any data to database.
   Future<CsvPreviewResult> previewCsvImport(File csvFile) async {
+    AppLogger.info('CSV import preview started', category: LogCategory.importData);
     try {
       final content = await csvFile.readAsString();
       final rows = const CsvToListConverter().convert(content);
@@ -184,6 +186,13 @@ class ImportService {
         }
       }
 
+      AppLogger.info(
+        'CSV import preview completed',
+        category: LogCategory.importData,
+        details:
+            '${rows.length - 1} rows, ${validTxs.length} valid, '
+            '$duplicateCount duplicate, $rejectedCount rejected',
+      );
       return CsvPreviewResult(
         totalRows: rows.length - 1,
         validCount: validTxs.length,
@@ -193,7 +202,7 @@ class ImportService {
         errors: errors,
       );
     } catch (e, st) {
-      await AppLogger.e('previewCsvImport failed', error: e, stackTrace: st);
+      await AppLogger.error('previewCsvImport failed', error: e, stackTrace: st, category: LogCategory.importData);
       return CsvPreviewResult(
         totalRows: 0,
         validCount: 0,
@@ -209,6 +218,11 @@ class ImportService {
   Future<bool> executeCsvImport(List<TransactionModel> transactions) async {
     if (transactions.isEmpty) return true;
 
+    AppLogger.info(
+      'CSV import started',
+      category: LogCategory.importData,
+      details: '${transactions.length} transactions',
+    );
     final db = await _dbHelper.database;
     try {
       await db.transaction((txn) async {
@@ -225,10 +239,10 @@ class ImportService {
           }
         }
       });
-      await AppLogger.i('Successfully executed CSV import for ${transactions.length} transactions.');
+      await AppLogger.info('CSV import completed', category: LogCategory.importData, details: '${transactions.length} transactions');
       return true;
     } catch (e, st) {
-      await AppLogger.e('executeCsvImport failed and rolled back', error: e, stackTrace: st);
+      await AppLogger.error('executeCsvImport failed and rolled back', error: e, stackTrace: st, category: LogCategory.importData);
       return false;
     }
   }
@@ -256,6 +270,11 @@ class ImportService {
         recurringCount: recurring,
       );
     } catch (e) {
+      AppLogger.warning(
+        'JSON import file could not be read',
+        category: LogCategory.importData,
+        error: e,
+      );
       return JsonPreviewResult(
         isValid: false,
         errorMessage: 'Invalid JSON data: $e',
@@ -265,6 +284,7 @@ class ImportService {
 
   /// Executes structured JSON application data import inside an atomic transaction.
   Future<bool> executeJsonImport(Map<String, dynamic> data) async {
+    AppLogger.info('JSON import started', category: LogCategory.importData);
     final db = await _dbHelper.database;
     try {
       await db.transaction((txn) async {
@@ -333,10 +353,10 @@ class ImportService {
         }
       });
 
-      await AppLogger.i('Successfully executed JSON import.');
+      await AppLogger.info('JSON import completed', category: LogCategory.importData);
       return true;
     } catch (e, st) {
-      await AppLogger.e('executeJsonImport failed and rolled back', error: e, stackTrace: st);
+      await AppLogger.error('executeJsonImport failed and rolled back', error: e, stackTrace: st, category: LogCategory.importData);
       return false;
     }
   }

@@ -1,5 +1,6 @@
 import '../../core/database/database_helper.dart';
 import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 import '../models/budget_model.dart';
 
 class BudgetRepository {
@@ -106,7 +107,7 @@ class BudgetRepository {
   Future<void> createBudget(BudgetModel budget) async {
     final db = await _dbHelper.database;
     await db.insert('budgets', budget.toMap());
-    await AppLogger.i('Created budget for ${budget.categoryId}');
+    await AppLogger.info('Budget created', category: LogCategory.budgets, details: 'id ${budget.id}, period ${budget.period}');
   }
 
   Future<void> updateBudget(BudgetModel budget) async {
@@ -117,12 +118,12 @@ class BudgetRepository {
       where: 'id = ?',
       whereArgs: [budget.id],
     );
-    await AppLogger.i('Updated budget ${budget.id}');
+    await AppLogger.info('Updated budget ${budget.id}', category: LogCategory.budgets);
   }
 
   Future<void> deleteBudget(String id) async {
     final db = await _dbHelper.database;
     await db.delete('budgets', where: 'id = ?', whereArgs: [id]);
-    await AppLogger.i('Deleted budget $id');
+    await AppLogger.info('Deleted budget $id', category: LogCategory.budgets);
   }
 }

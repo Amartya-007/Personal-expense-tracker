@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 import '../../data/models/account_model.dart';
 import '../../data/repositories/account_repository.dart';
 
@@ -32,7 +33,12 @@ class AccountListNotifier
       await _repository.createAccount(account);
       await loadAccounts();
     } catch (e, st) {
-      await AppLogger.e('createAccount failed', error: e, stackTrace: st);
+      await AppLogger.error(
+        'createAccount failed',
+        error: e,
+        stackTrace: st,
+        category: LogCategory.settings,
+      );
       rethrow;
     }
   }
@@ -50,10 +56,11 @@ class AccountListNotifier
       );
       await loadAccounts();
     } catch (e, st) {
-      await AppLogger.e(
+      await AppLogger.error(
         'updateAccountBalanceDirect failed',
         error: e,
         stackTrace: st,
+        category: LogCategory.settings,
       );
       rethrow;
     }
@@ -65,7 +72,12 @@ class AccountListNotifier
       await _repository.setPrimaryAccount(accountId);
       await loadAccounts();
     } catch (e, st) {
-      await AppLogger.e('setPrimaryAccount failed', error: e, stackTrace: st);
+      await AppLogger.error(
+        'setPrimaryAccount failed',
+        error: e,
+        stackTrace: st,
+        category: LogCategory.settings,
+      );
       rethrow;
     }
   }
@@ -75,7 +87,12 @@ class AccountListNotifier
       await _repository.clearPrimaryAccount();
       await loadAccounts();
     } catch (e, st) {
-      await AppLogger.e('clearPrimaryAccount failed', error: e, stackTrace: st);
+      await AppLogger.error(
+        'clearPrimaryAccount failed',
+        error: e,
+        stackTrace: st,
+        category: LogCategory.settings,
+      );
       rethrow;
     }
   }
@@ -85,7 +102,12 @@ class AccountListNotifier
       await _repository.deleteAccount(accountId);
       await loadAccounts();
     } catch (e, st) {
-      await AppLogger.e('deleteAccount failed', error: e, stackTrace: st);
+      await AppLogger.error(
+        'deleteAccount failed',
+        error: e,
+        stackTrace: st,
+        category: LogCategory.settings,
+      );
       rethrow;
     }
   }

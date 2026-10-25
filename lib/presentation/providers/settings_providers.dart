@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 import '../../core/theme/app_haptics.dart';
 
 final defaultUpiAccountProvider =
@@ -101,6 +103,11 @@ class BoolPrefNotifier extends StateNotifier<bool> {
     state = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_key, value);
+    AppLogger.info(
+      'Setting changed',
+      category: LogCategory.settings,
+      details: '$_key: ${value ? 'on' : 'off'}',
+    );
   }
 }
 

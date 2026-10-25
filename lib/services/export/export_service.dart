@@ -11,6 +11,7 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../core/constants/app_constants.dart';
 import '../../core/database/database_helper.dart';
 import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 import '../../core/utils/currency_formatter.dart';
 
 class ExportService {
@@ -52,10 +53,11 @@ class ExportService {
           ? savedUri.toFilePath()
           : savedUri.toString();
     } catch (e, st) {
-      await AppLogger.e(
+      await AppLogger.error(
         'Saving export for the user failed',
         error: e,
         stackTrace: st,
+        category: LogCategory.exportData,
       );
       rethrow;
     } finally {
@@ -67,6 +69,7 @@ class ExportService {
 
   /// Exports all transactions to a CSV file.
   Future<File> exportToCsv({DateTime? startDate, DateTime? endDate}) async {
+    AppLogger.info('CSV export started', category: LogCategory.exportData);
     try {
       final db = await _dbHelper.database;
       final startMs = startDate?.millisecondsSinceEpoch ?? 0;
@@ -137,16 +140,26 @@ class ExportService {
       );
       await file.writeAsString(csvString);
 
-      await AppLogger.i('Exported transactions to CSV: ${file.path}');
+      await AppLogger.info(
+        'Transactions exported to CSV',
+        category: LogCategory.exportData,
+        details: '${rows.length} rows',
+      );
       return file;
     } catch (e, st) {
-      await AppLogger.e('exportToCsv failed', error: e, stackTrace: st);
+      await AppLogger.error(
+        'exportToCsv failed',
+        error: e,
+        stackTrace: st,
+        category: LogCategory.exportData,
+      );
       rethrow;
     }
   }
 
   /// Exports full structured JSON application data covering all database entities.
   Future<File> exportToJson() async {
+    AppLogger.info('JSON export started', category: LogCategory.exportData);
     try {
       final db = await _dbHelper.database;
       final docsDir = await _getDocsDirectory();
@@ -188,12 +201,19 @@ class ExportService {
       );
 
       await file.writeAsString(jsonEncode(exportData));
-      await AppLogger.i(
-        'Exported complete JSON application data to ${file.path}',
+      await AppLogger.info(
+        'Full data exported to JSON',
+        category: LogCategory.exportData,
+        details: '${transactions.length} transactions',
       );
       return file;
     } catch (e, st) {
-      await AppLogger.e('exportToJson failed', error: e, stackTrace: st);
+      await AppLogger.error(
+        'exportToJson failed',
+        error: e,
+        stackTrace: st,
+        category: LogCategory.exportData,
+      );
       rethrow;
     }
   }
@@ -203,6 +223,10 @@ class ExportService {
     DateTime? startDate,
     DateTime? endDate,
   }) async {
+    AppLogger.info(
+      'PDF report generation started',
+      category: LogCategory.exportData,
+    );
     try {
       final pdf = pw.Document();
       final db = await _dbHelper.database;
@@ -280,10 +304,18 @@ class ExportService {
       );
       await file.writeAsBytes(await pdf.save());
 
-      await AppLogger.i('Generated PDF report at ${file.path}');
+      await AppLogger.info(
+        'PDF report generated',
+        category: LogCategory.exportData,
+      );
       return file;
     } catch (e, st) {
-      await AppLogger.e('generatePdfReport failed', error: e, stackTrace: st);
+      await AppLogger.error(
+        'generatePdfReport failed',
+        error: e,
+        stackTrace: st,
+        category: LogCategory.exportData,
+      );
       rethrow;
     }
   }

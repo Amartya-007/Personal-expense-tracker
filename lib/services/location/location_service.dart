@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 
 class LocationResult {
   final double latitude;
@@ -62,7 +63,7 @@ class LocationService {
         locationName: locName,
       );
     } catch (e) {
-      await AppLogger.w('Location capture skipped: $e');
+      await AppLogger.warning('Location capture skipped', category: LogCategory.permissions, error: e);
       return null;
     }
   }

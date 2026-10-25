@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import '../../core/database/database_helper.dart';
 import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 import '../models/category_model.dart';
 
 class CategoryRepository {
@@ -26,7 +27,7 @@ class CategoryRepository {
   Future<void> createCategory(CategoryModel category) async {
     final db = await _dbHelper.database;
     await db.insert('categories', category.toMap());
-    await AppLogger.i('Created category ${category.name}');
+    await AppLogger.info('Category created', category: LogCategory.settings, details: 'id ${category.id}');
   }
 
   Future<void> updateCategory(CategoryModel category) async {
@@ -37,7 +38,7 @@ class CategoryRepository {
       where: 'id = ?',
       whereArgs: [category.id],
     );
-    await AppLogger.i('Updated category ${category.name}');
+    await AppLogger.info('Category updated', category: LogCategory.settings, details: 'id ${category.id}');
   }
 
   Future<void> deleteCategory(String categoryId, {String? replacementCategoryId}) async {
@@ -62,6 +63,6 @@ class CategoryRepository {
 
       await txn.delete('categories', where: 'id = ?', whereArgs: [categoryId]);
     });
-    await AppLogger.i('Deleted category $categoryId');
+    await AppLogger.info('Deleted category $categoryId', category: LogCategory.settings);
   }
 }

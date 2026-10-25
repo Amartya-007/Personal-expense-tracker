@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 import '../../data/models/sms_review_model.dart';
 import '../../data/repositories/sms_repository.dart';
 import 'bank_parsers/axis_parser.dart';
@@ -38,13 +39,22 @@ class SmsParserService {
     String body, {
     DateTime? date,
     String? messageId,
+  }) => _parse(sender, body, date: date, messageId: messageId).model;
+
+  /// Same as [parseSmsMessage], also reporting which parser matched (its
+  /// class name only, never message text) for the activity log.
+  ({SmsReviewModel? model, String? parser}) _parse(
+    String sender,
+    String body, {
+    DateTime? date,
+    String? messageId,
   }) {
     for (final parser in _parsers) {
       if (parser.canParse(sender, body)) {
         final extracted = parser.parse(sender, body);
         if (extracted != null && extracted.status == 'SUCCESS') {
           final txDate = date ?? DateTime.now();
-          return SmsReviewModel(
+          final model = SmsReviewModel(
             id: _uuid.v4(),
             rawSms: body,
             sender: sender,
@@ -59,10 +69,31 @@ class SmsParserService {
             smsMessageId: messageId,
             createdAt: DateTime.now(),
           );
+          return (model: model, parser: parser.runtimeType.toString());
         }
       }
     }
-    return null;
+    return (model: null, parser: null);
+  }
+
+  /// "BoiSmsParser: 3, GenericBankParser: 1" for the activity log.
+  static String _describeParsers(Map<String, int> used) => used.isEmpty
+      ? 'none matched'
+      : used.entries.map((e) => '${e.key}: ${e.value}').join(', ');
+
+  // Last SMS permission state seen, so only a change is logged.
+  static bool? _lastSmsPermission;
+
+  static void _noteSmsPermission(bool granted) {
+    if (_lastSmsPermission == granted) return;
+    final first = _lastSmsPermission == null;
+    _lastSmsPermission = granted;
+    AppLogger.info(
+      first
+          ? 'SMS permission is ${granted ? 'granted' : 'not granted'}'
+          : 'SMS permission changed to ${granted ? 'granted' : 'not granted'}',
+      category: LogCategory.permissions,
+    );
   }
 
   /// Queues bank messages the user pasted in by hand. This needs **no SMS
@@ -80,20 +111,36 @@ class SmsParserService {
     final chunks = text
         .split(RegExp(r'\n\s*\n'))
         .map((c) => c.trim())
-        .where((c) => c.isNotEmpty);
+        .where((c) => c.isNotEmpty)
+        .toList();
+    AppLogger.info(
+      'Manual SMS paste processing started',
+      category: LogCategory.sms,
+      details: '${chunks.length} messages',
+    );
 
+    final parsersUsed = <String, int>{};
     for (final chunk in chunks) {
-      final parsed = parseSmsMessage('PASTED', chunk);
-      if (parsed == null) {
+      final parsed = _parse('PASTED', chunk);
+      final model = parsed.model;
+      if (model == null) {
         unrecognized++;
         continue;
       }
-      if (await _smsRepo.addToQueueIfNew(parsed)) {
+      parsersUsed.update(parsed.parser!, (n) => n + 1, ifAbsent: () => 1);
+      if (await _smsRepo.addToQueueIfNew(model)) {
         added++;
       } else {
         duplicate++;
       }
     }
+    AppLogger.info(
+      'Manual SMS paste processing completed',
+      category: LogCategory.sms,
+      details:
+          '${chunks.length} processed, $added queued, $duplicate duplicate, '
+          '$unrecognized not recognised. Parsers: ${_describeParsers(parsersUsed)}',
+    );
     return (added: added, duplicate: duplicate, unrecognized: unrecognized);
   }
 
@@ -103,43 +150,69 @@ class SmsParserService {
   /// Used by the manual "Scan Inbox" button on [SmsReviewScreen].
   Future<int> scanInboxAndQueue({int limit = 100}) async {
     try {
+      AppLogger.info(
+        'Inbox SMS scan started',
+        category: LogCategory.sms,
+        details: 'limit $limit',
+      );
       final List<dynamic>? rawList = await _channel.invokeMethod(
         'getInboxSms',
         {'limit': limit},
       );
-      if (rawList == null || rawList.isEmpty) return 0;
+      if (rawList == null || rawList.isEmpty) {
+        AppLogger.info(
+          'Inbox SMS scan completed',
+          category: LogCategory.sms,
+          details: 'no messages found',
+        );
+        return 0;
+      }
 
       int addedCount = 0;
+      int duplicateCount = 0;
+      int skippedCount = 0;
+      final parsersUsed = <String, int>{};
       for (final raw in rawList) {
-        if (raw is Map) {
-          final sender = raw['sender']?.toString() ?? '';
-          final body = raw['body']?.toString() ?? '';
-          final msgId = raw['id']?.toString();
-          final dateMs = raw['date'] as int?;
-          final date = dateMs != null
-              ? DateTime.fromMillisecondsSinceEpoch(dateMs)
-              : DateTime.now();
+        if (raw is! Map) {
+          skippedCount++;
+          continue;
+        }
+        final sender = raw['sender']?.toString() ?? '';
+        final body = raw['body']?.toString() ?? '';
+        final msgId = raw['id']?.toString();
+        final dateMs = raw['date'] as int?;
+        final date = dateMs != null
+            ? DateTime.fromMillisecondsSinceEpoch(dateMs)
+            : DateTime.now();
 
-          final parsed = parseSmsMessage(
-            sender,
-            body,
-            date: date,
-            messageId: msgId,
-          );
-          if (parsed != null) {
-            if (await _smsRepo.addToQueueIfNew(parsed)) addedCount++;
-          }
+        final parsed = _parse(sender, body, date: date, messageId: msgId);
+        final model = parsed.model;
+        if (model == null) {
+          skippedCount++;
+          continue;
+        }
+        parsersUsed.update(parsed.parser!, (n) => n + 1, ifAbsent: () => 1);
+        if (await _smsRepo.addToQueueIfNew(model)) {
+          addedCount++;
+        } else {
+          duplicateCount++;
         }
       }
-      await AppLogger.i(
-        'Inbox SMS scan completed. Added $addedCount items to review queue.',
+      AppLogger.info(
+        'Inbox SMS scan completed',
+        category: LogCategory.sms,
+        details:
+            '${rawList.length} processed, $addedCount queued, '
+            '$duplicateCount already known, $skippedCount not recognised. '
+            'Parsers: ${_describeParsers(parsersUsed)}',
       );
       return addedCount;
     } catch (e, stack) {
-      await AppLogger.e(
+      await AppLogger.error(
         'Failed to scan SMS inbox',
         error: e,
         stackTrace: stack,
+        category: LogCategory.sms,
       );
       return 0;
     }
@@ -187,12 +260,21 @@ class SmsParserService {
 
       // Do nothing if the user has not granted SMS permission.
       final hasPermission = await SmsCaptureService.hasPermission();
+      _noteSmsPermission(hasPermission);
       if (!hasPermission) return 0;
 
       final messages = await SmsCaptureService.readPendingMessages();
       if (messages.isEmpty) return 0;
 
+      AppLogger.info(
+        'Background SMS processing started',
+        category: LogCategory.sms,
+        details: '${messages.length} messages',
+      );
       int addedCount = 0;
+      int duplicateCount = 0;
+      int skippedCount = 0;
+      final parsersUsed = <String, int>{};
       final acknowledgedIds = <String>[];
 
       for (final message in messages) {
@@ -200,31 +282,44 @@ class SmsParserService {
         // re-processed on every resume.
         acknowledgedIds.add(message.id);
 
-        final parsed = parseSmsMessage(
+        final parsed = _parse(
           message.sender,
           message.body,
           date: message.receivedAt,
           messageId: message.id,
         );
-        if (parsed == null) continue;
+        final model = parsed.model;
+        if (model == null) {
+          skippedCount++;
+          continue;
+        }
+        parsersUsed.update(parsed.parser!, (n) => n + 1, ifAbsent: () => 1);
 
-        if (await _smsRepo.addToQueueIfNew(parsed)) addedCount++;
+        if (await _smsRepo.addToQueueIfNew(model)) {
+          addedCount++;
+        } else {
+          duplicateCount++;
+        }
       }
 
       // Remove all processed messages from the native pending queue in one call.
       await SmsCaptureService.acknowledgeMessages(acknowledgedIds);
 
-      if (addedCount > 0) {
-        await AppLogger.i(
-          'Background SMS processing complete. Added $addedCount items to review queue.',
-        );
-      }
+      AppLogger.info(
+        'Background SMS processing completed',
+        category: LogCategory.sms,
+        details:
+            '${messages.length} processed, $addedCount queued, '
+            '$duplicateCount already known, $skippedCount not recognised. '
+            'Parsers: ${_describeParsers(parsersUsed)}',
+      );
       return addedCount;
     } catch (e, stack) {
-      await AppLogger.e(
+      await AppLogger.error(
         'Failed to process pending SMS messages',
         error: e,
         stackTrace: stack,
+        category: LogCategory.sms,
       );
       return 0;
     }

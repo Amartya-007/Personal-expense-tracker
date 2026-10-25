@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/database/database_helper.dart';
 import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 import 'backup_service.dart';
 
 /// Thrown when "delete all data" did not complete. [message] is safe to show
@@ -40,14 +41,19 @@ class DataResetService {
   /// kept. Steps 3 and 4 run only after the data is gone and cannot undo it,
   /// so their failures are logged rather than thrown.
   Future<void> deleteAllData() async {
+    AppLogger.info(
+      'Delete all data started',
+      category: LogCategory.settings,
+    );
     // 1. Safety backup. No backup, no deletion.
     try {
       await _backupService.createSafetyBackup();
     } catch (e, stack) {
-      await AppLogger.e(
+      await AppLogger.error(
         'Delete all data aborted: safety backup failed',
         error: e,
         stackTrace: stack,
+        category: LogCategory.settings,
       );
       throw const DataResetException(
         'Could not create the safety backup, so nothing was deleted.',
@@ -58,10 +64,11 @@ class DataResetService {
     try {
       await DatabaseHelper.instance.deleteAllUserData();
     } catch (e, stack) {
-      await AppLogger.e(
+      await AppLogger.error(
         'Delete all data failed; database left unchanged',
         error: e,
         stackTrace: stack,
+        category: LogCategory.settings,
       );
       throw const DataResetException(
         'Deleting failed, so your data was not changed.',
@@ -71,6 +78,10 @@ class DataResetService {
     // 3 and 4: the data is gone; finish cleaning up on a best-effort basis.
     await _deleteReceiptFiles();
     await _resetPersonalPreferences();
+    AppLogger.info(
+      'Delete all data completed',
+      category: LogCategory.settings,
+    );
   }
 
   Future<void> _deleteReceiptFiles() async {
@@ -86,10 +97,11 @@ class DataResetService {
         await receiptsDir.delete(recursive: true);
       }
     } catch (e, stack) {
-      await AppLogger.e(
+      await AppLogger.error(
         'Could not remove receipt files after deleting all data',
         error: e,
         stackTrace: stack,
+        category: LogCategory.settings,
       );
     }
   }
@@ -103,10 +115,11 @@ class DataResetService {
       // Back to the first-run flow, which creates the first account.
       await prefs.setBool(AppConstants.prefIsOnboardingComplete, false);
     } catch (e, stack) {
-      await AppLogger.e(
+      await AppLogger.error(
         'Could not reset preferences after deleting all data',
         error: e,
         stackTrace: stack,
+        category: LogCategory.settings,
       );
     }
   }

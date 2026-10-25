@@ -175,15 +175,27 @@ class DatabaseTables {
     );
   ''';
 
+  // Local diagnostic log (Settings > Logs). `level` and `category` hold the
+  // stable values of LogLevel / LogCategory. `category` has a default so rows
+  // written without one (older code, tests) stay valid.
   static const String createAppLogsTable = '''
-    CREATE TABLE app_logs (
+    CREATE TABLE IF NOT EXISTS app_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       timestamp INTEGER NOT NULL,
       level TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'app',
       message TEXT NOT NULL,
-      details TEXT
+      details TEXT,
+      error TEXT,
+      stack_trace TEXT
     );
   ''';
+
+  static const List<String> createAppLogIndexes = [
+    'CREATE INDEX IF NOT EXISTS idx_app_logs_time ON app_logs(timestamp DESC, id DESC);',
+    'CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs(level, timestamp DESC);',
+    'CREATE INDEX IF NOT EXISTS idx_app_logs_category ON app_logs(category, timestamp DESC);',
+  ];
 
   static const String createFtsTable = '''
     CREATE VIRTUAL TABLE IF NOT EXISTS transactions_fts USING fts5(
@@ -242,5 +254,6 @@ class DatabaseTables {
     'CREATE INDEX IF NOT EXISTS idx_receipts_tx ON receipts(transaction_id);',
     'CREATE INDEX IF NOT EXISTS idx_tx_splits_tx ON transaction_splits(transaction_id);',
     createPrimaryAccountIndex,
+    ...createAppLogIndexes,
   ];
 }

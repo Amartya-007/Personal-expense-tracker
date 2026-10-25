@@ -1,5 +1,6 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
@@ -10,7 +11,7 @@ class NotificationService {
       const initSettings = InitializationSettings(android: androidInit);
       await _plugin.initialize(initSettings);
     } catch (e) {
-      await AppLogger.w('Failed to initialize local notifications plugin: $e');
+      await AppLogger.warning('Failed to initialize local notifications plugin', error: e);
     }
   }
 
@@ -31,7 +32,7 @@ class NotificationService {
       const details = NotificationDetails(android: androidDetails);
       await _plugin.show(id, title, body, details, payload: payload);
     } catch (e) {
-      await AppLogger.w('Failed to show notification: $e');
+      await AppLogger.warning('Failed to show notification', error: e);
     }
   }
 }

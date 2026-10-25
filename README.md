@@ -44,6 +44,7 @@ MyKhata keeps all of your money data on your own device — no account, no cloud
 - **Full backup & restore**, plus **CSV / PDF export** and **CSV import**.
 - **Biometric / PIN lock** and a **privacy mask** that hides amounts.
 - **Delete all data** with an automatic safety backup taken first.
+- **Logs** (Settings → Logs): a local, searchable diagnostic log of app activity, warnings and errors, with filters, export to JSON and a 5,000-entry retention cap. Sensitive values (account/card numbers, SMS text, amounts, credentials) are never stored.
 - Light / Dark / System theme, and a global haptics toggle.
 
 ---

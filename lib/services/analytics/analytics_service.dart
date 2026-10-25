@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import '../../core/database/database_helper.dart';
 import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 import '../../core/utils/currency_formatter.dart';
 import '../../data/models/analytics_summary_model.dart';
 import '../../data/models/spending_forecast_model.dart';
@@ -129,7 +130,7 @@ class AnalyticsService {
         accountBreakdown: accountBreakdown,
       );
     } catch (e, stack) {
-      await AppLogger.e('getAnalytics failed', error: e, stackTrace: stack);
+      await AppLogger.error('getAnalytics failed', error: e, stackTrace: stack, category: LogCategory.app);
       return AnalyticsSummaryModel(
         totalIncome: 0,
         totalExpense: 0,
@@ -292,7 +293,7 @@ class AnalyticsService {
 
       return insights;
     } catch (e, stack) {
-      await AppLogger.e('getHomeInsights failed', error: e, stackTrace: stack);
+      await AppLogger.error('getHomeInsights failed', error: e, stackTrace: stack, category: LogCategory.app);
       return ['Unable to load insights right now.'];
     }
   }

@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 import '../../core/utils/currency_formatter.dart';
 import '../../data/repositories/budget_repository.dart';
 import 'notification_service.dart';
@@ -52,7 +53,11 @@ class BudgetAlertService {
         );
       }
     } catch (e) {
-      await AppLogger.w('Budget alert check skipped: $e');
+      await AppLogger.warning(
+        'Budget alert check skipped',
+        category: LogCategory.budgets,
+        error: e,
+      );
     }
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 import '../../data/models/account_model.dart';
 import '../../data/models/sms_review_model.dart';
 import '../../data/repositories/sms_repository.dart';
@@ -76,10 +77,11 @@ class SmsQueueNotifier extends StateNotifier<AsyncValue<List<SmsReviewModel>>> {
       await _repository.updateStatus(id, status);
       await loadQueue();
     } catch (e, st) {
-      await AppLogger.e(
+      await AppLogger.error(
         'SmsQueueNotifier.updateStatus failed',
         error: e,
         stackTrace: st,
+        category: LogCategory.sms,
       );
       rethrow;
     }
@@ -103,10 +105,11 @@ class SmsQueueNotifier extends StateNotifier<AsyncValue<List<SmsReviewModel>>> {
       await loadQueue();
       return pendingCount + inboxCount;
     } catch (e, st) {
-      await AppLogger.e(
+      await AppLogger.error(
         'SmsQueueNotifier.scanInbox failed',
         error: e,
         stackTrace: st,
+        category: LogCategory.sms,
       );
       return 0;
     }

@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 import '../../data/models/budget_model.dart';
 import '../../data/repositories/budget_repository.dart';
 import '../../services/analytics/budget_history.dart';
@@ -22,22 +24,44 @@ class BudgetListNotifier extends StateNotifier<AsyncValue<List<BudgetModel>>> {
       final list = await _repository.getActiveBudgets();
       state = AsyncValue.data(list);
     } catch (e, st) {
+      // Covers the spent-amount calculation done while loading budgets.
+      await AppLogger.error(
+        'Budget calculation failed',
+        category: LogCategory.budgets,
+        error: e,
+        stackTrace: st,
+      );
       state = AsyncValue.error(e, st);
     }
   }
 
+  /// Runs a budget write; logs and rethrows if it fails.
+  Future<void> _logFailure(String action, Future<void> Function() run) async {
+    try {
+      await run();
+    } catch (e, st) {
+      await AppLogger.error(
+        'Budget $action failed',
+        category: LogCategory.budgets,
+        error: e,
+        stackTrace: st,
+      );
+      rethrow;
+    }
+  }
+
   Future<void> createBudget(BudgetModel budget) async {
-    await _repository.createBudget(budget);
+    await _logFailure('create', () => _repository.createBudget(budget));
     await loadBudgets();
   }
 
   Future<void> updateBudget(BudgetModel budget) async {
-    await _repository.updateBudget(budget);
+    await _logFailure('update', () => _repository.updateBudget(budget));
     await loadBudgets();
   }
 
   Future<void> deleteBudget(String id) async {
-    await _repository.deleteBudget(id);
+    await _logFailure('delete', () => _repository.deleteBudget(id));
     await loadBudgets();
   }
 }

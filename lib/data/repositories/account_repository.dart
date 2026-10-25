@@ -1,6 +1,7 @@
 import 'package:uuid/uuid.dart';
 import '../../core/database/database_helper.dart';
 import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 import '../models/account_model.dart';
 import '../models/balance_adjustment_model.dart';
 
@@ -52,7 +53,7 @@ class AccountRepository {
       }
       await txn.insert('accounts', account.toMap());
     });
-    await AppLogger.i('Created account: ${account.name}');
+    await AppLogger.info('Account created', category: LogCategory.settings, details: 'id ${account.id}');
   }
 
   /// Makes [accountId] the one primary account (clearing any other) in one
@@ -75,13 +76,13 @@ class AccountRepository {
         whereArgs: [accountId],
       );
     });
-    await AppLogger.i('Primary account set to $accountId');
+    await AppLogger.info('Primary account set to $accountId', category: LogCategory.settings);
   }
 
   Future<void> clearPrimaryAccount() async {
     final db = await _dbHelper.database;
     await db.update('accounts', {'is_primary': 0}, where: 'is_primary = 1');
-    await AppLogger.i('Primary account cleared');
+    await AppLogger.info('Primary account cleared', category: LogCategory.settings);
   }
 
   Future<void> updateAccount(AccountModel account) async {
@@ -95,7 +96,7 @@ class AccountRepository {
       where: 'id = ?',
       whereArgs: [account.id],
     );
-    await AppLogger.i('Updated account: ${account.name}');
+    await AppLogger.info('Account updated', category: LogCategory.settings, details: 'id ${account.id}');
   }
 
   Future<void> updateAccountBalanceDirect(String accountId, double newBalance, {String? reason}) async {
@@ -131,7 +132,7 @@ class AccountRepository {
         whereArgs: [accountId],
       );
     });
-    await AppLogger.i('Directly updated account balance for $accountId to ₹$newBalance');
+    await AppLogger.info('Account balance adjusted directly', category: LogCategory.transactions, details: 'id $accountId');
   }
 
   Future<void> deleteAccount(String accountId) async {
@@ -147,7 +148,7 @@ class AccountRepository {
       where: 'id = ?',
       whereArgs: [accountId],
     );
-    await AppLogger.i('Deactivated account $accountId');
+    await AppLogger.info('Deactivated account $accountId', category: LogCategory.settings);
   }
 
   /// Reconciles account ledger against transactions and balance adjustments (Improvement 3).
@@ -232,11 +233,7 @@ class AccountRepository {
     );
     if (changed == 0) return false;
 
-    await AppLogger.i(
-      'Reconciliation correction on $accountId: '
-      '₹${result.actualBalance} -> ₹${result.expectedBalance} '
-      '(drift ₹${result.drift})',
-    );
+    await AppLogger.info('Account balance reconciled', category: LogCategory.transactions, details: 'id $accountId');
     return true;
   }
 }

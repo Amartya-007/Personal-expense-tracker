@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mykhata/core/constants/app_constants.dart';
 import 'package:mykhata/core/database/database_helper.dart';
+import 'package:mykhata/core/logging/app_logger.dart';
 import 'package:mykhata/services/backup/backup_service.dart';
 import 'package:mykhata/services/backup/data_reset_service.dart';
 import 'package:path/path.dart' as p;
@@ -148,6 +149,9 @@ void main() {
     final dbPath = DatabaseHelper.customDatabasePath!;
     await databaseFactory.deleteDatabase(dbPath);
     await DatabaseHelper.instance.database;
+    // Logging is asynchronous: let the "database opened" entry land now, so it
+    // cannot arrive after the reset and break the empty-`app_logs` check.
+    await AppLogger.flush();
     SharedPreferences.setMockInitialValues({});
   });
 

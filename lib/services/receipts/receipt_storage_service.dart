@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 import '../../data/models/receipt_model.dart';
 
 class ReceiptStorageService {
@@ -57,10 +58,10 @@ class ReceiptStorageService {
         createdAt: DateTime.now(),
       );
 
-      await AppLogger.i('Saved receipt image to $targetPath');
+      await AppLogger.info('Receipt image saved', category: LogCategory.transactions);
       return receipt;
     } catch (e, stack) {
-      await AppLogger.e('Failed to capture receipt', error: e, stackTrace: stack);
+      await AppLogger.error('Failed to capture receipt', error: e, stackTrace: stack, category: LogCategory.transactions);
       return null;
     }
   }

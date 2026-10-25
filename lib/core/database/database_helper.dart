@@ -7,13 +7,15 @@ import 'package:sqflite/sqflite.dart';
 
 import '../constants/app_constants.dart';
 import '../constants/default_categories.dart';
+import '../../data/repositories/log_repository.dart';
 import '../logging/app_logger.dart';
+import '../logging/log_category.dart';
 import 'database_migrations.dart';
 import 'database_tables.dart';
 
 class DatabaseHelper {
   static final String _dbName = AppConstants.dbFileName;
-  static const int _dbVersion = 3;
+  static const int _dbVersion = 4;
 
   // Seed data created on first run. Shared with [deleteAllUserData] so that a
   // reset returns to exactly this state.
@@ -96,29 +98,69 @@ class DatabaseHelper {
   static Database? _database;
   static String? _customDatabasePath;
 
-  DatabaseHelper._internal();
+  DatabaseHelper._internal() {
+    // The logger persists into this database. Registered here so every path
+    // that touches the database also has working logs.
+    AppLogger.sink ??= LogRepository();
+  }
+
+  // Report a failing open once only: the logger's own writes retry the open.
+  static bool _loggedInitFailure = false;
 
   /// Allows tests or custom configurations to specify an isolated database path.
   static void setCustomDatabasePath(String? path) {
     if (_database != null && _database!.isOpen) {
+      AppLogger.holdWrites();
       _database!.close();
     }
     _database = null;
+    _opening = null;
     _customDatabasePath = path;
   }
 
   static String? get customDatabasePath => _customDatabasePath;
   String? get activeCustomPath => _customDatabasePath;
 
+  // Callers that arrive while the database is opening share that one open.
+  static Future<Database>? _opening;
+
   Future<Database> get database async {
     if (_database != null && _database!.isOpen) return _database!;
-    _database = await _initDatabase();
-    return _database!;
+    return _opening ??= _initDatabase()
+        .then((db) {
+          _database = db;
+          return db;
+        })
+        .whenComplete(() => _opening = null);
   }
 
   Future<Database> _initDatabase() async {
-    final path = _customDatabasePath ?? await _defaultDatabasePath();
-    return await _openDatabaseWithPath(path);
+    // Log writes would need this database before it is ready; they queue in
+    // memory and are written once it is open.
+    AppLogger.holdWrites();
+    try {
+      final path = _customDatabasePath ?? await _defaultDatabasePath();
+      final db = await _openDatabaseWithPath(path);
+      AppLogger.info(
+        'Database opened',
+        category: LogCategory.database,
+        details: 'schema version $_dbVersion',
+      );
+      return db;
+    } catch (e, st) {
+      if (!_loggedInitFailure) {
+        _loggedInitFailure = true;
+        AppLogger.error(
+          'Database initialization failed',
+          category: LogCategory.database,
+          error: e,
+          stackTrace: st,
+        );
+      }
+      rethrow;
+    } finally {
+      AppLogger.releaseWrites();
+    }
   }
 
   static Future<String> _defaultDatabasePath() async {
@@ -145,18 +187,45 @@ class DatabaseHelper {
         } catch (_) {}
       },
       onCreate: _onCreate,
-      onUpgrade: DatabaseMigrations.migrate,
+      onUpgrade: _onUpgrade,
       // Prevent a crash when the user installs an older app version over a newer one.
       onDowngrade: (db, oldVersion, newVersion) async {
-        await AppLogger.e(
-          'Database downgrade detected (v$oldVersion → v$newVersion). '
-          'Resetting database to avoid schema corruption.',
+        AppLogger.error(
+          'Database downgrade detected; resetting database to avoid schema '
+          'corruption',
+          category: LogCategory.database,
+          details: 'v$oldVersion → v$newVersion',
         );
         // Drop all known tables then recreate from scratch.
         await _dropAllTables(db);
         await _onCreate(db, newVersion);
       },
     );
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    AppLogger.info(
+      'Database migration started',
+      category: LogCategory.database,
+      details: 'v$oldVersion → v$newVersion',
+    );
+    try {
+      await DatabaseMigrations.migrate(db, oldVersion, newVersion);
+      AppLogger.info(
+        'Database migration completed',
+        category: LogCategory.database,
+        details: 'v$oldVersion → v$newVersion',
+      );
+    } catch (e, st) {
+      AppLogger.error(
+        'Database migration failed',
+        category: LogCategory.database,
+        details: 'v$oldVersion → v$newVersion',
+        error: e,
+        stackTrace: st,
+      );
+      rethrow;
+    }
   }
 
   /// Drops all application tables so `_onCreate` can recreate them cleanly
@@ -186,6 +255,11 @@ class DatabaseHelper {
   }
 
   Future<void> _onCreate(Database db, int version) async {
+    AppLogger.info(
+      'Database created',
+      category: LogCategory.database,
+      details: 'schema version $version',
+    );
     // ── 1. Core schema (one batch) ────────────────────────────────────────
     final schemaBatch = db.batch();
     schemaBatch.execute(DatabaseTables.createAccountsTable);
@@ -359,6 +433,11 @@ class DatabaseHelper {
   Future<void> close() async {
     final db = _database;
     if (db != null) {
+      // Write what is queued while the connection still exists, then keep
+      // later log writes from reopening the file while it is closed (a
+      // restore replaces it). Writing resumes when the database is reopened.
+      await AppLogger.flush();
+      AppLogger.holdWrites();
       await db.close();
       _database = null;
     }

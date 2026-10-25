@@ -2,6 +2,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../core/database/database_helper.dart';
 import '../../core/logging/app_logger.dart';
+import '../../core/logging/log_category.dart';
 import '../models/recurring_payment_model.dart';
 import '../models/transaction_model.dart';
 import 'transaction_repository.dart';
@@ -30,7 +31,11 @@ class RecurringPaymentRepository {
   Future<void> createRecurringPayment(RecurringPaymentModel item) async {
     final db = await _dbHelper.database;
     await db.insert('recurring_payments', item.toMap());
-    await AppLogger.i('Created recurring payment ${item.name}');
+    await AppLogger.info(
+      'Recurring payment created',
+      category: LogCategory.settings,
+      details: 'id ${item.id}',
+    );
   }
 
   Future<void> updateRecurringPayment(RecurringPaymentModel item) async {
@@ -41,13 +46,20 @@ class RecurringPaymentRepository {
       where: 'id = ?',
       whereArgs: [item.id],
     );
-    await AppLogger.i('Updated recurring payment ${item.name}');
+    await AppLogger.info(
+      'Recurring payment updated',
+      category: LogCategory.settings,
+      details: 'id ${item.id}',
+    );
   }
 
   Future<void> deleteRecurringPayment(String id) async {
     final db = await _dbHelper.database;
     await db.delete('recurring_payments', where: 'id = ?', whereArgs: [id]);
-    await AppLogger.i('Completely deleted recurring payment rule $id');
+    await AppLogger.info(
+      'Completely deleted recurring payment rule $id',
+      category: LogCategory.settings,
+    );
   }
 
   Future<void> processPaymentAction(
@@ -81,8 +93,10 @@ class RecurringPaymentRepository {
         where: 'id = ?',
         whereArgs: [item.id],
       );
-      await AppLogger.i(
-        'Marked recurring payment ${item.name} as Paid and advanced due date',
+      await AppLogger.info(
+        'Recurring payment marked as paid',
+        category: LogCategory.settings,
+        details: 'id ${item.id}',
       );
     } else if (action == 'Later') {
       final nextDate = item.nextDueDate.add(const Duration(days: 1));
