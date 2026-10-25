@@ -51,7 +51,9 @@ class TransactionRepository {
 
     if (effectiveCatIds.isNotEmpty) {
       final hasUncategorized = effectiveCatIds.contains('uncategorized');
-      final regularCatIds = effectiveCatIds.where((id) => id != 'uncategorized').toList();
+      final regularCatIds = effectiveCatIds
+          .where((id) => id != 'uncategorized')
+          .toList();
 
       final catClauses = <String>[];
       if (hasUncategorized) {
@@ -89,7 +91,9 @@ class TransactionRepository {
 
     if (effectiveAccIds.isNotEmpty) {
       final hasPrimary = effectiveAccIds.contains('primary');
-      final regularAccIds = effectiveAccIds.where((id) => id != 'primary').toList();
+      final regularAccIds = effectiveAccIds
+          .where((id) => id != 'primary')
+          .toList();
 
       final accClauses = <String>[];
       if (hasPrimary) {
@@ -140,18 +144,26 @@ class TransactionRepository {
     // Receipt presence
     if (hasReceipt != null) {
       if (hasReceipt) {
-        whereClauses.add('EXISTS (SELECT 1 FROM receipts r WHERE r.transaction_id = t.id)');
+        whereClauses.add(
+          'EXISTS (SELECT 1 FROM receipts r WHERE r.transaction_id = t.id)',
+        );
       } else {
-        whereClauses.add('NOT EXISTS (SELECT 1 FROM receipts r WHERE r.transaction_id = t.id)');
+        whereClauses.add(
+          'NOT EXISTS (SELECT 1 FROM receipts r WHERE r.transaction_id = t.id)',
+        );
       }
     }
 
     // Recurring presence
     if (isRecurring != null) {
       if (isRecurring) {
-        whereClauses.add('(t.recurring_payment_id IS NOT NULL AND TRIM(t.recurring_payment_id) != "")');
+        whereClauses.add(
+          '(t.recurring_payment_id IS NOT NULL AND TRIM(t.recurring_payment_id) != "")',
+        );
       } else {
-        whereClauses.add('(t.recurring_payment_id IS NULL OR TRIM(t.recurring_payment_id) = "")');
+        whereClauses.add(
+          '(t.recurring_payment_id IS NULL OR TRIM(t.recurring_payment_id) = "")',
+        );
       }
     }
 
@@ -167,9 +179,13 @@ class TransactionRepository {
     // Location presence
     if (hasLocation != null) {
       if (hasLocation) {
-        whereClauses.add('(t.location_name IS NOT NULL AND TRIM(t.location_name) != "")');
+        whereClauses.add(
+          '(t.location_name IS NOT NULL AND TRIM(t.location_name) != "")',
+        );
       } else {
-        whereClauses.add('(t.location_name IS NULL OR TRIM(t.location_name) = "")');
+        whereClauses.add(
+          '(t.location_name IS NULL OR TRIM(t.location_name) = "")',
+        );
       }
     }
 
@@ -189,17 +205,32 @@ class TransactionRepository {
         't.id IN (SELECT tt.transaction_id FROM transaction_tags tt JOIN tags tg ON tt.tag_id = tg.id WHERE tg.name LIKE ?)',
         't.id IN (SELECT ts.transaction_id FROM transaction_splits ts LEFT JOIN categories sc ON ts.category_id = sc.id WHERE ts.note LIKE ? OR sc.name LIKE ?)',
       ];
-      whereArgs.addAll([term, term, term, term, term, term, term, term, term, term]);
+      whereArgs.addAll([
+        term,
+        term,
+        term,
+        term,
+        term,
+        term,
+        term,
+        term,
+        term,
+        term,
+      ]);
 
       // Check numeric query / amount match
       final cleanedNumStr = query.replaceAll(RegExp(r'[^\d.]'), '');
       final parsedNum = double.tryParse(cleanedNumStr);
       if (parsedNum != null && parsedNum > 0) {
         final lowerQuery = query.toLowerCase();
-        if (lowerQuery.contains('above') || lowerQuery.contains('more than') || lowerQuery.startsWith('>')) {
+        if (lowerQuery.contains('above') ||
+            lowerQuery.contains('more than') ||
+            lowerQuery.startsWith('>')) {
           searchClauses.add('t.amount > ?');
           whereArgs.add(parsedNum);
-        } else if (lowerQuery.contains('below') || lowerQuery.contains('less than') || lowerQuery.startsWith('<')) {
+        } else if (lowerQuery.contains('below') ||
+            lowerQuery.contains('less than') ||
+            lowerQuery.startsWith('<')) {
           searchClauses.add('t.amount < ?');
           whereArgs.add(parsedNum);
         } else {
@@ -212,7 +243,9 @@ class TransactionRepository {
 
       // Check year match like '2026'
       if (RegExp(r'^\d{4}$').hasMatch(query)) {
-        searchClauses.add("strftime('%Y', t.date / 1000, 'unixepoch', 'localtime') = ?");
+        searchClauses.add(
+          "strftime('%Y', t.date / 1000, 'unixepoch', 'localtime') = ?",
+        );
         whereArgs.add(query);
       }
 
@@ -300,7 +333,8 @@ class TransactionRepository {
         break;
     }
 
-    final sql = '''
+    final sql =
+        '''
       SELECT 
         t.*,
         c.name as category_name,
@@ -321,18 +355,39 @@ class TransactionRepository {
     finalWhereArgs.add(offset);
 
     final maps = await db.rawQuery(sql, finalWhereArgs);
+    if (maps.isEmpty) return [];
+
+    final txIds = maps.map((m) => m['id'] as String).toList();
+    final batchResults = await Future.wait([
+      _getBatchTags(db, txIds),
+      _getBatchReceipts(db, txIds),
+      _getBatchSplits(db, txIds),
+    ]);
+    final batchTags = batchResults[0] as Map<String, List<TagModel>>;
+    final batchReceipts = batchResults[1] as Map<String, List<ReceiptModel>>;
+    final batchSplits =
+        batchResults[2] as Map<String, List<TransactionSplitModel>>;
+
     final list = <TransactionModel>[];
     for (final map in maps) {
       final txId = map['id'] as String;
-      final tags = await _getTagsForTransaction(db, txId);
-      final receipts = await _getReceiptsForTransaction(db, txId);
-      final splits = await _getSplitsForTransaction(db, txId);
-      list.add(TransactionModel.fromMap(map, tags: tags, receipts: receipts, splits: splits));
+      final tags = batchTags[txId] ?? const [];
+      final receipts = batchReceipts[txId] ?? const [];
+      final splits = batchSplits[txId] ?? const [];
+      list.add(
+        TransactionModel.fromMap(
+          map,
+          tags: tags,
+          receipts: receipts,
+          splits: splits,
+        ),
+      );
     }
     return list;
   }
 
-  Future<({int count, double totalExpense, double totalIncome})> getFilteredSummary({
+  Future<({int count, double totalExpense, double totalIncome})>
+  getFilteredSummary({
     String? type,
     String? accountId,
     List<String>? accountIds,
@@ -372,7 +427,8 @@ class TransactionRepository {
       searchQuery: searchQuery,
     );
 
-    final sql = '''
+    final sql =
+        '''
       SELECT 
         COUNT(*) as total_count,
         COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END), 0) as total_expense,
@@ -398,8 +454,7 @@ class TransactionRepository {
 
   Future<TransactionModel?> getTransactionById(String id) async {
     final db = await _dbHelper.database;
-    const sql =
-        '''
+    const sql = '''
       SELECT 
         t.*,
         c.name as category_name,
@@ -419,7 +474,12 @@ class TransactionRepository {
     final tags = await _getTagsForTransaction(db, id);
     final receipts = await _getReceiptsForTransaction(db, id);
     final splits = await _getSplitsForTransaction(db, id);
-    return TransactionModel.fromMap(maps.first, tags: tags, receipts: receipts, splits: splits);
+    return TransactionModel.fromMap(
+      maps.first,
+      tags: tags,
+      receipts: receipts,
+      splits: splits,
+    );
   }
 
   Future<void> createTransaction(TransactionModel tx) async {
@@ -443,11 +503,10 @@ class TransactionRepository {
           tagId = existing.first['id'] as String;
         } else {
           tagId = tag.id;
-          await txn.insert(
-            'tags',
-            {'id': tagId, 'name': cleanName},
-            conflictAlgorithm: ConflictAlgorithm.replace,
-          );
+          await txn.insert('tags', {
+            'id': tagId,
+            'name': cleanName,
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
         }
 
         await txn.insert('transaction_tags', {
@@ -486,7 +545,11 @@ class TransactionRepository {
       await learnCategoryRule(tx.description.trim(), tx.categoryId!);
     }
 
-    await AppLogger.info('Transaction created', category: LogCategory.transactions, details: 'id ${tx.id}, type ${tx.type}');
+    await AppLogger.info(
+      'Transaction created',
+      category: LogCategory.transactions,
+      details: 'id ${tx.id}, type ${tx.type}',
+    );
   }
 
   Future<void> updateTransaction(TransactionModel newTx) async {
@@ -538,11 +601,10 @@ class TransactionRepository {
           tagId = existing.first['id'] as String;
         } else {
           tagId = tag.id;
-          await txn.insert(
-            'tags',
-            {'id': tagId, 'name': cleanName},
-            conflictAlgorithm: ConflictAlgorithm.replace,
-          );
+          await txn.insert('tags', {
+            'id': tagId,
+            'name': cleanName,
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
         }
 
         await txn.insert('transaction_tags', {
@@ -586,7 +648,10 @@ class TransactionRepository {
         }, conflictAlgorithm: ConflictAlgorithm.replace);
       }
     });
-    await AppLogger.info('Updated transaction ${newTx.id}', category: LogCategory.transactions);
+    await AppLogger.info(
+      'Updated transaction ${newTx.id}',
+      category: LogCategory.transactions,
+    );
   }
 
   Future<void> softDeleteTransaction(String id) async {
@@ -614,7 +679,10 @@ class TransactionRepository {
         whereArgs: [id],
       );
     });
-    await AppLogger.info('Soft-deleted transaction $id', category: LogCategory.transactions);
+    await AppLogger.info(
+      'Soft-deleted transaction $id',
+      category: LogCategory.transactions,
+    );
   }
 
   Future<void> restoreTransaction(String id) async {
@@ -644,7 +712,10 @@ class TransactionRepository {
         whereArgs: [id],
       );
     });
-    await AppLogger.info('Restored transaction $id', category: LogCategory.transactions);
+    await AppLogger.info(
+      'Restored transaction $id',
+      category: LogCategory.transactions,
+    );
   }
 
   Future<void> permanentlyDeleteTransaction(String id) async {
@@ -702,8 +773,7 @@ class TransactionRepository {
 
   Future<List<TransactionModel>> getSoftDeletedTransactions() async {
     final db = await _dbHelper.database;
-    const sql =
-        '''
+    const sql = '''
       SELECT 
         t.*,
         c.name as category_name,
@@ -719,13 +789,33 @@ class TransactionRepository {
       ORDER BY t.deleted_at DESC
     ''';
     final maps = await db.rawQuery(sql);
+    if (maps.isEmpty) return [];
+
+    final txIds = maps.map((m) => m['id'] as String).toList();
+    final batchResults = await Future.wait([
+      _getBatchTags(db, txIds),
+      _getBatchReceipts(db, txIds),
+      _getBatchSplits(db, txIds),
+    ]);
+    final batchTags = batchResults[0] as Map<String, List<TagModel>>;
+    final batchReceipts = batchResults[1] as Map<String, List<ReceiptModel>>;
+    final batchSplits =
+        batchResults[2] as Map<String, List<TransactionSplitModel>>;
+
     final list = <TransactionModel>[];
     for (final map in maps) {
       final txId = map['id'] as String;
-      final tags = await _getTagsForTransaction(db, txId);
-      final receipts = await _getReceiptsForTransaction(db, txId);
-      final splits = await _getSplitsForTransaction(db, txId);
-      list.add(TransactionModel.fromMap(map, tags: tags, receipts: receipts, splits: splits));
+      final tags = batchTags[txId] ?? const [];
+      final receipts = batchReceipts[txId] ?? const [];
+      final splits = batchSplits[txId] ?? const [];
+      list.add(
+        TransactionModel.fromMap(
+          map,
+          tags: tags,
+          receipts: receipts,
+          splits: splits,
+        ),
+      );
     }
     return list;
   }
@@ -742,12 +832,100 @@ class TransactionRepository {
     } catch (_) {}
   }
 
+  Future<Map<String, List<TagModel>>> _getBatchTags(
+    DatabaseExecutor db,
+    List<String> txIds,
+  ) async {
+    if (txIds.isEmpty) return {};
+    const chunkSize = 200;
+    final result = <String, List<TagModel>>{};
+
+    for (var i = 0; i < txIds.length; i += chunkSize) {
+      final chunk = txIds.sublist(
+        i,
+        i + chunkSize > txIds.length ? txIds.length : i + chunkSize,
+      );
+      final placeholders = List.filled(chunk.length, '?').join(',');
+      final sql =
+          '''
+        SELECT tt.transaction_id, tg.*
+        FROM transaction_tags tt
+        JOIN tags tg ON tt.tag_id = tg.id
+        WHERE tt.transaction_id IN ($placeholders)
+      ''';
+      final maps = await db.rawQuery(sql, chunk);
+      for (final m in maps) {
+        final txId = m['transaction_id'] as String;
+        result.putIfAbsent(txId, () => []).add(TagModel.fromMap(m));
+      }
+    }
+    return result;
+  }
+
+  Future<Map<String, List<ReceiptModel>>> _getBatchReceipts(
+    DatabaseExecutor db,
+    List<String> txIds,
+  ) async {
+    if (txIds.isEmpty) return {};
+    const chunkSize = 200;
+    final result = <String, List<ReceiptModel>>{};
+
+    for (var i = 0; i < txIds.length; i += chunkSize) {
+      final chunk = txIds.sublist(
+        i,
+        i + chunkSize > txIds.length ? txIds.length : i + chunkSize,
+      );
+      final placeholders = List.filled(chunk.length, '?').join(',');
+      final sql =
+          '''
+        SELECT * FROM receipts WHERE transaction_id IN ($placeholders)
+      ''';
+      final maps = await db.rawQuery(sql, chunk);
+      for (final m in maps) {
+        final txId = m['transaction_id'] as String;
+        result.putIfAbsent(txId, () => []).add(ReceiptModel.fromMap(m));
+      }
+    }
+    return result;
+  }
+
+  Future<Map<String, List<TransactionSplitModel>>> _getBatchSplits(
+    DatabaseExecutor db,
+    List<String> txIds,
+  ) async {
+    if (txIds.isEmpty) return {};
+    const chunkSize = 200;
+    final result = <String, List<TransactionSplitModel>>{};
+
+    for (var i = 0; i < txIds.length; i += chunkSize) {
+      final chunk = txIds.sublist(
+        i,
+        i + chunkSize > txIds.length ? txIds.length : i + chunkSize,
+      );
+      final placeholders = List.filled(chunk.length, '?').join(',');
+      final sql =
+          '''
+        SELECT s.*, c.name as category_name
+        FROM transaction_splits s
+        LEFT JOIN categories c ON s.category_id = c.id
+        WHERE s.transaction_id IN ($placeholders)
+      ''';
+      final maps = await db.rawQuery(sql, chunk);
+      for (final m in maps) {
+        final txId = m['transaction_id'] as String;
+        result
+            .putIfAbsent(txId, () => [])
+            .add(TransactionSplitModel.fromMap(m));
+      }
+    }
+    return result;
+  }
+
   Future<List<TagModel>> _getTagsForTransaction(
     DatabaseExecutor db,
     String txId,
   ) async {
-    const sql =
-        '''
+    const sql = '''
       SELECT tag_id FROM transaction_tags WHERE transaction_id = ?
     ''';
     final maps = await db.rawQuery(sql, [txId]);

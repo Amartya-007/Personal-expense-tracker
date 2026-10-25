@@ -46,6 +46,61 @@ const int _insightsTab = 3;
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+
+    // Reload in place (keeps what is on screen) rather than invalidating the
+    // notifier-backed providers, which would blink every section.
+    Future<void> refresh() async {
+      ref.invalidate(recentTransactionsProvider);
+      ref.invalidate(homeInsightsProvider);
+      ref.invalidate(homeMonthSummaryProvider);
+      await Future.wait([
+        ref.read(accountListProvider.notifier).loadAccounts(),
+        ref.read(budgetListProvider.notifier).loadBudgets(),
+        ref.read(recurringListProvider.notifier).loadRecurringPayments(),
+      ]);
+    }
+
+    return Scaffold(
+      backgroundColor: p.background,
+      body: SafeArea(
+        bottom: false,
+        child: RefreshIndicator(
+          color: p.primary,
+          onRefresh: refresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(
+              18,
+              AppSpacing.lg,
+              18,
+              MediaQuery.of(context).padding.bottom + 130,
+            ),
+            children: const [
+              _HeaderSection(),
+              SizedBox(height: AppSpacing.lg),
+              _HeroCardSection(),
+              SizedBox(height: 14),
+              _AttentionZone(),
+              _ThisMonthStrip(),
+              SizedBox(height: AppSpacing.xl),
+              _RecentTransactionsSection(),
+              SizedBox(height: AppSpacing.xl),
+              _UpcomingRecurringSection(),
+              _InsightsSection(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderSection extends ConsumerWidget {
+  const _HeaderSection();
+
   String _getGreeting() {
     final hour = DateTime.now().hour;
     if (hour < 12) return 'Good morning';
@@ -53,7 +108,163 @@ class HomeScreen extends ConsumerWidget {
     return 'Good evening';
   }
 
-  Future<void> _recurringAction(
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+    final userName = ref.watch(userNameProvider);
+
+    return FadeSlideIn(
+      child: Row(
+        children: [
+          _Avatar(name: userName),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _getGreeting(),
+                  style: AppText.caption(p.muted)
+                      .copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  userName.isEmpty ? 'Welcome back' : userName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.display(p.ink),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroCardSection extends ConsumerWidget {
+  const _HeroCardSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accountsAsync = ref.watch(accountListProvider);
+    final overview = ref.watch(homeOverviewProvider);
+
+    return FadeSlideIn(
+      index: 1,
+      child: AsyncSection<List<AccountModel>>(
+        value: accountsAsync,
+        skeletonHeight: 150,
+        errorLabel: 'Could not load accounts',
+        onRetry: () => ref.read(accountListProvider.notifier).loadAccounts(),
+        builder: (accounts) => _HeroCard(
+          accounts: accounts,
+          total: overview.totalBalance,
+          onEditAccount: (acc) => editAccountBalance(context, ref, acc),
+        ),
+      ),
+    );
+  }
+}
+
+class _AttentionZone extends ConsumerWidget {
+  const _AttentionZone();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final overview = ref.watch(homeOverviewProvider);
+    final smsCount = overview.pendingSmsCount;
+    final billsDue = overview.billsDueCount;
+    final exceededBudgets = overview.exceededBudgets;
+
+    if (smsCount == 0 && billsDue == 0 && exceededBudgets.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (smsCount > 0) ...[
+          FadeSlideIn(index: 1, child: _SmsAttentionCard(count: smsCount)),
+          const SizedBox(height: 14),
+        ],
+        if (billsDue > 0) ...[
+          FadeSlideIn(index: 1, child: _BillsDueAttentionCard(count: billsDue)),
+          const SizedBox(height: 14),
+        ],
+        if (exceededBudgets.isNotEmpty) ...[
+          FadeSlideIn(
+            index: 1,
+            child: _BudgetAlertCard(
+              exceeded: exceededBudgets,
+              onTap: () =>
+                  ref.read(mainTabProvider.notifier).state = _budgetsTab,
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
+      ],
+    );
+  }
+}
+
+class _RecentTransactionsSection extends ConsumerWidget {
+  const _RecentTransactionsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final recentTxsAsync = ref.watch(recentTransactionsProvider);
+
+    return FadeSlideIn(
+      index: 3,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionHeader(
+            title: 'Recent transactions',
+            actionLabel: 'See all',
+            onAction: () =>
+                ref.read(mainTabProvider.notifier).state = _transactionsTab,
+          ),
+          AsyncSection(
+            value: recentTxsAsync,
+            skeletonHeight: 150,
+            errorLabel: 'Could not load recent transactions',
+            onRetry: () => ref.invalidate(recentTransactionsProvider),
+            builder: (txs) {
+              if (txs.isEmpty) {
+                return EmptyState(
+                  compact: true,
+                  emoji: '🧾',
+                  title: 'No transactions yet',
+                  message: 'Record your first expense to see it here.',
+                  actionLabel: 'Add expense',
+                  onAction: () => AppRoutes.pushModal(
+                    context,
+                    const AddTransactionScreen(initialType: 'expense'),
+                  ),
+                );
+              }
+              return TransactionListCard(
+                transactions: txs,
+                onTap: (tx) => AppRoutes.push(
+                  context,
+                  TransactionDetailScreen(transactionId: tx.id),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UpcomingRecurringSection extends ConsumerWidget {
+  const _UpcomingRecurringSection();
+
+  static Future<void> _recurringAction(
     BuildContext context,
     WidgetRef ref,
     RecurringPaymentModel item,
@@ -70,7 +281,7 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  void _showRecurringActionSheet(
+  static void _showRecurringActionSheet(
     BuildContext context,
     WidgetRef ref,
     RecurringPaymentModel item,
@@ -121,7 +332,6 @@ class HomeScreen extends ConsumerWidget {
             TextButton(
               onPressed: () async {
                 Navigator.pop(ctx);
-                // Deleting a rule used to happen on a single tap.
                 final ok = await confirmDestructive(
                   context,
                   title: 'Delete ${item.name}?',
@@ -149,301 +359,115 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
-    final accountsAsync = ref.watch(accountListProvider);
-    final recentTxsAsync = ref.watch(recentTransactionsProvider);
     final recurringAsync = ref.watch(recurringListProvider);
+
+    return FadeSlideIn(
+      index: 4,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionHeader(
+            title: 'Upcoming recurring',
+            actionLabel: 'Manage',
+            onAction: () =>
+                AppRoutes.push(context, const RecurringPaymentsScreen()),
+          ),
+          AsyncSection(
+            value: recurringAsync,
+            errorLabel: 'Could not load recurring payments',
+            onRetry: () => ref
+                .read(recurringListProvider.notifier)
+                .loadRecurringPayments(),
+            builder: (list) {
+              if (list.isEmpty) {
+                return EmptyState(
+                  compact: true,
+                  emoji: '🔁',
+                  title: 'No recurring payments',
+                  message:
+                      'Add rent or subscriptions to keep track of what is due.',
+                  actionLabel: 'Add one',
+                  onAction: () =>
+                      AppRoutes.push(context, const RecurringPaymentsScreen()),
+                );
+              }
+              final dateFormat = DateFormat('d MMM');
+              return SettingsGroup(
+                children: [
+                  for (final r in list.take(3))
+                    ListRowTile(
+                      emoji: '🔁',
+                      title: r.name,
+                      subtitle:
+                          'Due ${dateFormat.format(r.nextDueDate)} · ${r.frequency}',
+                      trailing: Text(
+                        CurrencyFormatter.format(r.amount),
+                        style: AppText.bodyStrong(p.expense),
+                      ),
+                      onTap: () => _showRecurringActionSheet(context, ref, r),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InsightsSection extends ConsumerWidget {
+  const _InsightsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
     final homeInsightsAsync = ref.watch(homeInsightsProvider);
-    // One consistent snapshot drives the hero total and the attention zone, so
-    // they never momentarily disagree. The month strip keeps its own
-    // AsyncValue read for skipLoadingOnReload no-flicker.
-    final overview = ref.watch(homeOverviewProvider);
-    final smsCount = overview.pendingSmsCount;
-    final billsDue = overview.billsDueCount;
-    final exceededBudgets = overview.exceededBudgets;
-    final userName = ref.watch(userNameProvider);
 
-    // Reload in place (keeps what is on screen) rather than invalidating the
-    // notifier-backed providers, which would blink every section.
-    Future<void> refresh() async {
-      ref.invalidate(recentTransactionsProvider);
-      ref.invalidate(homeInsightsProvider);
-      ref.invalidate(homeMonthSummaryProvider);
-      await Future.wait([
-        ref.read(accountListProvider.notifier).loadAccounts(),
-        ref.read(budgetListProvider.notifier).loadBudgets(),
-        ref.read(recurringListProvider.notifier).loadRecurringPayments(),
-      ]);
-    }
-
-    return Scaffold(
-      backgroundColor: p.background,
-      body: SafeArea(
-        bottom: false,
-        child: RefreshIndicator(
-          color: p.primary,
-          onRefresh: refresh,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.fromLTRB(
-              18,
-              AppSpacing.lg,
-              18,
-              MediaQuery.of(context).padding.bottom + 130,
-            ),
-            children: [
-              // 1. Header: who this is for, and the time of day.
-              FadeSlideIn(
-                child: Row(
+    return homeInsightsAsync.maybeWhen(
+      data: (insights) => insights.isEmpty
+          ? const SizedBox.shrink()
+          : Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xl),
+              child: FadeSlideIn(
+                index: 5,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _Avatar(name: userName),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
+                    const SectionHeader(title: 'Insights'),
+                    AppCard(
+                      padding: const EdgeInsets.all(18),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            _getGreeting(),
-                            style: AppText.caption(p.muted)
-                                .copyWith(fontWeight: FontWeight.w600),
+                          Row(
+                            children: [
+                              const Text('💡', style: TextStyle(fontSize: 16)),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Smart observation',
+                                style: AppText.bodyStrong(p.ink),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            // The name is empty until the user sets one.
-                            userName.isEmpty ? 'Welcome back' : userName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppText.display(p.ink),
-                          ),
+                          const SizedBox(height: 10),
+                          for (final msg in insights)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Text(
+                                msg,
+                                style: AppText.caption(p.muted)
+                                    .copyWith(fontSize: 13),
+                              ),
+                            ),
                         ],
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: AppSpacing.lg),
-
-              // 2. Hero balance card
-              FadeSlideIn(
-                index: 1,
-                child: AsyncSection<List<AccountModel>>(
-                  value: accountsAsync,
-                  skeletonHeight: 150,
-                  errorLabel: 'Could not load accounts',
-                  onRetry: () =>
-                      ref.read(accountListProvider.notifier).loadAccounts(),
-                  builder: (accounts) => _HeroCard(
-                    accounts: accounts,
-                    total: overview.totalBalance,
-                    onEditAccount: (acc) =>
-                        editAccountBalance(context, ref, acc),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              // 2a. Bank messages waiting: one clear call to action (this
-              // used to be a header pill AND a badge on a quick action).
-              if (smsCount > 0) ...[
-                FadeSlideIn(
-                  index: 1,
-                  child: _SmsAttentionCard(count: smsCount),
-                ),
-                const SizedBox(height: 14),
-              ],
-
-              // 2a-ii. Bills due this week: surfaced only when at least one
-              // active recurring rule is due within the next 7 days. Tapping
-              // opens the full recurring screen; the "Upcoming recurring"
-              // section below stays as the on-Home detail.
-              if (billsDue > 0) ...[
-                FadeSlideIn(
-                  index: 1,
-                  child: _BillsDueAttentionCard(count: billsDue),
-                ),
-                const SizedBox(height: 14),
-              ],
-
-              // 2a-iii. Budget alert: budgets surface on Home only when a limit
-              // is reached or exceeded, as a compact tappable card in the
-              // attention zone. The full list lives on the Budgets tab.
-              if (exceededBudgets.isNotEmpty) ...[
-                FadeSlideIn(
-                  index: 1,
-                  child: _BudgetAlertCard(
-                    exceeded: exceededBudgets,
-                    onTap: () =>
-                        ref.read(mainTabProvider.notifier).state = _budgetsTab,
-                  ),
-                ),
-                const SizedBox(height: 14),
-              ],
-
-              // 2b. This month at a glance (always this month, whatever range
-              // Insights is showing).
-              const FadeSlideIn(index: 1, child: _ThisMonthStrip()),
-              const SizedBox(height: AppSpacing.xl),
-
-              // 4. Recent transactions
-              FadeSlideIn(
-                index: 3,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SectionHeader(
-                      title: 'Recent transactions',
-                      actionLabel: 'See all',
-                      onAction: () => ref.read(mainTabProvider.notifier).state =
-                          _transactionsTab,
-                    ),
-                    AsyncSection(
-                      value: recentTxsAsync,
-                      skeletonHeight: 150,
-                      errorLabel: 'Could not load recent transactions',
-                      onRetry: () => ref.invalidate(recentTransactionsProvider),
-                      builder: (txs) {
-                        if (txs.isEmpty) {
-                          return EmptyState(
-                            compact: true,
-                            emoji: '🧾',
-                            title: 'No transactions yet',
-                            message:
-                                'Record your first expense to see it here.',
-                            actionLabel: 'Add expense',
-                            onAction: () => AppRoutes.pushModal(
-                              context,
-                              const AddTransactionScreen(
-                                initialType: 'expense',
-                              ),
-                            ),
-                          );
-                        }
-                        return TransactionListCard(
-                          transactions: txs,
-                          onTap: (tx) => AppRoutes.push(
-                            context,
-                            TransactionDetailScreen(transactionId: tx.id),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-
-              // 5. Upcoming recurring
-              FadeSlideIn(
-                index: 4,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SectionHeader(
-                      title: 'Upcoming recurring',
-                      actionLabel: 'Manage',
-                      onAction: () => AppRoutes.push(
-                        context,
-                        const RecurringPaymentsScreen(),
-                      ),
-                    ),
-                    AsyncSection(
-                      value: recurringAsync,
-                      errorLabel: 'Could not load recurring payments',
-                      onRetry: () => ref
-                          .read(recurringListProvider.notifier)
-                          .loadRecurringPayments(),
-                      builder: (list) {
-                        if (list.isEmpty) {
-                          return EmptyState(
-                            compact: true,
-                            emoji: '🔁',
-                            title: 'No recurring payments',
-                            message: 'Add rent or subscriptions to keep track of what is due.',
-                            actionLabel: 'Add one',
-                            onAction: () => AppRoutes.push(
-                              context,
-                              const RecurringPaymentsScreen(),
-                            ),
-                          );
-                        }
-                        final dateFormat = DateFormat('d MMM');
-                        return SettingsGroup(
-                          children: [
-                            for (final r in list.take(3))
-                              ListRowTile(
-                                emoji: '🔁',
-                                title: r.name,
-                                subtitle:
-                                    'Due ${dateFormat.format(r.nextDueDate)} · ${r.frequency}',
-                                trailing: Text(
-                                  CurrencyFormatter.format(r.amount),
-                                  style: AppText.bodyStrong(p.expense),
-                                ),
-                                onTap: () =>
-                                    _showRecurringActionSheet(context, ref, r),
-                              ),
-                          ],
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-
-              // 6. Insights (hidden when there is nothing to say)
-              ...homeInsightsAsync.maybeWhen(
-                data: (insights) => insights.isEmpty
-                    ? const <Widget>[]
-                    : <Widget>[
-                        const SizedBox(height: AppSpacing.xl),
-                        FadeSlideIn(
-                          index: 5,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SectionHeader(title: 'Insights'),
-                              AppCard(
-                                padding: const EdgeInsets.all(18),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        const Text(
-                                          '💡',
-                                          style: TextStyle(fontSize: 16),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          'Smart observation',
-                                          style: AppText.bodyStrong(p.ink),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 10),
-                                    for (final msg in insights)
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 4,
-                                        ),
-                                        child: Text(
-                                          msg,
-                                          style: AppText.caption(p.muted)
-                                              .copyWith(fontSize: 13),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                orElse: () => const <Widget>[],
-              ),
-            ],
-          ),
-        ),
-      ),
+            ),
+      orElse: () => const SizedBox.shrink(),
     );
   }
 }

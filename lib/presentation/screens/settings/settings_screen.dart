@@ -21,6 +21,7 @@ import '../../widgets/pressable.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/segmented_tabs.dart';
 import '../../widgets/sms_permission_help.dart';
+import '../legal/about_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../sms_review/sms_review_screen.dart';
 import 'accounts_management_screen.dart';
@@ -129,34 +130,7 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   void _showAbout(BuildContext context) {
-    AppBottomSheet.show<void>(
-      context,
-      builder: (ctx) {
-        final p = ctx.palette;
-        return Column(
-          children: [
-            Container(
-              width: 76,
-              height: 76,
-              decoration: BoxDecoration(
-                gradient: p.heroGradient,
-                borderRadius: BorderRadius.circular(AppRadius.dialog),
-              ),
-              alignment: Alignment.center,
-              child: const Text('📒', style: TextStyle(fontSize: 36)),
-            ),
-            const SizedBox(height: 14),
-            Text('MyKhata', style: AppText.display(p.ink)),
-            const SizedBox(height: 6),
-            Text(
-              'Version 1.0 · Offline · No ads · No login',
-              style: AppText.caption(p.muted),
-            ),
-            const SizedBox(height: 8),
-          ],
-        );
-      },
-    );
+    AppRoutes.push(context, const AboutScreen());
   }
 
   /// Deletes all app data after confirmation. A safety backup is made first
@@ -372,7 +346,7 @@ class SettingsScreen extends ConsumerWidget {
             const SizedBox(height: 22),
 
             // These two used to be a "SMS Detection" link and a "Location" row
-            // that only showed a snackbar; the onboarding choices behind them
+            // that only showed a snack bar; the onboarding choices behind them
             // were never read. They are real switches now.
             section(3, 'Automation', [
               ListRowTile(
@@ -476,6 +450,7 @@ class SettingsScreen extends ConsumerWidget {
                 subtitle: themeMode == ThemeMode.dark ? 'Dark' : 'Light',
                 onTap: () => _showAppearanceSheet(context),
               ),
+
               ListRowTile(
                 emoji: '📋',
                 title: 'Logs',
@@ -484,7 +459,8 @@ class SettingsScreen extends ConsumerWidget {
               ),
               ListRowTile(
                 emoji: 'ℹ️',
-                title: 'About',
+                title: 'About MyKhata',
+                subtitle: 'Version and details',
                 onTap: () => _showAbout(context),
               ),
             ]),

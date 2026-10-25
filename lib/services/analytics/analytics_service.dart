@@ -130,7 +130,12 @@ class AnalyticsService {
         accountBreakdown: accountBreakdown,
       );
     } catch (e, stack) {
-      await AppLogger.error('getAnalytics failed', error: e, stackTrace: stack, category: LogCategory.app);
+      await AppLogger.error(
+        'getAnalytics failed',
+        error: e,
+        stackTrace: stack,
+        category: LogCategory.app,
+      );
       return AnalyticsSummaryModel(
         totalIncome: 0,
         totalExpense: 0,
@@ -159,15 +164,15 @@ class AnalyticsService {
       ''',
         [startMs, todayMs],
       );
-      final actualSpentSoFar = (expRes.first['total'] as num?)?.toDouble() ?? 0.0;
+      final actualSpentSoFar =
+          (expRes.first['total'] as num?)?.toDouble() ?? 0.0;
 
-      final budgetRes = await db.rawQuery(
-        '''
+      final budgetRes = await db.rawQuery('''
         SELECT SUM(amount) as total FROM budgets
         WHERE period = 'monthly'
-      ''',
-      );
-      final monthlyBudgetLimit = (budgetRes.first['total'] as num?)?.toDouble() ?? 0.0;
+      ''');
+      final monthlyBudgetLimit =
+          (budgetRes.first['total'] as num?)?.toDouble() ?? 0.0;
 
       final daysElapsed = math.max(1, now.day);
       final totalDaysInMonth = monthEnd.day;
@@ -181,9 +186,13 @@ class AnalyticsService {
       ''',
         [todayMs, endMs],
       );
-      final remainingRecurringDue = (recurringRes.first['total'] as num?)?.toDouble() ?? 0.0;
+      final remainingRecurringDue =
+          (recurringRes.first['total'] as num?)?.toDouble() ?? 0.0;
 
-      final projectedTotalSpend = actualSpentSoFar + (dailyRunRate * remainingDays) + remainingRecurringDue;
+      final projectedTotalSpend =
+          actualSpentSoFar +
+          (dailyRunRate * remainingDays) +
+          remainingRecurringDue;
 
       return SpendingForecastModel(
         actualSpentSoFar: actualSpentSoFar,
@@ -217,23 +226,25 @@ class AnalyticsService {
       final startMs = startDate.millisecondsSinceEpoch;
       final endMs = endDate.millisecondsSinceEpoch;
       final duration = endMs - startMs;
-      final step = duration > 0 ? duration ~/ dataPoints : 1;
+      if (duration <= 0) return List.filled(dataPoints, 0.0);
+      final step = duration ~/ dataPoints;
 
-      final spots = <double>[];
-      for (int i = 0; i < dataPoints; i++) {
-        final chunkStart = startMs + (i * step);
-        final chunkEnd = (i == dataPoints - 1) ? endMs : (chunkStart + step);
-
-        final res = await db.rawQuery(
-          '''
-          SELECT SUM(amount) as total FROM transactions
-          WHERE type = 'expense' AND date >= ? AND date < ? AND deleted_at IS NULL
+      final res = await db.rawQuery(
+        '''
+        SELECT date, amount FROM transactions
+        WHERE type = 'expense' AND date >= ? AND date <= ? AND deleted_at IS NULL
         ''',
-          [chunkStart, chunkEnd],
-        );
+        [startMs, endMs],
+      );
 
-        final sum = (res.first['total'] as num?)?.toDouble() ?? 0.0;
-        spots.add(sum);
+      final spots = List.filled(dataPoints, 0.0);
+      for (final row in res) {
+        final txDate = (row['date'] as num).toInt();
+        final amount = (row['amount'] as num).toDouble();
+        var index = (txDate - startMs) ~/ step;
+        if (index >= dataPoints) index = dataPoints - 1;
+        if (index < 0) index = 0;
+        spots[index] += amount;
       }
       return spots;
     } catch (_) {
@@ -288,12 +299,19 @@ class AnalyticsService {
       }
 
       if (insights.isEmpty) {
-        insights.add('Log your expenses to unlock personalized spending forecasts.');
+        insights.add(
+          'Log your expenses to unlock personalized spending forecasts.',
+        );
       }
 
       return insights;
     } catch (e, stack) {
-      await AppLogger.error('getHomeInsights failed', error: e, stackTrace: stack, category: LogCategory.app);
+      await AppLogger.error(
+        'getHomeInsights failed',
+        error: e,
+        stackTrace: stack,
+        category: LogCategory.app,
+      );
       return ['Unable to load insights right now.'];
     }
   }

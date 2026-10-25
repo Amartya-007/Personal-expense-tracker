@@ -94,7 +94,7 @@ class InsightsScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 24),
               FadeSlideIn(
-                index: 5,
+                index: 6,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -164,6 +164,17 @@ class _AnalyticsBody extends ConsumerWidget {
         const SizedBox(height: 24),
         FadeSlideIn(
           index: 4,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SectionHeader(title: 'Financial health'),
+              _SavingsRateCard(data: data),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        FadeSlideIn(
+          index: 5,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -466,6 +477,120 @@ class _IncomeExpenseCard extends ConsumerWidget {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SavingsRateCard extends ConsumerWidget {
+  final AnalyticsSummaryModel data;
+
+  const _SavingsRateCard({required this.data});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+    final isMasked = ref.watch(privacyModeProvider);
+    final rate = data.savingsRate;
+
+    // No income — show an informative empty state instead of a misleading 0%.
+    if (rate == null) {
+      return const EmptyState(
+        compact: true,
+        emoji: '📊',
+        title: 'Not enough data',
+        message: 'Record some income to see your savings rate.',
+      );
+    }
+
+    // Clamped 0‒100 for the visual gauge; the label can still say "Overspent".
+    final gaugeValue = rate.clamp(0.0, 100.0) / 100.0;
+    final isOverspent = rate < 0;
+
+    final gaugeColor = isOverspent
+        ? p.expense
+        : rate >= 30
+            ? p.income
+            : rate >= 10
+                ? p.primary
+                : p.secondary;
+
+    return AppCard(
+      padding: const EdgeInsets.all(18),
+      child: Row(
+        children: [
+          // ── Circular gauge ──────────────────────────────────────────────
+          SizedBox(
+            width: 80,
+            height: 80,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 0, end: gaugeValue),
+              duration: AppMotion.slow,
+              curve: AppMotion.enter,
+              builder: (context, v, _) => Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox.expand(
+                    child: CircularProgressIndicator(
+                      value: v,
+                      strokeWidth: 7,
+                      strokeCap: StrokeCap.round,
+                      backgroundColor: p.surface2,
+                      valueColor: AlwaysStoppedAnimation(gaugeColor),
+                    ),
+                  ),
+                  Text(
+                    isMasked
+                        ? '••%'
+                        : '${rate.round()}%',
+                    style: AppText.bodyStrong(gaugeColor).copyWith(fontSize: 18),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 18),
+          // ── Labels ──────────────────────────────────────────────────────
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      data.savingsHealthEmoji,
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        data.savingsHealthLabel,
+                        style: AppText.bodyStrong(p.ink),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  isOverspent
+                      ? 'Expenses exceeded income by '
+                          '${CurrencyFormatter.format(data.netSavings.abs(), isMasked: isMasked)} '
+                          'this period.'
+                      : 'You saved '
+                          '${CurrencyFormatter.format(data.netSavings, isMasked: isMasked)} '
+                          'of your '
+                          '${CurrencyFormatter.format(data.totalIncome, isMasked: isMasked)} '
+                          'income.',
+                  style: AppText.caption(p.muted),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
         ],
       ),

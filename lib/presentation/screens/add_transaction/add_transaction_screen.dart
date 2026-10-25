@@ -20,7 +20,9 @@ import '../../../data/models/category_model.dart';
 import '../../../data/models/receipt_model.dart';
 import '../../../data/models/tag_model.dart';
 import '../../../data/models/transaction_model.dart';
+import '../../../data/models/transaction_split_model.dart';
 import '../../../services/location/location_service.dart';
+import '../../widgets/app_card.dart';
 import '../../../services/receipts/receipt_storage_service.dart';
 import '../../providers/account_providers.dart';
 import '../../providers/category_providers.dart';
@@ -91,6 +93,30 @@ class AddTransactionScreen extends ConsumerStatefulWidget {
       _AddTransactionScreenState();
 }
 
+class _SplitItem {
+  final String id;
+  String? categoryId;
+  CategoryModel? category;
+  final TextEditingController amountController;
+  final TextEditingController noteController;
+
+  _SplitItem({
+    required this.id,
+    this.categoryId,
+    this.category,
+    required String amountText,
+    String noteText = '',
+  })  : amountController = TextEditingController(text: amountText),
+        noteController = TextEditingController(text: noteText);
+
+  double get amount => double.tryParse(amountController.text.trim()) ?? 0.0;
+
+  void dispose() {
+    amountController.dispose();
+    noteController.dispose();
+  }
+}
+
 class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   late String _type; // 'expense', 'income', 'transfer'
   final TextEditingController _amountController = TextEditingController();
@@ -109,9 +135,14 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   final List<TagModel> _selectedTags = [];
   final List<ReceiptModel> _receipts = [];
 
+  bool _isSplit = false;
+  final List<_SplitItem> _splitItems = [];
+  String? _splitError;
+
   LocationResult? _locationResult;
   bool _isSaving = false;
   String? _suggestedCategoryName;
+  bool _userPickedCategory = false;
 
   // Inline field errors (shown under the field, mirroring budget_form's
   // pattern) instead of a Snackbar.
@@ -130,21 +161,6 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   final Uuid _uuid = const Uuid();
   final ReceiptStorageService _receiptService = ReceiptStorageService();
   final LocationService _locationService = LocationService();
-
-  static const Map<String, String> _keywordRules = {
-    'momos': 'Food',
-    'pizza': 'Food',
-    'burger': 'Food',
-    'chinese': 'Food',
-    'swiggy': 'Food',
-    'zomato': 'Food',
-    'pen': 'Stationery',
-    'notebook': 'Stationery',
-    'books': 'Education',
-    'charger': 'Electronics',
-    'earphones': 'Electronics',
-    'screen guard': 'Electronics',
-  };
 
   @override
   void initState() {
@@ -166,6 +182,22 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       _noteController.text = tx.note ?? '';
       _selectedTags.addAll(tx.tags);
       _receipts.addAll(tx.receipts);
+
+      if (tx.splits.isNotEmpty) {
+        _isSplit = true;
+        for (final s in tx.splits) {
+          _splitItems.add(
+            _SplitItem(
+              id: s.id,
+              categoryId: s.categoryId,
+              amountText: s.amount.toStringAsFixed(
+                s.amount.truncateToDouble() == s.amount ? 0 : 2,
+              ),
+              noteText: s.note ?? '',
+            ),
+          );
+        }
+      }
     } else if (widget.smsPrefill != null) {
       final prefill = widget.smsPrefill!;
       _type = prefill.type.toLowerCase();
@@ -193,7 +225,101 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     _noteController.dispose();
     _amountFocusNode.dispose();
     _descriptionFocusNode.dispose();
+    for (final item in _splitItems) {
+      item.dispose();
+    }
     super.dispose();
+  }
+
+  void _toggleSplit(List<CategoryModel> categories) {
+    AppHaptics.tap();
+    if (_isSplit) {
+      setState(() {
+        _isSplit = false;
+        _splitError = null;
+      });
+    } else {
+      final currentTotal =
+          double.tryParse(_amountController.text.trim()) ?? 0.0;
+      final initialCat = _effectiveCategory(categories);
+      final half1 =
+          currentTotal > 0 ? (currentTotal / 2).toStringAsFixed(2) : '';
+      final half2 =
+          currentTotal > 0
+              ? (currentTotal - (currentTotal / 2)).toStringAsFixed(2)
+              : '';
+      setState(() {
+        _isSplit = true;
+        _splitError = null;
+        if (_splitItems.isEmpty) {
+          _splitItems.addAll([
+            _SplitItem(
+              id: _uuid.v4(),
+              category: initialCat,
+              categoryId: initialCat?.id,
+              amountText: half1,
+            ),
+            _SplitItem(
+              id: _uuid.v4(),
+              category: categories.length > 1 ? categories[1] : null,
+              categoryId: categories.length > 1 ? categories[1].id : null,
+              amountText: half2,
+            ),
+          ]);
+        }
+      });
+    }
+  }
+
+  void _addSplitItem(List<CategoryModel> categories) {
+    AppHaptics.tap();
+    final currentTotal =
+        double.tryParse(_amountController.text.trim()) ?? 0.0;
+    final allocated = _splitItems.fold(
+      0.0,
+      (sum, item) => sum + item.amount,
+    );
+    final remaining = (currentTotal - allocated).clamp(0.0, kMaxAmount);
+    final remStr = remaining > 0 ? remaining.toStringAsFixed(2) : '';
+
+    setState(() {
+      _splitItems.add(
+        _SplitItem(
+          id: _uuid.v4(),
+          category: null,
+          amountText: remStr,
+        ),
+      );
+      _splitError = null;
+    });
+  }
+
+  void _removeSplitItem(int index) {
+    AppHaptics.tap();
+    if (_splitItems.length <= 2) return;
+    setState(() {
+      final item = _splitItems.removeAt(index);
+      item.dispose();
+      _splitError = null;
+    });
+  }
+
+  void _splitEqually() {
+    AppHaptics.tap();
+    final total = double.tryParse(_amountController.text.trim()) ?? 0.0;
+    if (total <= 0 || _splitItems.isEmpty) return;
+
+    final n = _splitItems.length;
+    final baseAmount = (total / n * 100).truncateToDouble() / 100;
+    final remainder = ((total - (baseAmount * n)) * 100).round() / 100;
+
+    setState(() {
+      for (int i = 0; i < n; i++) {
+        final amt = (i == 0) ? (baseAmount + remainder) : baseAmount;
+        _splitItems[i].amountController.text = amt.toStringAsFixed(2);
+      }
+      _splitError = null;
+    });
   }
 
   Future<void> _captureLocation() async {
@@ -208,32 +334,55 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     }
   }
 
-  void _onDescriptionChanged(String text, List<CategoryModel> categories) {
-    if (_type != 'expense') {
-      setState(() => _suggestedCategoryName = null);
+  void _onDescriptionChanged(
+    String text,
+    List<CategoryModel> categories,
+    List<({String keyword, String categoryId})> rules,
+  ) {
+    if (_userPickedCategory || _type != 'expense' || categories.isEmpty) {
+      if (_suggestedCategoryName != null) {
+        setState(() => _suggestedCategoryName = null);
+      }
       return;
     }
-    // BUG FIX: guard against empty categories list to prevent RangeError on .first
-    if (categories.isEmpty) return;
 
     final lower = text.toLowerCase().trim();
-    String? matchedCategory;
+    if (lower.isEmpty) {
+      if (_suggestedCategoryName != null) {
+        setState(() => _suggestedCategoryName = null);
+      }
+      return;
+    }
 
-    for (final entry in _keywordRules.entries) {
-      if (lower.contains(entry.key)) {
-        matchedCategory = entry.value;
-        break;
+    CategoryModel? matchedCategory;
+
+    // 1. Check category_rules table (seeded + learned rules)
+    for (final rule in rules) {
+      if (lower.contains(rule.keyword)) {
+        for (final c in categories) {
+          if (c.id == rule.categoryId) {
+            matchedCategory = c;
+            break;
+          }
+        }
+        if (matchedCategory != null) break;
+      }
+    }
+
+    // 2. If no rule matched, check if description directly contains category name
+    if (matchedCategory == null) {
+      for (final c in categories) {
+        if (lower.contains(c.name.toLowerCase())) {
+          matchedCategory = c;
+          break;
+        }
       }
     }
 
     if (matchedCategory != null) {
-      final match = categories.firstWhere(
-        (c) => c.name.toLowerCase() == matchedCategory!.toLowerCase(),
-        orElse: () => categories.first,
-      );
       setState(() {
-        _selectedCategory = match;
-        _suggestedCategoryName = matchedCategory;
+        _selectedCategory = matchedCategory;
+        _suggestedCategoryName = matchedCategory!.name;
       });
     } else {
       if (_suggestedCategoryName != null) {
@@ -323,6 +472,39 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   ? original.categoryId
                   : null));
 
+    if (_isSplit && _type != 'transfer') {
+      if (_splitItems.length < 2) {
+        setState(() => _splitError = 'Please add at least 2 categories');
+        return;
+      }
+      double totalAllocated = 0.0;
+      for (int i = 0; i < _splitItems.length; i++) {
+        final item = _splitItems[i];
+        if (item.category == null &&
+            (item.categoryId == null || item.categoryId!.isEmpty)) {
+          setState(() => _splitError = 'Select a category for Split ${i + 1}');
+          return;
+        }
+        if (item.amount <= 0) {
+          setState(
+            () => _splitError = 'Enter a valid amount for Split ${i + 1}',
+          );
+          return;
+        }
+        totalAllocated += item.amount;
+      }
+      if ((totalAllocated - amount).abs() > 0.01) {
+        final diff = (amount - totalAllocated).abs();
+        final isOver = totalAllocated > amount;
+        setState(
+          () => _splitError = isOver
+              ? 'Splits exceed total by ₹${diff.toStringAsFixed(2)}'
+              : 'Remaining ₹${diff.toStringAsFixed(2)} unallocated',
+        );
+        return;
+      }
+    }
+
     setState(() => _isSaving = true);
 
     final txId = widget.editTransaction?.id ?? _uuid.v4();
@@ -333,12 +515,31 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     final isSmsEntry =
         widget.editTransaction == null && widget.smsPrefill != null;
 
+    final splits = (_isSplit && _type != 'transfer')
+        ? _splitItems.map((item) {
+            return TransactionSplitModel(
+              id: item.id.isNotEmpty ? item.id : _uuid.v4(),
+              transactionId: txId,
+              categoryId: item.category?.id ?? item.categoryId ?? '',
+              categoryName: item.category?.name,
+              amount: item.amount,
+              note: TextSanitizer.singleLine(item.noteController.text).isNotEmpty
+                  ? TextSanitizer.singleLine(item.noteController.text)
+                  : null,
+            );
+          }).toList()
+        : const <TransactionSplitModel>[];
+
+    final effectiveCatId = splits.isNotEmpty
+        ? splits.first.categoryId
+        : categoryId;
+
     final tx = TransactionModel(
       id: txId,
       type: _type,
       amount: amount,
       description: finalDesc,
-      categoryId: categoryId,
+      categoryId: effectiveCatId,
       paymentMethod: _type == 'transfer' ? 'Bank' : _selectedPaymentMethod,
       source: isSmsEntry ? 'sms' : 'manual',
       smsMessageId: isSmsEntry ? widget.smsPrefill!.smsMessageId : null,
@@ -361,6 +562,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           _locationResult?.locationName ?? widget.editTransaction?.locationName,
       tags: _selectedTags,
       receipts: _receipts,
+      splits: splits,
       createdAt: widget.editTransaction?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -426,6 +628,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     final categoriesAsync = ref.watch(
       _type == 'income' ? incomeCategoriesProvider : expenseCategoriesProvider,
     );
+    final rules = ref.watch(categoryRulesProvider).value ?? const [];
 
     return Scaffold(
       appBar: AppBar(
@@ -688,7 +891,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                             if (err != _descriptionError) {
                               setState(() => _descriptionError = err);
                             }
-                            _onDescriptionChanged(val, categories);
+                            _onDescriptionChanged(val, categories, rules);
                           },
                         ),
                         if (_suggestedCategoryName != null &&
@@ -709,24 +912,71 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                       const SizedBox(height: 18),
 
                       // 3. Category / To
-                      Text(
-                        _type == 'transfer' ? 'To' : 'Category',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: mutedColor,
+                      if (_type == 'transfer') ...[
+                        Text(
+                          'To',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: mutedColor,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 6),
-                      if (_type == 'transfer')
+                        const SizedBox(height: 6),
                         _buildAccountDropdown(
                           value: _effectiveDestination(accounts),
                           accounts: accounts,
                           onChanged: (acc) =>
                               setState(() => _selectedDestinationAccount = acc),
-                        )
-                      else ...[
-                        if (categories.isEmpty)
+                        ),
+                      ] else ...[
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              _isSplit ? 'Category splits' : 'Category',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: mutedColor,
+                              ),
+                            ),
+                            InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () => _toggleSplit(categories),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      _isSplit
+                                          ? Icons.check_circle_outline_rounded
+                                          : Icons.call_split_rounded,
+                                      size: 14,
+                                      color: p.primary,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _isSplit
+                                          ? 'Single category'
+                                          : 'Split categories',
+                                      style: AppText.caption(p.primary)
+                                          .copyWith(fontWeight: FontWeight.w700),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        if (_isSplit)
+                          _buildSplitSection(p, categories)
+                        else ...[
+                          if (categories.isEmpty)
                           Text(
                             'No categories available.',
                             style: TextStyle(color: mutedColor),
@@ -745,6 +995,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                                     setState(() {
                                       _selectedCategory = cat;
                                       _suggestedCategoryName = null;
+                                      _userPickedCategory = true;
                                     });
                                   },
                                   child: AnimatedContainer(
@@ -809,12 +1060,14 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                             onChanged: (c) => setState(() {
                               _selectedCategory = c;
                               _suggestedCategoryName = null;
+                              _userPickedCategory = true;
                             }),
                           ),
                         ],
                       ],
                     ],
-                  );
+                  ],
+                );
                 },
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, _) => Text('Error: $e'),
@@ -1431,4 +1684,260 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     ];
     return months[month - 1];
   }
+
+  Widget _buildSplitSection(AppPalette p, List<CategoryModel> categories) {
+    // Match any unresolved categories for edit mode
+    for (final item in _splitItems) {
+      if (item.category == null && item.categoryId != null) {
+        for (final c in categories) {
+          if (c.id == item.categoryId) {
+            item.category = c;
+            break;
+          }
+        }
+      }
+    }
+
+    final currentTotal =
+        double.tryParse(_amountController.text.trim()) ?? 0.0;
+    final totalAllocated = _splitItems.fold(
+      0.0,
+      (sum, item) => sum + item.amount,
+    );
+    final diff = (currentTotal - totalAllocated).abs();
+    final isBalanced = currentTotal > 0 && diff < 0.01;
+    final isOver = totalAllocated > currentTotal + 0.01;
+
+    return AppCard(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Allocated: ${CurrencyFormatter.format(totalAllocated)} / ${CurrencyFormatter.format(currentTotal)}',
+                      style: AppText.caption(p.ink).copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isBalanced
+                          ? '✓ Fully allocated'
+                          : isOver
+                          ? 'Exceeds total by ₹${(totalAllocated - currentTotal).toStringAsFixed(2)}'
+                          : '₹${(currentTotal - totalAllocated).toStringAsFixed(2)} unallocated',
+                      style: AppText.caption(
+                        isBalanced
+                            ? p.income
+                            : isOver
+                            ? p.expense
+                            : p.primary,
+                      ).copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+              ),
+              InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: _splitEqually,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: p.surface2,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: p.border),
+                  ),
+                  child: Text(
+                    'Split equally',
+                    style: AppText.caption(p.ink).copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          for (int i = 0; i < _splitItems.length; i++)
+            _buildSplitRow(p, categories, i),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: () => _addSplitItem(categories),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add_rounded, size: 16, color: p.primary),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Add another category',
+                        style: AppText.caption(p.primary).copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_splitError != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              _splitError!,
+              style: AppText.caption(p.expense).copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSplitRow(
+    AppPalette p,
+    List<CategoryModel> categories,
+    int index,
+  ) {
+    final item = _splitItems[index];
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: p.surface2.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: p.border),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: p.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Split ${index + 1}',
+                  style: AppText.caption(p.primary).copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: AppDropdown<CategoryModel>(
+                  hint: 'Select category',
+                  sheetTitle: 'Category for split ${index + 1}',
+                  value: item.category,
+                  items: categories,
+                  keyOf: (c) => c.id,
+                  labelOf: (c) => c.name,
+                  emojiOf: (c) => AppColors.getCategoryEmoji(c.name),
+                  onChanged: (c) {
+                    setState(() {
+                      item.category = c;
+                      item.categoryId = c.id;
+                      _splitError = null;
+                    });
+                  },
+                ),
+              ),
+              if (_splitItems.length > 2)
+                IconButton(
+                  icon: Icon(
+                    Icons.remove_circle_outline_rounded,
+                    color: p.expense,
+                    size: 20,
+                  ),
+                  onPressed: () => _removeSplitItem(index),
+                  tooltip: 'Remove split',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                flex: 4,
+                child: TextField(
+                  controller: item.amountController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: AmountInput.amountFormatters(),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: p.ink,
+                  ),
+                  onChanged: (_) {
+                    setState(() => _splitError = null);
+                  },
+                  decoration: appFieldDecoration(
+                    p,
+                    hint: 'Amount',
+                  ).copyWith(
+                    prefixText: '₹ ',
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 5,
+                child: TextField(
+                  controller: item.noteController,
+                  maxLength: 40,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: p.ink,
+                  ),
+                  decoration: appFieldDecoration(
+                    p,
+                    hint: 'Note (optional)',
+                  ).copyWith(
+                    counterText: '',
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
+

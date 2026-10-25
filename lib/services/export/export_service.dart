@@ -12,7 +12,6 @@ import '../../core/constants/app_constants.dart';
 import '../../core/database/database_helper.dart';
 import '../../core/logging/app_logger.dart';
 import '../../core/logging/log_category.dart';
-import '../../core/utils/currency_formatter.dart';
 
 class ExportService {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
@@ -218,7 +217,10 @@ class ExportService {
     }
   }
 
-  /// Generates a PDF financial summary report.
+  /// Generates a clean, paginated PDF financial report.
+  ///
+  /// Uses flexible column widths and explicit cell widgets instead of
+  /// TableHelper.fromTextArray, so long values can wrap within their cells.
   Future<File> generatePdfReport({
     DateTime? startDate,
     DateTime? endDate,
@@ -227,6 +229,7 @@ class ExportService {
       'PDF report generation started',
       category: LogCategory.exportData,
     );
+
     try {
       final pdf = pw.Document();
       final db = await _dbHelper.database;
@@ -243,53 +246,329 @@ class ExportService {
         WHERE t.deleted_at IS NULL AND t.date >= ? AND t.date <= ?
         ORDER BY t.date DESC
         LIMIT 500
-      ''',
+        ''',
         [startMs, endMs],
       );
 
+      final generatedAt = DateTime.now();
+      String dateLabel(DateTime d) =>
+          '${d.day.toString().padLeft(2, '0')}/'
+              '${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+      // The built-in Helvetica font does not cover all Unicode characters.
+      // Normalize currency symbols and replace unsupported characters without
+      // relying on complex Unicode regular-expression ranges.
+      String pdfSafeText(Object? value, {String fallback = '-'}) {
+        var input = (value?.toString() ?? '').trim();
+        if (input.isEmpty) return fallback;
+
+        input = input
+            .replaceAll('₹', 'INR ')
+            .replaceAll('€', 'EUR ')
+            .replaceAll('£', 'GBP ')
+            .replaceAll('¥', 'JPY ');
+
+        final normalized = StringBuffer();
+        for (final rune in input.runes) {
+          // Skip control characters except tab/newline, which are normalized
+          // to spaces below. Replace unsupported non-Latin glyphs with '?'.
+          if (rune < 0x20 || (rune >= 0x7F && rune <= 0x9F)) {
+            normalized.write(' ');
+          } else if (rune <= 0xFF) {
+            normalized.writeCharCode(rune);
+          } else {
+            // This also safely removes emoji and avoids missing-glyph errors.
+            normalized.write('?');
+          }
+        }
+
+        var result = normalized
+            .toString()
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+
+        // Add safe break opportunities to long unbroken tokens. Spaces are
+        // used instead of zero-width characters for predictable PDF wrapping.
+        result = result.replaceAllMapped(
+          RegExp(r'\S{25,}'),
+              (match) {
+            final token = match.group(0)!;
+            final parts = <String>[];
+            for (var i = 0; i < token.length; i += 18) {
+              parts.add(token.substring(
+                i,
+                i + 18 > token.length ? token.length : i + 18,
+              ));
+            }
+            return parts.join(' ');
+          },
+        );
+
+        return result.isEmpty ? fallback : result;
+      }
+
+      final pageTheme = pw.PageTheme(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.fromLTRB(28, 30, 28, 34),
+        theme: pw.ThemeData.withFont(
+          base: pw.Font.helvetica(),
+          bold: pw.Font.helveticaBold(),
+          italic: pw.Font.helveticaOblique(),
+          boldItalic: pw.Font.helveticaBoldOblique(),
+        ),
+      );
+
+      final headerStyle = pw.TextStyle(
+        fontSize: 8,
+        color: PdfColors.blueGrey700,
+        fontWeight: pw.FontWeight.bold,
+      );
+      final cellStyle = pw.TextStyle(
+        fontSize: 7.5,
+        color: PdfColors.blueGrey900,
+        lineSpacing: 1.5,
+      );
+
+      pw.Widget cell(
+          String value, {
+            pw.Alignment alignment = pw.Alignment.centerLeft,
+            pw.TextStyle? style,
+          }) {
+        return pw.Container(
+          alignment: alignment,
+          padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 7),
+          child: pw.Text(
+            pdfSafeText(value),
+            style: style ?? cellStyle,
+            softWrap: true,
+            textAlign: alignment == pw.Alignment.centerRight
+                ? pw.TextAlign.right
+                : pw.TextAlign.left,
+          ),
+        );
+      }
+
+      final rows = txs.map((r) {
+        final date = DateTime.fromMillisecondsSinceEpoch(
+          (r['date'] as num?)?.toInt() ?? 0,
+        );
+        final amount = (r['amount'] as num?)?.toDouble() ?? 0.0;
+        final type = pdfSafeText(r['type'], fallback: 'UNKNOWN').toUpperCase();
+
+        return <pw.Widget>[
+          cell(dateLabel(date)),
+          cell(type),
+          cell(pdfSafeText(r['description'], fallback: 'No description')),
+          cell(pdfSafeText(r['category'])),
+          cell(pdfSafeText(r['account'])),
+          cell(
+            'INR ${amount.toStringAsFixed(2)}',
+            alignment: pw.Alignment.centerRight,
+            style: pw.TextStyle(
+              fontSize: 7.5,
+              color: PdfColors.blueGrey900,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+        ];
+      }).toList();
+
+      final income = txs.fold<double>(0, (sum, r) {
+        final amount = (r['amount'] as num?)?.toDouble() ?? 0;
+        final type = (r['type'] as String? ?? '').toLowerCase();
+        return sum + (type == 'income' ? amount.abs() : 0);
+      });
+      final expenses = txs.fold<double>(0, (sum, r) {
+        final amount = (r['amount'] as num?)?.toDouble() ?? 0;
+        final type = (r['type'] as String? ?? '').toLowerCase();
+        return sum + (type == 'expense' ? amount.abs() : 0);
+      });
+
+      final periodLabel = startDate == null && endDate == null
+          ? 'All available dates'
+          : '${startDate == null ? 'Beginning' : dateLabel(startDate)}'
+          '  -  ${endDate == null ? 'Present' : dateLabel(endDate)}';
+
       pdf.addPage(
         pw.MultiPage(
-          pageFormat: PdfPageFormat.a4,
-          build: (context) => [
-            pw.Header(
-              level: 0,
-              child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'MyKhata Financial Report',
-                    style: pw.TextStyle(
-                      fontSize: 24,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                  pw.Text(DateTime.now().toString().split(' ')[0]),
-                ],
+          pageTheme: pageTheme,
+          maxPages: 100,
+          header: (context) => pw.Container(
+            padding: const pw.EdgeInsets.only(bottom: 10),
+            decoration: const pw.BoxDecoration(
+              border: pw.Border(
+                bottom: pw.BorderSide(
+                  color: PdfColors.blueGrey200,
+                  width: 0.8,
+                ),
               ),
             ),
-            pw.SizedBox(height: 16),
-            pw.TableHelper.fromTextArray(
-              headers: [
-                'Date',
-                'Type',
-                'Description',
-                'Category',
-                'Account',
-                'Amount (INR)',
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                pw.Container(
+                  width: 5,
+                  height: 28,
+                  decoration: const pw.BoxDecoration(
+                    color: PdfColors.indigo700,
+                    borderRadius: pw.BorderRadius.all(pw.Radius.circular(2)),
+                  ),
+                ),
+                pw.SizedBox(width: 9),
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'MyKhata',
+                        style: pw.TextStyle(
+                          fontSize: 17,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.blueGrey900,
+                        ),
+                      ),
+                      pw.SizedBox(height: 2),
+                      pw.Text(
+                        'FINANCIAL TRANSACTION REPORT',
+                        style: pw.TextStyle(
+                          fontSize: 7,
+                          letterSpacing: 1.1,
+                          color: PdfColors.blueGrey600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                pw.Text(
+                  dateLabel(generatedAt),
+                  style: pw.TextStyle(
+                    fontSize: 8,
+                    color: PdfColors.blueGrey600,
+                  ),
+                ),
               ],
-              data: txs.map((r) {
-                final d = DateTime.fromMillisecondsSinceEpoch(
-                  (r['date'] as num).toInt(),
-                );
-                return [
-                  '${d.day}/${d.month}/${d.year}',
-                  ((r['type'] as String?) ?? 'unknown').toUpperCase(),
-                  (r['description'] as String?) ?? '',
-                  (r['category'] as String?) ?? '-',
-                  (r['account'] as String?) ?? '-',
-                  CurrencyFormatter.format((r['amount'] as num).toDouble()),
-                ];
-              }).toList(),
+            ),
+          ),
+          footer: (context) => pw.Container(
+            alignment: pw.Alignment.centerRight,
+            padding: const pw.EdgeInsets.only(top: 8),
+            decoration: const pw.BoxDecoration(
+              border: pw.Border(
+                top: pw.BorderSide(color: PdfColors.blueGrey200, width: 0.6),
+              ),
+            ),
+            child: pw.Text(
+              'MyKhata  |  Page ${context.pageNumber} of ${context.pagesCount}',
+              style: pw.TextStyle(
+                fontSize: 7,
+                color: PdfColors.blueGrey500,
+              ),
+            ),
+          ),
+          build: (context) => [
+            pw.SizedBox(height: 16),
+            pw.Text(
+              'Financial overview',
+              style: pw.TextStyle(
+                fontSize: 20,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.blueGrey900,
+              ),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Text(
+              'Period: $periodLabel',
+              style: pw.TextStyle(fontSize: 9, color: PdfColors.blueGrey600),
+            ),
+            pw.SizedBox(height: 14),
+            pw.Row(
+              children: [
+                _summaryCard('TRANSACTIONS', '${txs.length}', PdfColors.indigo700),
+                pw.SizedBox(width: 8),
+                _summaryCard('INCOME', 'INR ${income.toStringAsFixed(2)}', PdfColors.green700),
+                pw.SizedBox(width: 8),
+                _summaryCard('EXPENSES', 'INR ${expenses.toStringAsFixed(2)}', PdfColors.red700),
+              ],
+            ),
+            pw.SizedBox(height: 20),
+            if (txs.isEmpty)
+              pw.Container(
+                width: double.infinity,
+                padding: const pw.EdgeInsets.all(22),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.blueGrey50,
+                  borderRadius: pw.BorderRadius.circular(8),
+                  border: pw.Border.all(color: PdfColors.blueGrey100),
+                ),
+                child: pw.Column(
+                  children: [
+                    pw.Text(
+                      'No transactions found',
+                      style: pw.TextStyle(
+                        fontSize: 12,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.blueGrey800,
+                      ),
+                    ),
+                    pw.SizedBox(height: 4),
+                    pw.Text(
+                      'Try selecting a different reporting period.',
+                      style: pw.TextStyle(fontSize: 9, color: PdfColors.blueGrey600),
+                    ),
+                  ],
+                ),
+              )
+            else
+              pw.Table(
+                border: pw.TableBorder(
+                  horizontalInside: const pw.BorderSide(
+                    color: PdfColors.blueGrey100,
+                    width: 0.5,
+                  ),
+                  bottom: const pw.BorderSide(
+                    color: PdfColors.blueGrey200,
+                    width: 0.7,
+                  ),
+                ),
+                columnWidths: const {
+                  0: pw.FlexColumnWidth(1.05),
+                  1: pw.FlexColumnWidth(0.85),
+                  2: pw.FlexColumnWidth(2.35),
+                  3: pw.FlexColumnWidth(1.35),
+                  4: pw.FlexColumnWidth(1.35),
+                  5: pw.FlexColumnWidth(1.25),
+                },
+                children: [
+                  pw.TableRow(
+                    repeat: true,
+                    decoration: const pw.BoxDecoration(color: PdfColors.blueGrey50),
+                    children: [
+                      cell('DATE', style: headerStyle),
+                      cell('TYPE', style: headerStyle),
+                      cell('DESCRIPTION', style: headerStyle),
+                      cell('CATEGORY', style: headerStyle),
+                      cell('ACCOUNT', style: headerStyle),
+                      cell(
+                        'AMOUNT (INR)',
+                        alignment: pw.Alignment.centerRight,
+                        style: headerStyle,
+                      ),
+                    ],
+                  ),
+                  for (var i = 0; i < rows.length; i++)
+                    pw.TableRow(
+                      decoration: pw.BoxDecoration(
+                        color: i.isEven ? PdfColors.white : PdfColors.grey50,
+                      ),
+                      children: rows[i],
+                    ),
+                ],
+              ),
+            pw.SizedBox(height: 10),
+            pw.Text(
+              'Showing up to 500 most recent transactions. '
+                  'Amounts are displayed in INR.',
+              style: pw.TextStyle(fontSize: 7, color: PdfColors.blueGrey500),
             ),
           ],
         ),
@@ -307,6 +586,7 @@ class ExportService {
       await AppLogger.info(
         'PDF report generated',
         category: LogCategory.exportData,
+        details: '${txs.length} transactions',
       );
       return file;
     } catch (e, st) {
@@ -318,5 +598,42 @@ class ExportService {
       );
       rethrow;
     }
+  }
+
+  pw.Widget _summaryCard(String label, String value, PdfColor accent) {
+    return pw.Expanded(
+      child: pw.Container(
+        padding: const pw.EdgeInsets.all(10),
+        decoration: pw.BoxDecoration(
+          color: PdfColors.blueGrey50,
+          borderRadius: pw.BorderRadius.circular(7),
+          border: pw.Border.all(color: PdfColors.blueGrey100, width: 0.7),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              label,
+              style: pw.TextStyle(
+                fontSize: 6.5,
+                letterSpacing: 0.6,
+                color: PdfColors.blueGrey600,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            pw.SizedBox(height: 5),
+            pw.Text(
+              value,
+              style: pw.TextStyle(
+                fontSize: 10,
+                color: accent,
+                fontWeight: pw.FontWeight.bold,
+              ),
+              softWrap: true,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

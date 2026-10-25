@@ -210,6 +210,63 @@ class _DetailBody extends StatelessWidget {
               ),
             ),
           ),
+          if (tx.splits.isNotEmpty) ...[
+            const SizedBox(height: 22),
+            const SectionHeader(title: 'Category splits'),
+            AppCard(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                children: [
+                  for (int i = 0; i < tx.splits.length; i++) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: [
+                          Text(
+                            AppColors.getCategoryEmoji(
+                              tx.splits[i].categoryName ?? '',
+                            ),
+                            style: const TextStyle(fontSize: 18),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  tx.splits[i].categoryName ?? 'Category',
+                                  style: AppText.body(p.ink).copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                if (tx.splits[i].note != null &&
+                                    tx.splits[i].note!.isNotEmpty)
+                                  Text(
+                                    tx.splits[i].note!,
+                                    style: AppText.caption(p.muted),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            CurrencyFormatter.format(tx.splits[i].amount),
+                            style: AppText.body(p.ink).copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (i < tx.splits.length - 1)
+                      Divider(
+                        height: 1,
+                        color: p.border.withValues(alpha: 0.5),
+                      ),
+                  ],
+                ],
+              ),
+            ),
+          ],
           if (tx.tags.isNotEmpty) ...[
             const SizedBox(height: 22),
             const SectionHeader(title: 'Tags'),
