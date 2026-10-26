@@ -15,7 +15,7 @@ import 'database_tables.dart';
 
 class DatabaseHelper {
   static final String _dbName = AppConstants.dbFileName;
-  static const int _dbVersion = 4;
+  static const int _dbVersion = 6;
 
   // Seed data created on first run. Shared with [deleteAllUserData] so that a
   // reset returns to exactly this state.
@@ -234,6 +234,12 @@ class DatabaseHelper {
     const tables = [
       'transactions_fts',
       'app_logs',
+      'split_participants',
+      'expense_splits',
+      'group_members',
+      'expense_groups',
+      'khata_entries',
+      'khata_people',
       'balance_adjustments',
       'sms_review_queue',
       'recurring_payments',
@@ -275,6 +281,12 @@ class DatabaseHelper {
     schemaBatch.execute(DatabaseTables.createSmsReviewQueueTable);
     schemaBatch.execute(DatabaseTables.createBalanceAdjustmentsTable);
     schemaBatch.execute(DatabaseTables.createAppLogsTable);
+    schemaBatch.execute(DatabaseTables.createKhataPeopleTable);
+    schemaBatch.execute(DatabaseTables.createKhataEntriesTable);
+    schemaBatch.execute(DatabaseTables.createExpenseGroupsTable);
+    schemaBatch.execute(DatabaseTables.createGroupMembersTable);
+    schemaBatch.execute(DatabaseTables.createExpenseSplitsTable);
+    schemaBatch.execute(DatabaseTables.createSplitParticipantsTable);
     await schemaBatch.commit(noResult: true);
 
     // ── 2. FTS (separate batch — failure is non-fatal) ────────────────────
@@ -350,6 +362,12 @@ class DatabaseHelper {
     await db.transaction((txn) async {
       // Children before parents: foreign keys are enforced.
       const userTables = [
+        'split_participants',
+        'expense_splits',
+        'group_members',
+        'expense_groups',
+        'khata_entries',
+        'khata_people',
         'transaction_splits',
         'transaction_tags',
         'receipts',

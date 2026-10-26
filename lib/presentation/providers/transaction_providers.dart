@@ -160,6 +160,74 @@ class TransactionFilter {
   }
 
   TransactionFilter clearAll() => const TransactionFilter();
+
+  Map<String, dynamic> toMap() {
+    return {
+      'searchQuery': searchQuery,
+      'type': type,
+      'datePeriod': datePeriod,
+      'customDateRangeStart': customDateRange?.start.millisecondsSinceEpoch,
+      'customDateRangeEnd': customDateRange?.end.millisecondsSinceEpoch,
+      'minAmount': minAmount,
+      'maxAmount': maxAmount,
+      'categoryIds': categoryIds,
+      'tagIds': tagIds,
+      'accountIds': accountIds,
+      'paymentMethods': paymentMethods,
+      'hasReceipt': hasReceipt,
+      'isRecurring': isRecurring,
+      'hasNote': hasNote,
+      'hasLocation': hasLocation,
+      'sortBy': sortBy.name,
+    };
+  }
+
+  factory TransactionFilter.fromMap(Map<String, dynamic> map) {
+    DateTimeRange? customRange;
+    if (map['customDateRangeStart'] != null &&
+        map['customDateRangeEnd'] != null) {
+      customRange = DateTimeRange(
+        start: DateTime.fromMillisecondsSinceEpoch(
+          map['customDateRangeStart'] as int,
+        ),
+        end: DateTime.fromMillisecondsSinceEpoch(
+          map['customDateRangeEnd'] as int,
+        ),
+      );
+    }
+
+    TransactionSortOption sort = TransactionSortOption.dateDesc;
+    if (map['sortBy'] != null) {
+      for (final s in TransactionSortOption.values) {
+        if (s.name == map['sortBy']) {
+          sort = s;
+          break;
+        }
+      }
+    }
+
+    return TransactionFilter(
+      searchQuery: map['searchQuery'] as String?,
+      type: map['type'] as String?,
+      datePeriod: map['datePeriod'] as String?,
+      customDateRange: customRange,
+      minAmount: (map['minAmount'] as num?)?.toDouble(),
+      maxAmount: (map['maxAmount'] as num?)?.toDouble(),
+      categoryIds:
+          (map['categoryIds'] as List<dynamic>?)?.cast<String>() ?? const [],
+      tagIds: (map['tagIds'] as List<dynamic>?)?.cast<String>() ?? const [],
+      accountIds:
+          (map['accountIds'] as List<dynamic>?)?.cast<String>() ?? const [],
+      paymentMethods:
+          (map['paymentMethods'] as List<dynamic>?)?.cast<String>() ??
+          const [],
+      hasReceipt: map['hasReceipt'] as bool?,
+      isRecurring: map['isRecurring'] as bool?,
+      hasNote: map['hasNote'] as bool?,
+      hasLocation: map['hasLocation'] as bool?,
+      sortBy: sort,
+    );
+  }
 }
 
 class TransactionState {

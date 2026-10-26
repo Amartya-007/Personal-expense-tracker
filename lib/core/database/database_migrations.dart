@@ -65,5 +65,39 @@ class DatabaseMigrations {
         await db.execute(sql);
       }
     }
+
+    // v5: Khata people and ledger entries.
+    if (oldVersion < 5) {
+      await db.execute(DatabaseTables.createKhataPeopleTable);
+      await db.execute(DatabaseTables.createKhataEntriesTable);
+      for (final sql in DatabaseTables.createKhataIndexes) {
+        await db.execute(sql);
+      }
+    }
+
+    // v6: Groups, Group Members, Expense Splits, Split Participants, Contact references.
+    if (oldVersion < 6) {
+      final columns = await db.rawQuery('PRAGMA table_info(khata_people)');
+      final names = {for (final c in columns) c['name']};
+      if (!names.contains('contact_id')) {
+        await db.execute('ALTER TABLE khata_people ADD COLUMN contact_id TEXT');
+      }
+      if (!names.contains('lookup_key')) {
+        await db.execute('ALTER TABLE khata_people ADD COLUMN lookup_key TEXT');
+      }
+      if (!names.contains('source')) {
+        await db.execute(
+          "ALTER TABLE khata_people ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'",
+        );
+      }
+
+      await db.execute(DatabaseTables.createExpenseGroupsTable);
+      await db.execute(DatabaseTables.createGroupMembersTable);
+      await db.execute(DatabaseTables.createExpenseSplitsTable);
+      await db.execute(DatabaseTables.createSplitParticipantsTable);
+      for (final sql in DatabaseTables.createExpenseGroupAndSplitIndexes) {
+        await db.execute(sql);
+      }
+    }
   }
 }

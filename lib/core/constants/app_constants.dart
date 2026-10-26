@@ -20,6 +20,7 @@ class AppConstants {
   static const String prefThemeMode = 'theme_mode';
   static const String prefHapticsEnabled = 'haptics_enabled';
   static const String prefPrivacyMode = 'privacy_mode_enabled';
+  static const String prefSavedViews = 'saved_views_json';
 
   // Database
   // BUG FIX: single source of truth for the DB file name used by both

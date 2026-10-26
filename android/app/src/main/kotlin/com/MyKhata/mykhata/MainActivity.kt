@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.database.Cursor
 import android.net.Uri
 import android.util.Log
+import android.provider.ContactsContract
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import org.json.JSONArray
@@ -17,6 +18,7 @@ import org.json.JSONArray
 class MainActivity: FlutterFragmentActivity() {
     private val SMS_CHANNEL = "com.MyKhata.mykhata/sms"
     private val INTENT_CHANNEL = "com.MyKhata.mykhata/intent"
+    private val CONTACTS_CHANNEL = "com.MyKhata.mykhata/contacts"
     private val SMS_PERMISSION_REQ_CODE = 8801
     private var initialIntentAction: String? = null
     private var pendingPermissionResult: MethodChannel.Result? = null
@@ -90,6 +92,19 @@ class MainActivity: FlutterFragmentActivity() {
                 initialIntentAction = null
             } else {
                 result.notImplemented()
+            }
+        }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CONTACTS_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getContacts" -> {
+                    val query = call.argument<String>("query")
+                    val contacts = readContacts(query)
+                    result.success(contacts)
+                }
+                else -> {
+                    result.notImplemented()
+                }
             }
         }
     }
@@ -199,5 +214,68 @@ class MainActivity: FlutterFragmentActivity() {
             Log.e("SMS_CHANNEL", "Error reading inbox SMS", e)
         }
         return list
+    }
+
+    private fun readContacts(queryFilter: String?): List<Map<String, Any>> {
+        val contactsMap = linkedMapOf<String, MutableMap<String, Any>>()
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            return emptyList()
+        }
+
+        try {
+            val uri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI
+            val projection = arrayOf(
+                ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
+                ContactsContract.CommonDataKinds.Phone.LOOKUP_KEY,
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                ContactsContract.CommonDataKinds.Phone.NUMBER
+            )
+            val selection = if (!queryFilter.isNullOrBlank()) {
+                "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ? OR ${ContactsContract.CommonDataKinds.Phone.NUMBER} LIKE ?"
+            } else null
+            val selectionArgs = if (!queryFilter.isNullOrBlank()) {
+                val q = "%$queryFilter%"
+                arrayOf(q, q)
+            } else null
+            val sortOrder = "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} COLLATE NOCASE ASC"
+
+            contentResolver.query(uri, projection, selection, selectionArgs, sortOrder)?.use { cursor ->
+                val idIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.CONTACT_ID)
+                val lookupIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.LOOKUP_KEY)
+                val nameIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                val numIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+
+                while (cursor.moveToNext()) {
+                    val contactId = if (idIdx >= 0) cursor.getString(idIdx) ?: "" else ""
+                    val lookupKey = if (lookupIdx >= 0) cursor.getString(lookupIdx) ?: "" else ""
+                    val name = (if (nameIdx >= 0) cursor.getString(nameIdx) else null)?.trim()
+                    val rawNumber = (if (numIdx >= 0) cursor.getString(numIdx) else null)?.trim()
+
+                    val key = if (contactId.isNotEmpty()) contactId else (name ?: rawNumber ?: "")
+                    if (key.isEmpty()) continue
+
+                    val entry = contactsMap.getOrPut(key) {
+                        mutableMapOf(
+                            "contactId" to contactId,
+                            "lookupKey" to lookupKey,
+                            "displayName" to (if (!name.isNullOrEmpty()) name else (rawNumber ?: "Unknown Contact")),
+                            "phones" to mutableListOf<String>()
+                        )
+                    }
+
+                    if (!rawNumber.isNullOrEmpty()) {
+                        @Suppress("UNCHECKED_CAST")
+                        val phones = entry["phones"] as MutableList<String>
+                        if (!phones.contains(rawNumber)) {
+                            phones.add(rawNumber)
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("CONTACTS_CHANNEL", "Error reading contacts", e)
+        }
+
+        return contactsMap.values.toList()
     }
 }

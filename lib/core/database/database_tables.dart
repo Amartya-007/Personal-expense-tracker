@@ -238,6 +238,124 @@ class DatabaseTables {
     END;
   ''';
 
+  static const String createKhataPeopleTable = '''
+    CREATE TABLE IF NOT EXISTS khata_people (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      phone TEXT,
+      notes TEXT,
+      contact_id TEXT,
+      lookup_key TEXT,
+      source TEXT NOT NULL DEFAULT 'manual',
+      is_archived INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+  ''';
+
+  static const String createKhataEntriesTable = '''
+    CREATE TABLE IF NOT EXISTS khata_entries (
+      id TEXT PRIMARY KEY,
+      person_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      amount REAL NOT NULL,
+      sign INTEGER NOT NULL DEFAULT 1,
+      date INTEGER NOT NULL,
+      notes TEXT,
+      due_date INTEGER,
+      account_id TEXT,
+      is_settled INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (person_id) REFERENCES khata_people(id) ON DELETE CASCADE,
+      FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
+    );
+  ''';
+
+  static const String createExpenseGroupsTable = '''
+    CREATE TABLE IF NOT EXISTS expense_groups (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      icon TEXT,
+      color TEXT,
+      is_archived INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+  ''';
+
+  static const String createGroupMembersTable = '''
+    CREATE TABLE IF NOT EXISTS group_members (
+      id TEXT PRIMARY KEY,
+      group_id TEXT NOT NULL,
+      person_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (group_id) REFERENCES expense_groups(id) ON DELETE CASCADE,
+      FOREIGN KEY (person_id) REFERENCES khata_people(id) ON DELETE CASCADE,
+      UNIQUE(group_id, person_id)
+    );
+  ''';
+
+  static const String createExpenseSplitsTable = '''
+    CREATE TABLE IF NOT EXISTS expense_splits (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      total_amount REAL NOT NULL,
+      payer_type TEXT NOT NULL DEFAULT 'user',
+      payer_person_id TEXT,
+      group_id TEXT,
+      split_mode TEXT NOT NULL,
+      date INTEGER NOT NULL,
+      transaction_id TEXT,
+      notes TEXT,
+      is_settled INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (group_id) REFERENCES expense_groups(id) ON DELETE SET NULL,
+      FOREIGN KEY (payer_person_id) REFERENCES khata_people(id) ON DELETE SET NULL,
+      FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL
+    );
+  ''';
+
+  static const String createSplitParticipantsTable = '''
+    CREATE TABLE IF NOT EXISTS split_participants (
+      id TEXT PRIMARY KEY,
+      split_id TEXT NOT NULL,
+      person_id TEXT,
+      is_payer INTEGER NOT NULL DEFAULT 0,
+      is_user INTEGER NOT NULL DEFAULT 0,
+      person_name TEXT NOT NULL,
+      person_phone TEXT,
+      share_value REAL NOT NULL,
+      allocated_amount REAL NOT NULL,
+      is_settled INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (split_id) REFERENCES expense_splits(id) ON DELETE CASCADE,
+      FOREIGN KEY (person_id) REFERENCES khata_people(id) ON DELETE SET NULL
+    );
+  ''';
+
+  static const List<String> createKhataIndexes = [
+    'CREATE INDEX IF NOT EXISTS idx_khata_people_archived ON khata_people(is_archived, name);',
+    'CREATE INDEX IF NOT EXISTS idx_khata_people_contact ON khata_people(contact_id);',
+    'CREATE INDEX IF NOT EXISTS idx_khata_entries_person ON khata_entries(person_id, date DESC, id DESC);',
+    'CREATE INDEX IF NOT EXISTS idx_khata_entries_account ON khata_entries(account_id);',
+    'CREATE INDEX IF NOT EXISTS idx_khata_entries_type ON khata_entries(type);',
+  ];
+
+  static const List<String> createExpenseGroupAndSplitIndexes = [
+    'CREATE INDEX IF NOT EXISTS idx_group_members_group ON group_members(group_id);',
+    'CREATE INDEX IF NOT EXISTS idx_group_members_person ON group_members(person_id);',
+    'CREATE INDEX IF NOT EXISTS idx_expense_splits_group ON expense_splits(group_id);',
+    'CREATE INDEX IF NOT EXISTS idx_expense_splits_date ON expense_splits(date DESC, id DESC);',
+    'CREATE INDEX IF NOT EXISTS idx_expense_splits_tx ON expense_splits(transaction_id);',
+    'CREATE INDEX IF NOT EXISTS idx_split_participants_split ON split_participants(split_id);',
+    'CREATE INDEX IF NOT EXISTS idx_split_participants_person ON split_participants(person_id);',
+  ];
+
   static const List<String> createIndexes = [
     // Optimal Composite Index covering (deleted_at, date DESC, id DESC) for keyset pagination & queries
     'CREATE INDEX IF NOT EXISTS idx_tx_active_date_id ON transactions(deleted_at, date DESC, id DESC);',
@@ -255,5 +373,7 @@ class DatabaseTables {
     'CREATE INDEX IF NOT EXISTS idx_tx_splits_tx ON transaction_splits(transaction_id);',
     createPrimaryAccountIndex,
     ...createAppLogIndexes,
+    ...createKhataIndexes,
+    ...createExpenseGroupAndSplitIndexes,
   ];
 }

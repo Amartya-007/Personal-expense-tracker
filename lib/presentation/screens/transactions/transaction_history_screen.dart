@@ -21,12 +21,15 @@ import '../../providers/category_providers.dart';
 import '../../providers/settings_providers.dart';
 import '../../providers/tag_providers.dart';
 import '../../providers/transaction_providers.dart';
+import '../../../core/theme/app_motion.dart';
+import '../../../data/models/saved_view_model.dart';
+import '../../providers/saved_views_provider.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/pressable.dart';
 import '../../widgets/fade_slide_in.dart';
 import '../../widgets/field_decoration.dart';
 import '../../widgets/filter_bottom_sheet.dart';
 import '../../widgets/icon_square_button.dart';
-import '../../widgets/pill_chips.dart';
 import '../../widgets/skeleton.dart';
 import '../../widgets/transaction_quick_edit_sheet.dart';
 import '../../widgets/transaction_row.dart';
@@ -392,63 +395,33 @@ class _QuickFilterChips extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(transactionListProvider.notifier);
-    final categories = ref.watch(categoriesListProvider).value ?? const [];
-
-    final thisMonthActive = filter.datePeriod == 'This Month';
-    final expensesActive = filter.type == 'expense';
-    final incomeActive = filter.type == 'income';
+    final savedViews = ref.watch(savedViewsProvider);
+    final activeSavedViewId = ref.watch(activeSavedViewIdProvider);
 
     final chips = <Widget>[
-      PillChip(
-        label: 'This month',
-        selected: thisMonthActive,
-        onTap: () => notifier.updateFilter(
-          (f) => thisMonthActive
-              ? f.copyWith(clearDatePeriod: true, clearCustomDateRange: true)
-              : f.copyWith(datePeriod: 'This Month'),
+      for (final view in savedViews)
+        _SavedViewChip(
+          view: view,
+          isActive:
+              activeSavedViewId == view.id ||
+              _isFilterEqual(filter, view.filter),
+          onTap: () {
+            if (activeSavedViewId == view.id ||
+                _isFilterEqual(filter, view.filter)) {
+              ref.read(activeSavedViewIdProvider.notifier).state = null;
+              notifier.clearFilters();
+            } else {
+              ref.read(activeSavedViewIdProvider.notifier).state = view.id;
+              notifier.setFilter(view.filter);
+            }
+          },
+          onLongPress:
+              view.isPreset
+                  ? null
+                  : () => _confirmDeleteView(context, ref, view),
         ),
-      ),
-      PillChip(
-        label: 'Expenses',
-        selected: expensesActive,
-        onTap: () => notifier.updateFilter(
-          (f) => expensesActive
-              ? f.copyWith(clearType: true)
-              : f.copyWith(type: 'expense'),
-        ),
-      ),
-      PillChip(
-        label: 'Income',
-        selected: incomeActive,
-        onTap: () => notifier.updateFilter(
-          (f) => incomeActive
-              ? f.copyWith(clearType: true)
-              : f.copyWith(type: 'income'),
-        ),
-      ),
     ];
 
-    // Optionally offer the top 1-2 categories as quick toggles.
-    for (final cat in categories.take(2)) {
-      final active = filter.categoryIds.contains(cat.id);
-      chips.add(
-        PillChip(
-          label: cat.name,
-          selected: active,
-          onTap: () => notifier.updateFilter(
-            (f) => active
-                ? f.copyWith(categoryIds: const [])
-                : f.copyWith(categoryIds: [cat.id]),
-          ),
-        ),
-      );
-    }
-
-    // Each PillChip is at least kMinInteractiveDimension tall; the list adds
-    // 8+4=12px of vertical padding. A hard kMinInteractiveDimension box can't
-    // hold both and overflows the bottom (~8px, worse at larger text scale).
-    // Size the box to the chip height plus the list padding, scaled with the
-    // system text size.
     const listVerticalPadding = 8 + 4;
     final scale = MediaQuery.textScalerOf(context);
     final height = scale.scale(kMinInteractiveDimension) + listVerticalPadding;
@@ -464,6 +437,127 @@ class _QuickFilterChips extends ConsumerWidget {
       ),
     );
   }
+
+  bool _isFilterEqual(TransactionFilter current, TransactionFilter target) {
+    if (target.type != null && target.type != current.type) return false;
+    if (target.datePeriod != null && target.datePeriod != current.datePeriod) {
+      return false;
+    }
+    if (target.minAmount != null && target.minAmount != current.minAmount) {
+      return false;
+    }
+    if (target.hasReceipt != null && target.hasReceipt != current.hasReceipt) {
+      return false;
+    }
+    if (target.isRecurring != null &&
+        target.isRecurring != current.isRecurring) {
+      return false;
+    }
+    return true;
+  }
+}
+
+class _SavedViewChip extends StatelessWidget {
+  final SavedViewModel view;
+  final bool isActive;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+
+  const _SavedViewChip({
+    required this.view,
+    required this.isActive,
+    required this.onTap,
+    this.onLongPress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+
+    return Pressable(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      haptic: PressHaptic.select,
+      child: AnimatedContainer(
+        duration: AppMotion.fast,
+        constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? p.primary : p.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isActive ? Colors.transparent : p.border),
+          boxShadow:
+              isActive
+                  ? [
+                    BoxShadow(
+                      color: p.primary.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                  : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(view.icon, style: const TextStyle(fontSize: 14)),
+            const SizedBox(width: 6),
+            Text(
+              view.name,
+              style: AppText.caption(isActive ? p.onPrimary : p.ink).copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (!view.isPreset) ...[
+              const SizedBox(width: 4),
+              Icon(
+                Icons.bookmark_rounded,
+                size: 12,
+                color:
+                    isActive
+                        ? p.onPrimary.withValues(alpha: 0.7)
+                        : p.primary,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+void _confirmDeleteView(
+  BuildContext context,
+  WidgetRef ref,
+  SavedViewModel view,
+) {
+  showDialog(
+    context: context,
+    builder:
+        (ctx) => AlertDialog(
+          title: Text('Delete "${view.name}"?'),
+          content: const Text(
+            'This saved view preset will be removed from your filter bar.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              onPressed: () {
+                Navigator.pop(ctx);
+                ref.read(savedViewsProvider.notifier).deleteView(view.id);
+                if (ref.read(activeSavedViewIdProvider) == view.id) {
+                  ref.read(activeSavedViewIdProvider.notifier).state = null;
+                }
+              },
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+  );
 }
 
 class _ActiveFilterChips extends ConsumerWidget {
@@ -764,28 +858,185 @@ class _ActiveFilterChips extends ConsumerWidget {
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           if (index == chips.length) {
-            return Center(
-              child: InkWell(
-                onTap: onClearAll,
-                borderRadius: BorderRadius.circular(16),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  child: Text(
-                    'Clear All',
-                    style: AppText.caption(p.primary)
-                        .copyWith(fontWeight: FontWeight.w700),
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                InkWell(
+                  onTap: () => _showSaveViewDialog(context, ref, filter),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: p.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: p.primary.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.bookmark_add_outlined,
+                          size: 14,
+                          color: p.primary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Save view',
+                          style: AppText.caption(p.primary).copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: onClearAll,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    child: Text(
+                      'Clear all',
+                      style: AppText.caption(p.muted).copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             );
           }
           return chips[index];
         },
       ),
     );
+  }
+}
+
+Future<void> _showSaveViewDialog(
+  BuildContext context,
+  WidgetRef ref,
+  TransactionFilter filter,
+) async {
+  final nameController = TextEditingController();
+  String selectedEmoji = '🔍';
+  final emojis = ['🔍', '💼', '🍽️', '✈️', '🏷️', '🛒', '⚡', '🧾', '🏥', '🎮'];
+
+  final saved = await showDialog<bool>(
+    context: context,
+    builder: (ctx) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          final p = context.palette;
+          return AlertDialog(
+            backgroundColor: p.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Text('Save current view', style: AppText.title(p.ink)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Name your view for 1-tap access from the filter bar.',
+                  style: AppText.caption(p.muted),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: nameController,
+                  autofocus: true,
+                  maxLength: 30,
+                  style: AppText.body(p.ink),
+                  decoration: appFieldDecoration(
+                    p,
+                    hint: 'e.g. Work travel, Tax receipts',
+                  ).copyWith(prefixText: '$selectedEmoji '),
+                ),
+                const SizedBox(height: 10),
+                Text('Choose an icon:', style: AppText.caption(p.muted)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final em in emojis)
+                      InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () => setState(() => selectedEmoji = em),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color:
+                                selectedEmoji == em
+                                    ? p.primary.withValues(alpha: 0.2)
+                                    : p.surface2,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color:
+                                  selectedEmoji == em
+                                      ? p.primary
+                                      : p.border,
+                            ),
+                          ),
+                          child: Text(em, style: const TextStyle(fontSize: 18)),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text('Cancel', style: AppText.body(p.muted)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: p.primary,
+                  foregroundColor: p.onPrimary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () {
+                  if (nameController.text.trim().isNotEmpty) {
+                    Navigator.pop(ctx, true);
+                  }
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+
+  if (saved == true && nameController.text.trim().isNotEmpty) {
+    final newView = await ref.read(savedViewsProvider.notifier).saveView(
+      name: nameController.text.trim(),
+      icon: selectedEmoji,
+      filter: filter,
+    );
+    ref.read(activeSavedViewIdProvider.notifier).state = newView.id;
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Saved "${newView.name}" to view presets'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 }
 

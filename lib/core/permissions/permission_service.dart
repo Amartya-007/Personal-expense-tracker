@@ -74,6 +74,20 @@ class PermissionService {
         return status.isGranted;
       });
 
+  static Future<bool> requestContactsPermission() =>
+      _logged('Contacts', () async {
+        final status = await Permission.contacts.request();
+        return status.isGranted;
+      });
+
+  static Future<PermissionStatus> getContactsPermissionStatus() async {
+    try {
+      return await Permission.contacts.status;
+    } catch (_) {
+      return PermissionStatus.denied;
+    }
+  }
+
   static Future<Map<String, bool>> checkAllPermissions() async {
     bool hasSms = false;
     try {
@@ -82,11 +96,17 @@ class PermissionService {
     if (!hasSms) {
       hasSms = await SmsCaptureService.hasPermission();
     }
+    bool hasContacts = false;
+    try {
+      hasContacts = await Permission.contacts.isGranted;
+    } catch (_) {}
+
     return {
       'sms': hasSms,
       'location': await Permission.locationWhenInUse.isGranted,
       'camera': await Permission.camera.isGranted,
       'notification': await Permission.notification.isGranted,
+      'contacts': hasContacts,
     };
   }
 }

@@ -32,13 +32,45 @@ import 'receipt_gallery_screen.dart';
 import 'recently_deleted_screen.dart';
 import 'recurring_payments_screen.dart';
 import 'tags_management_screen.dart';
+import '../khata/khata_list_screen.dart';
+import '../../providers/contact_providers.dart';
+import '../../../services/contacts/contact_service.dart';
 
-class SettingsScreen extends ConsumerWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    Future.microtask(() {
+      if (mounted) {
+        ref.read(contactPermissionControllerProvider.notifier).refreshStatus();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      ref.read(contactPermissionControllerProvider.notifier).refreshStatus();
+    }
+  }
 
   Future<void> _editName(
     BuildContext context,
-    WidgetRef ref,
     String current,
   ) async {
     final values = await showFieldsSheet(
@@ -88,7 +120,6 @@ class SettingsScreen extends ConsumerWidget {
 
   Future<void> _toggleBiometrics(
     BuildContext context,
-    WidgetRef ref,
     bool value,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -135,7 +166,7 @@ class SettingsScreen extends ConsumerWidget {
 
   /// Deletes all app data after confirmation. A safety backup is made first
   /// (silently); if it cannot be made, or the deletion fails, nothing changes.
-  Future<void> _deleteAllData(BuildContext context, WidgetRef ref) async {
+  Future<void> _deleteAllData(BuildContext context) async {
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
 
@@ -204,12 +235,13 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final p = context.palette;
     final auth = ref.watch(authProvider);
     final name = ref.watch(userNameProvider);
     final smsOn = ref.watch(autoSmsDetectionProvider);
     final locationOn = ref.watch(autoLocationCaptureProvider);
+    final contactPerm = ref.watch(contactPermissionControllerProvider);
     final themeMode = ref.watch(themeModeProvider);
     final waiting = ref.watch(smsQueueProvider('detected')).value?.length ?? 0;
     final primaryAccount = (ref.watch(accountListProvider).value ?? const [])
@@ -250,7 +282,7 @@ class SettingsScreen extends ConsumerWidget {
             FadeSlideIn(
               index: 1,
               child: Pressable(
-                onTap: () => _editName(context, ref, name),
+                onTap: () => _editName(context, name),
                 scale: 0.98,
                 child: AppCard(
                   gradient: p.heroGradientSoft,
@@ -342,13 +374,19 @@ class SettingsScreen extends ConsumerWidget {
                 onTap: () =>
                     AppRoutes.push(context, const ReceiptGalleryScreen()),
               ),
+              ListRowTile(
+                emoji: '👥',
+                title: 'Khata · People ledger',
+                subtitle: 'Track money lent and borrowed with people',
+                onTap: () =>
+                    AppRoutes.push(context, const KhataListScreen()),
+              ),
             ]),
             const SizedBox(height: 22),
 
             // These two used to be a "SMS Detection" link and a "Location" row
             // that only showed a snack bar; the onboarding choices behind them
-            // were never read. They are real switches now.
-            section(3, 'Automation', [
+            section(3, 'Automation & Permissions', [
               ListRowTile(
                 emoji: '💬',
                 title: 'Detect bank SMS',
@@ -395,6 +433,108 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ),
               ),
+              ListRowTile(
+                emoji: '👥',
+                title: 'Contacts for expense splitting',
+                subtitle: switch (contactPerm) {
+                  ContactPermissionState.granted =>
+                    'Granted · Read contacts enabled',
+                  ContactPermissionState.denied =>
+                    'Denied · Tap to request or view details',
+                  ContactPermissionState.permanentlyDenied =>
+                    'Blocked in Settings · Tap to open App Settings',
+                  ContactPermissionState.restricted =>
+                    'Restricted or unavailable on device',
+                  ContactPermissionState.notRequested =>
+                    'Not requested · Tap to allow access',
+                },
+                trailing: contactPerm.isGranted
+                    ? Icon(Icons.check_circle_rounded, color: p.primary, size: 20)
+                    : Icon(Icons.chevron_right_rounded, color: p.muted, size: 20),
+                onTap: () async {
+                  if (contactPerm.isGranted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Contact permission is granted. You can revoke it anytime in Android App Settings. Manual entry is always available.',
+                        ),
+                      ),
+                    );
+                  } else if (contactPerm.isPermanentlyDenied) {
+                    final shouldOpen = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Contact Permission Blocked'),
+                        content: const Text(
+                          'Contact access is disabled in Android Settings. To enable it, open App Settings and grant Contacts permission.\n\n'
+                          'Note: You can still add people manually without granting contact access.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancel'),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Open Settings'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (shouldOpen == true) {
+                      await ref
+                          .read(contactPermissionControllerProvider.notifier)
+                          .openSettings();
+                    }
+                  } else if (contactPerm == ContactPermissionState.restricted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Contact reading is restricted or unavailable on this device. You can still add people manually.',
+                        ),
+                      ),
+                    );
+                  } else {
+                    final shouldRequest = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Allow Contact Access?'),
+                        content: const Text(
+                          'MyKhata uses contact access only to make it easy to select friends and phone numbers when splitting expenses or creating groups.\n\n'
+                          '• Contacts are never synced or uploaded to any server.\n'
+                          '• Only people you explicitly select are saved locally.\n'
+                          '• This permission is optional. Manual entry is always supported.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancel'),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Allow Access'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (shouldRequest == true) {
+                      final granted = await ref
+                          .read(contactPermissionControllerProvider.notifier)
+                          .requestPermission();
+                      if (!context.mounted) return;
+                      if (!granted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Contact permission was not granted. Manual entry is still available.',
+                            ),
+                          ),
+                        );
+                      }
+                    }
+                  }
+                },
+              ),
             ]),
             const SizedBox(height: 22),
 
@@ -422,7 +562,7 @@ class SettingsScreen extends ConsumerWidget {
                 subtitle: 'Ask for fingerprint, face or PIN on open',
                 trailing: toggle(
                   auth.isBiometricsEnabled,
-                  (v) => _toggleBiometrics(context, ref, v),
+                  (v) => _toggleBiometrics(context, v),
                 ),
               ),
               ListRowTile(
@@ -483,7 +623,7 @@ class SettingsScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 14),
                         OutlinedButton.icon(
-                          onPressed: () => _deleteAllData(context, ref),
+                          onPressed: () => _deleteAllData(context),
                           icon: const Icon(Icons.delete_forever_rounded),
                           label: const Text('Delete All Data'),
                           style: OutlinedButton.styleFrom(

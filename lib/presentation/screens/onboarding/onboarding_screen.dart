@@ -66,6 +66,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   // permission, so both toggles map onto requestCameraPermission().
   bool _photosEnabled = true;
   bool _smsEnabled = true;
+  bool _contactsEnabled = true;
   bool _requestingPermissions = false;
 
   bool _biometricSuccess = false;
@@ -181,6 +182,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       if (_smsEnabled) {
         _smsEnabled = await PermissionService.requestSmsPermission();
       }
+      if (_contactsEnabled) {
+        _contactsEnabled = await PermissionService.requestContactsPermission();
+      }
     } catch (_) {
       // A failed prompt must never block onboarding.
     }
@@ -196,6 +200,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       _camEnabled = false;
       _photosEnabled = false;
       _smsEnabled = false;
+      _contactsEnabled = false;
     });
     _next();
   }
@@ -718,6 +723,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 'Detect bank messages so you can review them',
                 _smsEnabled,
                 (v) => setState(() => _smsEnabled = v),
+              ),
+              row(
+                '👥',
+                'Contacts',
+                'Pick people quickly when splitting bills or creating groups',
+                _contactsEnabled,
+                (v) => setState(() => _contactsEnabled = v),
               ),
             ],
           ),

@@ -19,6 +19,7 @@ import '../../widgets/receipt_viewer.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/undo_snackbar.dart';
 import '../add_transaction/add_transaction_screen.dart';
+import '../khata/expense_split_screen.dart';
 
 class TransactionDetailScreen extends ConsumerWidget {
   final String transactionId;
@@ -338,6 +339,31 @@ class _DetailBody extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 28),
+          if (!isTransfer && !tx.isIncome) ...[
+            OutlinedButton.icon(
+              onPressed: () {
+                AppRoutes.push(
+                  context,
+                  ExpenseSplitScreen(
+                    initialAmount: tx.amount,
+                    initialTitle: tx.description,
+                    initialTransactionId: tx.id,
+                  ),
+                );
+              },
+              icon: const Icon(Icons.call_split_rounded),
+              label: const Text('Split with Friends or Group'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: p.primary,
+                side: BorderSide(color: p.primary.withValues(alpha: 0.3)),
+                minimumSize: const Size(double.infinity, 50),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           PrimaryButton(
             label: 'Edit',
             icon: Icons.edit_rounded,

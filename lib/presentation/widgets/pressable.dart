@@ -11,6 +11,7 @@ enum PressHaptic { none, tap, select }
 class Pressable extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final double scale;
   final PressHaptic haptic;
 
@@ -18,6 +19,7 @@ class Pressable extends StatefulWidget {
     super.key,
     required this.child,
     this.onTap,
+    this.onLongPress,
     this.scale = 0.96,
     this.haptic = PressHaptic.tap,
   });
@@ -45,15 +47,21 @@ class _PressableState extends State<Pressable> {
     widget.onTap?.call();
   }
 
+  void _handleLongPress() {
+    AppHaptics.select();
+    widget.onLongPress?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final enabled = widget.onTap != null;
+    final enabled = widget.onTap != null || widget.onLongPress != null;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapDown: enabled ? (_) => _set(true) : null,
       onTapUp: enabled ? (_) => _set(false) : null,
       onTapCancel: enabled ? () => _set(false) : null,
-      onTap: enabled ? _handleTap : null,
+      onTap: widget.onTap != null ? _handleTap : null,
+      onLongPress: widget.onLongPress != null ? _handleLongPress : null,
       child: AnimatedScale(
         scale: _down ? widget.scale : 1.0,
         duration: AppMotion.instant,

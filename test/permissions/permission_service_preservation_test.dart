@@ -390,7 +390,7 @@ void main() {
   // ---------------------------------------------------------------------------
   group('Preservation Smoke Test — checkAllPermissions() shape is unchanged', () {
     test(
-      'checkAllPermissions() returns a map with exactly the four expected keys',
+      'checkAllPermissions() returns a map with expected keys including contacts',
       () async {
         _useFake(
           _FakePermissionHandler(
@@ -399,6 +399,7 @@ void main() {
               Permission.locationWhenInUse: PermissionStatus.granted,
               Permission.camera: PermissionStatus.denied,
               Permission.notification: PermissionStatus.denied,
+              Permission.contacts: PermissionStatus.granted,
             },
           ),
         );
@@ -407,15 +408,15 @@ void main() {
 
         expect(
           result.keys.toSet(),
-          equals({'sms', 'location', 'camera', 'notification'}),
+          equals({'sms', 'location', 'camera', 'notification', 'contacts'}),
           reason:
-              'checkAllPermissions() must always return a map with the four '
-              'keys: sms, location, camera, notification.',
+              'checkAllPermissions() must return a map with all permission keys.',
         );
         expect(result['sms'], isTrue);
         expect(result['location'], isTrue);
         expect(result['camera'], isFalse);
         expect(result['notification'], isFalse);
+        expect(result['contacts'], isTrue);
       },
     );
   });

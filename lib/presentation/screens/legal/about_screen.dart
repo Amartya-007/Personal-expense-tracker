@@ -88,6 +88,7 @@ class AboutScreen extends StatelessWidget {
                   const SizedBox(height: 10),
                   _featureRow(p, '🔒', 'Private & Secure', 'All data is saved locally on your device SQLite database.'),
                   _featureRow(p, '💬', 'Bank SMS Review', 'Detects bank transaction messages on-device for manual review.'),
+                  _featureRow(p, '👥', 'Split Expenses & Groups', 'Split bills equally, by percentages or shares. Optional contact access with full offline privacy.'),
                   _featureRow(p, '🎯', 'Smart Budgets', 'Set monthly or category limits with early nudge alerts.'),
                   _featureRow(p, '💾', 'Full Data Ownership', 'Export ZIP backups, CSV, or PDF reports whenever you want.'),
                 ],

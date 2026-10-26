@@ -37,6 +37,8 @@ import '../settings/account_balance_actions.dart';
 import '../settings/recurring_payments_screen.dart';
 import '../sms_review/sms_review_screen.dart';
 import '../transactions/transaction_detail_screen.dart';
+import '../../providers/khata_providers.dart';
+import '../khata/khata_list_screen.dart';
 
 /// Tab indexes used by the "See all" links.
 const int _transactionsTab = 1;
@@ -85,6 +87,7 @@ class HomeScreen extends ConsumerWidget {
               SizedBox(height: 14),
               _AttentionZone(),
               _ThisMonthStrip(),
+              _KhataSummarySection(),
               SizedBox(height: AppSpacing.xl),
               _RecentTransactionsSection(),
               SizedBox(height: AppSpacing.xl),
@@ -257,6 +260,76 @@ class _RecentTransactionsSection extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _KhataSummarySection extends ConsumerWidget {
+  const _KhataSummarySection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+    final summaryAsync = ref.watch(khataSummaryProvider);
+
+    return summaryAsync.when(
+      data: (summary) {
+        if (summary.activePeopleCount == 0) return const SizedBox.shrink();
+
+        return FadeSlideIn(
+          index: 2,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 14),
+              SectionHeader(
+                title: 'Khata · People Ledger',
+                actionLabel: 'Open',
+                onAction: () => AppRoutes.push(context, const KhataListScreen()),
+              ),
+              Pressable(
+                onTap: () => AppRoutes.push(context, const KhataListScreen()),
+                child: AppCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: p.primary.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.people_outline_rounded, color: p.primary, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${summary.activePeopleCount} ${summary.activePeopleCount == 1 ? 'person' : 'people'} in ledger',
+                              style: AppText.body(p.ink).copyWith(fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              "Get: ${CurrencyFormatter.format(summary.totalReceivable)} · Give: ${CurrencyFormatter.format(summary.totalPayable)}",
+                              style: AppText.caption(p.muted),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right_rounded, color: p.muted, size: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
     );
   }
 }
