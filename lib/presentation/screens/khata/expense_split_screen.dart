@@ -488,36 +488,54 @@ class _ExpenseSplitScreenState extends ConsumerState<ExpenseSplitScreen> {
                     children: [
                       Icon(Icons.groups_outlined, size: 20, color: p.primary),
                       const SizedBox(width: 8),
-                      Text('Group (Optional)', style: AppText.bodyStrong(p.ink)),
-                      const Spacer(),
-                      groupsAsync.when(
-                        data: (groups) {
-                          return DropdownButton<String?>(
-                            value: _selectedGroup?.id,
-                            underline: const SizedBox.shrink(),
-                            hint: Text('None', style: AppText.caption(p.muted)),
-                            items: [
-                              const DropdownMenuItem<String?>(
-                                value: null,
-                                child: Text('No Group (Ad-hoc)'),
+                      Text('Group', style: AppText.bodyStrong(p.ink)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: groupsAsync.when(
+                          data: (groups) {
+                            return DropdownButton<String?>(
+                              value: _selectedGroup?.id,
+                              isExpanded: true,
+                              isDense: true,
+                              alignment: AlignmentDirectional.centerEnd,
+                              underline: const SizedBox.shrink(),
+                              hint: Align(
+                                alignment: Alignment.centerRight,
+                                child: Text('No Group (Ad-hoc)',
+                                    style: AppText.caption(p.muted),
+                                    overflow: TextOverflow.ellipsis),
                               ),
-                              ...groups.map((g) => DropdownMenuItem<String?>(
-                                    value: g.id,
-                                    child: Text('${g.icon ?? '👥'} ${g.name}'),
-                                  )),
-                            ],
-                            onChanged: (id) {
-                              if (id == null) {
-                                _onGroupSelected(null);
-                              } else {
-                                final g = groups.firstWhere((x) => x.id == id);
-                                _onGroupSelected(g);
-                              }
-                            },
-                          );
-                        },
-                        loading: () => const SizedBox.shrink(),
-                        error: (_, __) => const SizedBox.shrink(),
+                              items: [
+                                DropdownMenuItem<String?>(
+                                  value: null,
+                                  alignment: AlignmentDirectional.centerEnd,
+                                  child: Text('No Group (Ad-hoc)',
+                                      style: AppText.body(p.ink),
+                                      overflow: TextOverflow.ellipsis),
+                                ),
+                                ...groups.map((g) => DropdownMenuItem<String?>(
+                                      value: g.id,
+                                      alignment: AlignmentDirectional.centerEnd,
+                                      child: Text(
+                                        '${g.icon ?? '👥'} ${g.name}',
+                                        style: AppText.body(p.ink),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    )),
+                              ],
+                              onChanged: (id) {
+                                if (id == null) {
+                                  _onGroupSelected(null);
+                                } else {
+                                  final g = groups.firstWhere((x) => x.id == id);
+                                  _onGroupSelected(g);
+                                }
+                              },
+                            );
+                          },
+                          loading: () => const SizedBox.shrink(),
+                          error: (_, __) => const SizedBox.shrink(),
+                        ),
                       ),
                     ],
                   ),
@@ -529,19 +547,29 @@ class _ExpenseSplitScreenState extends ConsumerState<ExpenseSplitScreen> {
                       Icon(Icons.payment_outlined, size: 20, color: p.primary),
                       const SizedBox(width: 8),
                       Text('Who Paid?', style: AppText.bodyStrong(p.ink)),
-                      const Spacer(),
-                      DropdownButton<String>(
-                        value: _payerKey,
-                        underline: const SizedBox.shrink(),
-                        items: _participants.map((p) {
-                          return DropdownMenuItem<String>(
-                            value: p.key,
-                            child: Text(p.name),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null) setState(() => _payerKey = val);
-                        },
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: DropdownButton<String>(
+                          value: _payerKey,
+                          isExpanded: true,
+                          isDense: true,
+                          alignment: AlignmentDirectional.centerEnd,
+                          underline: const SizedBox.shrink(),
+                          items: _participants.map((part) {
+                            return DropdownMenuItem<String>(
+                              value: part.key,
+                              alignment: AlignmentDirectional.centerEnd,
+                              child: Text(
+                                part.name,
+                                style: AppText.body(p.ink),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) setState(() => _payerKey = val);
+                          },
+                        ),
                       ),
                     ],
                   ),
@@ -587,19 +615,28 @@ class _ExpenseSplitScreenState extends ConsumerState<ExpenseSplitScreen> {
                         return Padding(
                           padding: const EdgeInsets.only(top: 8),
                           child: DropdownButtonFormField<String?>(
+                            isExpanded: true,
                             initialValue: _selectedAccountId,
                             decoration: appFieldDecoration(
                               p,
-                              hint: 'Select account for cash flow (optional)',
+                              hint: 'Select account (optional)',
                             ),
                             items: [
-                              const DropdownMenuItem<String?>(
+                              DropdownMenuItem<String?>(
                                 value: null,
-                                child: Text('No Account (Ledger Only)'),
+                                child: Text(
+                                  'No Account (Ledger Only)',
+                                  style: AppText.body(p.ink),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                               ...accounts.map((a) => DropdownMenuItem<String?>(
                                     value: a.id,
-                                    child: Text(a.name),
+                                    child: Text(
+                                      a.name,
+                                      style: AppText.body(p.ink),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   )),
                             ],
                             onChanged: (val) =>
@@ -770,17 +807,21 @@ class _ExpenseSplitScreenState extends ConsumerState<ExpenseSplitScreen> {
     final isPayer = entry.key == _payerKey;
 
     return AppCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       child: Row(
         children: [
           Checkbox(
             value: entry.isIncluded,
             activeColor: p.primary,
+            visualDensity: VisualDensity.compact,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             onChanged: (val) {
               setState(() => entry.isIncluded = val ?? true);
             },
           ),
+          const SizedBox(width: 4),
           CircleAvatar(
+            radius: 16,
             backgroundColor: isPayer
                 ? p.primary.withValues(alpha: 0.2)
                 : p.surface2,
@@ -789,10 +830,11 @@ class _ExpenseSplitScreenState extends ConsumerState<ExpenseSplitScreen> {
               style: AppText.bodyStrong(isPayer ? p.primary : p.ink),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
                   children: [
@@ -826,6 +868,7 @@ class _ExpenseSplitScreenState extends ConsumerState<ExpenseSplitScreen> {
                   Text(
                     'Share: ${CurrencyFormatter.format(share.allocatedAmount)}',
                     style: AppText.caption(p.muted),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ],
@@ -836,7 +879,7 @@ class _ExpenseSplitScreenState extends ConsumerState<ExpenseSplitScreen> {
           if (_splitMode != SplitMode.equal && entry.isIncluded) ...[
             const SizedBox(width: 8),
             SizedBox(
-              width: 84,
+              width: 76,
               child: TextFormField(
                 controller: entry.inputController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -844,7 +887,7 @@ class _ExpenseSplitScreenState extends ConsumerState<ExpenseSplitScreen> {
                 style: AppText.bodyStrong(p.ink),
                 decoration: InputDecoration(
                   contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                   isDense: true,
                   suffixText: _splitMode == SplitMode.percentage
                       ? '%'
@@ -860,22 +903,28 @@ class _ExpenseSplitScreenState extends ConsumerState<ExpenseSplitScreen> {
               ),
             ),
           ] else if (share != null && entry.isIncluded) ...[
+            const SizedBox(width: 6),
             Text(
               CurrencyFormatter.format(share.allocatedAmount),
-              style: AppText.amount(p.ink, size: 15),
+              style: AppText.amount(p.ink, size: 14),
             ),
           ],
 
-          if (!entry.isUser)
+          if (!entry.isUser) ...[
+            const SizedBox(width: 4),
             IconButton(
               icon: const Icon(Icons.close, size: 18),
               color: p.muted,
               tooltip: 'Remove',
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              padding: EdgeInsets.zero,
               onPressed: () {
                 AppHaptics.select();
                 setState(() => _participants.remove(entry));
               },
             ),
+          ],
         ],
       ),
     );

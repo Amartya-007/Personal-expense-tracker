@@ -86,9 +86,19 @@ class _KhataListScreenState extends ConsumerState<KhataListScreen>
                   ),
                   title: Text('From Device Contacts', style: AppText.bodyStrong(p.ink)),
                   subtitle: Text('Pick someone from your address book', style: AppText.caption(p.muted)),
-                  onTap: () {
+                  onTap: () async {
                     Navigator.pop(ctx);
-                    PersonSelectorSheet.show(context, multiSelect: false, title: 'Select Contact');
+                    final selected = await PersonSelectorSheet.show(
+                      context,
+                      multiSelect: false,
+                      title: 'Select Contact',
+                    );
+                    if (selected != null && selected.isNotEmpty && mounted) {
+                      AppRoutes.push(
+                        context,
+                        PersonDetailScreen(personId: selected.first.id),
+                      );
+                    }
                   },
                 ),
                 ListTile(

@@ -61,12 +61,12 @@ class AppCard extends StatelessWidget {
         border: gradient == null ? Border.all(color: p.border) : null,
       ),
       clipBehavior: Clip.antiAlias,
-      child: onTap == null
-          ? content
-          : Material(
-              color: Colors.transparent,
-              child: InkWell(onTap: onTap, child: content),
-            ),
+      child: Material(
+        color: Colors.transparent,
+        child: onTap == null
+            ? content
+            : InkWell(onTap: onTap, child: content),
+      ),
     );
   }
 }

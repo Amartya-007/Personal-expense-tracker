@@ -99,8 +99,18 @@ class MainActivity: FlutterFragmentActivity() {
             when (call.method) {
                 "getContacts" -> {
                     val query = call.argument<String>("query")
-                    val contacts = readContacts(query)
-                    result.success(contacts)
+                    Thread {
+                        try {
+                            val contacts = readContacts(query)
+                            runOnUiThread {
+                                result.success(contacts)
+                            }
+                        } catch (e: Exception) {
+                            runOnUiThread {
+                                result.error("CONTACTS_ERROR", e.message, null)
+                            }
+                        }
+                    }.start()
                 }
                 else -> {
                     result.notImplemented()

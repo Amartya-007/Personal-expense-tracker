@@ -5,12 +5,12 @@ import '../../../../core/theme/app_haptics.dart';
 import '../../../../core/theme/app_palette.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_text.dart';
+import '../../../../core/utils/keyboard.dart';
 import '../../../../data/models/khata_person_model.dart';
 import '../../../../services/contacts/contact_service.dart';
 import '../../../providers/contact_providers.dart';
 import '../../../providers/khata_providers.dart';
 import '../../../widgets/app_card.dart';
-import '../../../widgets/app_sheets.dart';
 import '../../../widgets/field_decoration.dart';
 import '../../../widgets/primary_button.dart';
 import 'add_person_sheet.dart';
@@ -33,19 +33,44 @@ class PersonSelectorSheet extends ConsumerStatefulWidget {
     bool multiSelect = true,
     String title = 'Select People',
   }) {
-    return AppBottomSheet.show<List<KhataPersonModel>>(
-      context,
-      title: title,
-      builder: (_) => PersonSelectorSheet(
-        initialSelected: initialSelected,
-        multiSelect: multiSelect,
-        title: title,
-      ),
+    dismissKeyboard();
+    return showModalBottomSheet<List<KhataPersonModel>>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final p = ctx.palette;
+        final media = MediaQuery.of(ctx);
+        final sheetHeight = media.size.height * 0.85;
+
+        return Padding(
+          padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+          child: Container(
+            height: sheetHeight,
+            decoration: BoxDecoration(
+              color: p.surface,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
+            ),
+            child: SafeArea(
+              top: false,
+              child: PersonSelectorSheet(
+                initialSelected: initialSelected,
+                multiSelect: multiSelect,
+                title: title,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
   @override
-  ConsumerState<PersonSelectorSheet> createState() => _PersonSelectorSheetState();
+  ConsumerState<PersonSelectorSheet> createState() =>
+      _PersonSelectorSheetState();
 }
 
 class _PersonSelectorSheetState extends ConsumerState<PersonSelectorSheet>
@@ -54,7 +79,7 @@ class _PersonSelectorSheetState extends ConsumerState<PersonSelectorSheet>
   final TextEditingController _searchController = TextEditingController();
   final Set<String> _selectedIds = {};
   final Map<String, KhataPersonModel> _selectedMap = {};
-  bool _isProcessingContact = false;
+  String? _processingContactId;
 
   @override
   void initState() {
@@ -71,6 +96,24 @@ class _PersonSelectorSheetState extends ConsumerState<PersonSelectorSheet>
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  String _normalizePhone(String phone) {
+    return phone.replaceAll(RegExp(r'[\s\-\(\)\+]'), '');
+  }
+
+  bool _isContactSelected(DeviceContact contact) {
+    return _selectedMap.values.any((p) {
+      if (contact.id.isNotEmpty && p.contactId == contact.id) return true;
+      if (contact.primaryPhone != null &&
+          p.phone != null &&
+          _normalizePhone(p.phone!) ==
+              _normalizePhone(contact.primaryPhone!)) {
+        return true;
+      }
+      return p.name.trim().toLowerCase() ==
+          contact.displayName.trim().toLowerCase();
+    });
   }
 
   void _toggleSelection(KhataPersonModel person) {
@@ -95,8 +138,30 @@ class _PersonSelectorSheetState extends ConsumerState<PersonSelectorSheet>
   }
 
   Future<void> _handlePickDeviceContact(DeviceContact contact) async {
-    if (_isProcessingContact) return;
-    setState(() => _isProcessingContact = true);
+    final alreadySelected = _isContactSelected(contact);
+
+    if (alreadySelected) {
+      AppHaptics.select();
+      setState(() {
+        _selectedMap.removeWhere((key, p) {
+          if (contact.id.isNotEmpty && p.contactId == contact.id) return true;
+          if (contact.primaryPhone != null &&
+              p.phone != null &&
+              _normalizePhone(p.phone!) ==
+                  _normalizePhone(contact.primaryPhone!)) {
+            return true;
+          }
+          return p.name.trim().toLowerCase() ==
+              contact.displayName.trim().toLowerCase();
+        });
+        _selectedIds.clear();
+        _selectedIds.addAll(_selectedMap.keys);
+      });
+      return;
+    }
+
+    if (_processingContactId != null) return;
+    setState(() => _processingContactId = contact.id);
     AppHaptics.tap();
 
     try {
@@ -113,7 +178,7 @@ class _PersonSelectorSheetState extends ConsumerState<PersonSelectorSheet>
         _toggleSelection(person);
       }
     } finally {
-      if (mounted) setState(() => _isProcessingContact = false);
+      if (mounted) setState(() => _processingContactId = null);
     }
   }
 
@@ -132,37 +197,75 @@ class _PersonSelectorSheetState extends ConsumerState<PersonSelectorSheet>
     final deviceContactsAsync = ref.watch(deviceContactsProvider);
 
     return Column(
-      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Search & manual add row
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _searchController,
-                onChanged: (val) {
-                  ref.read(khataSearchQueryProvider.notifier).state = val;
-                  ref.read(contactSearchQueryProvider.notifier).state = val;
-                  setState(() {});
-                },
-                style: AppText.body(p.ink),
-                decoration: appFieldDecoration(p, hint: 'Search by name or phone').copyWith(
-                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
+        // Handle bar
+        Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: Center(
+            child: Container(
+              width: 40,
+              height: 5,
+              decoration: BoxDecoration(
+                color: p.border,
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+          ),
+        ),
+
+        // Header: Title & Close
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 10, 10, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(widget.title, style: AppText.title(p.ink)),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded),
+                color: p.muted,
+                tooltip: 'Close',
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        ),
+
+        // Search & Manual Add Row
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (val) {
+                    ref.read(khataSearchQueryProvider.notifier).state = val;
+                    ref.read(contactSearchQueryProvider.notifier).state = val;
+                    setState(() {});
+                  },
+                  style: AppText.body(p.ink),
+                  decoration: appFieldDecoration(
+                    p,
+                    hint: 'Search by name or phone',
+                  ).copyWith(
+                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(Icons.person_add_alt_1_rounded),
-              tooltip: 'Add Manually',
-              style: IconButton.styleFrom(
-                backgroundColor: p.primary.withValues(alpha: 0.12),
-                foregroundColor: p.primary,
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.person_add_alt_1_rounded),
+                tooltip: 'Add Manually',
+                style: IconButton.styleFrom(
+                  backgroundColor: p.primary.withValues(alpha: 0.12),
+                  foregroundColor: p.primary,
+                ),
+                onPressed: _openManualAdd,
               ),
-              onPressed: _openManualAdd,
-            ),
-          ],
+            ],
+          ),
         ),
         const SizedBox(height: AppSpacing.sm),
 
@@ -177,11 +280,9 @@ class _PersonSelectorSheetState extends ConsumerState<PersonSelectorSheet>
             Tab(text: 'Device Contacts'),
           ],
         ),
-        const SizedBox(height: AppSpacing.sm),
 
-        // Tab Content
-        SizedBox(
-          height: 320,
+        // Bounded, smoothly scrolling Tab Content
+        Expanded(
           child: TabBarView(
             controller: _tabController,
             children: [
@@ -193,9 +294,16 @@ class _PersonSelectorSheetState extends ConsumerState<PersonSelectorSheet>
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.people_outline_rounded, size: 40, color: p.muted),
-                          const SizedBox(height: 8),
-                          Text('No saved people found', style: AppText.body(p.muted)),
+                          Icon(
+                            Icons.people_outline_rounded,
+                            size: 44,
+                            color: p.muted,
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            'No saved people found',
+                            style: AppText.body(p.muted),
+                          ),
                           const SizedBox(height: 12),
                           TextButton.icon(
                             icon: const Icon(Icons.add, size: 18),
@@ -213,29 +321,47 @@ class _PersonSelectorSheetState extends ConsumerState<PersonSelectorSheet>
                       final person = people[i];
                       final isSelected = _selectedIds.contains(person.id);
                       return ListTile(
+                        selected: isSelected,
+                        selectedTileColor: p.primary.withValues(alpha: 0.08),
                         leading: CircleAvatar(
-                          backgroundColor: p.primary.withValues(alpha: 0.15),
+                          backgroundColor: isSelected
+                              ? p.primary
+                              : p.primary.withValues(alpha: 0.15),
                           child: Text(
-                            person.name.isNotEmpty ? person.name[0].toUpperCase() : '?',
-                            style: AppText.bodyStrong(p.primary),
+                            person.name.isNotEmpty
+                                ? person.name[0].toUpperCase()
+                                : '?',
+                            style: AppText.bodyStrong(
+                              isSelected ? p.onPrimary : p.primary,
+                            ),
                           ),
                         ),
-                        title: Text(person.name, style: AppText.bodyStrong(p.ink)),
+                        title:
+                            Text(person.name, style: AppText.bodyStrong(p.ink)),
                         subtitle: person.phone != null
-                            ? Text(person.phone!, style: AppText.caption(p.muted))
+                            ? Text(person.phone!,
+                                style: AppText.caption(p.muted))
                             : null,
-                        trailing: Checkbox(
-                          value: isSelected,
-                          activeColor: p.primary,
-                          onChanged: (_) => _toggleSelection(person),
-                        ),
+                        trailing: widget.multiSelect
+                            ? Checkbox(
+                                value: isSelected,
+                                activeColor: p.primary,
+                                onChanged: (_) => _toggleSelection(person),
+                              )
+                            : (isSelected
+                                ? Icon(Icons.check_circle_rounded,
+                                    color: p.primary, size: 22)
+                                : const Icon(Icons.chevron_right_rounded,
+                                    size: 20)),
                         onTap: () => _toggleSelection(person),
                       );
                     },
                   );
                 },
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(child: Text('Error loading people: $e')),
+                loading: () =>
+                    const Center(child: CircularProgressIndicator()),
+                error: (e, _) =>
+                    Center(child: Text('Error loading people: $e')),
               ),
 
               // Tab 2: Device Contacts
@@ -274,9 +400,20 @@ class _PersonSelectorSheetState extends ConsumerState<PersonSelectorSheet>
                     data: (contacts) {
                       if (contacts.isEmpty) {
                         return Center(
-                          child: Text(
-                            'No matching contacts found',
-                            style: AppText.body(p.muted),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.contacts_outlined,
+                                size: 44,
+                                color: p.muted,
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                'No matching contacts found',
+                                style: AppText.body(p.muted),
+                              ),
+                            ],
                           ),
                         );
                       }
@@ -285,54 +422,109 @@ class _PersonSelectorSheetState extends ConsumerState<PersonSelectorSheet>
                         itemCount: contacts.length,
                         itemBuilder: (ctx, i) {
                           final contact = contacts[i];
+                          final isSelected = _isContactSelected(contact);
+                          final isProcessing =
+                              _processingContactId == contact.id;
+
                           return ListTile(
+                            selected: isSelected,
+                            selectedTileColor:
+                                p.primary.withValues(alpha: 0.08),
                             leading: CircleAvatar(
-                              backgroundColor: p.surface2,
-                              child: Icon(Icons.person_outline_rounded, color: p.ink),
+                              backgroundColor: isSelected
+                                  ? p.primary
+                                  : p.surface2,
+                              child: isSelected
+                                  ? Icon(
+                                      Icons.check_rounded,
+                                      color: p.onPrimary,
+                                      size: 20,
+                                    )
+                                  : Icon(
+                                      Icons.person_outline_rounded,
+                                      color: p.ink,
+                                      size: 20,
+                                    ),
                             ),
-                            title: Text(contact.displayName, style: AppText.bodyStrong(p.ink)),
+                            title: Text(
+                              contact.displayName,
+                              style: AppText.bodyStrong(p.ink),
+                            ),
                             subtitle: contact.primaryPhone != null
-                                ? Text(contact.primaryPhone!, style: AppText.caption(p.muted))
+                                ? Text(
+                                    contact.primaryPhone!,
+                                    style: AppText.caption(p.muted),
+                                  )
                                 : null,
-                            trailing: TextButton(
-                              child: const Text('Select'),
-                              onPressed: () => _handlePickDeviceContact(contact),
-                            ),
-                            onTap: () => _handlePickDeviceContact(contact),
+                            trailing: isProcessing
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : (widget.multiSelect
+                                    ? Checkbox(
+                                        value: isSelected,
+                                        activeColor: p.primary,
+                                        onChanged: (_) =>
+                                            _handlePickDeviceContact(contact),
+                                      )
+                                    : (isSelected
+                                        ? Icon(
+                                            Icons.check_circle_rounded,
+                                            color: p.primary,
+                                            size: 22,
+                                          )
+                                        : const Icon(
+                                            Icons.chevron_right_rounded,
+                                            size: 20,
+                                          ))),
+                            onTap: isProcessing
+                                ? null
+                                : () => _handlePickDeviceContact(contact),
                           );
                         },
                       );
                     },
-                    loading: () => const Center(child: CircularProgressIndicator()),
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
                     error: (e, _) => Center(child: Text('Error: $e')),
                   );
                 },
-                loading: () => const Center(child: CircularProgressIndicator()),
+                loading: () =>
+                    const Center(child: CircularProgressIndicator()),
                 error: (e, _) => Center(child: Text('Error: $e')),
               ),
             ],
           ),
         ),
 
-        const SizedBox(height: AppSpacing.sm),
-
-        // Bottom confirmation bar
+        // Bottom confirmation bar for multi-select
         if (widget.multiSelect)
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '${_selectedIds.length} ${_selectedIds.length == 1 ? 'person' : 'people'} selected',
-                  style: AppText.bodyStrong(p.ink),
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+            decoration: BoxDecoration(
+              color: p.surface,
+              border: Border(top: BorderSide(color: p.border)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${_selectedIds.length} ${_selectedIds.length == 1 ? 'person' : 'people'} selected',
+                    style: AppText.bodyStrong(p.ink),
+                  ),
                 ),
-              ),
-              PrimaryButton(
-                label: 'Confirm',
-                onPressed: () {
-                  Navigator.of(context).pop(_selectedMap.values.toList());
-                },
-              ),
-            ],
+                PrimaryButton(
+                  label: 'Confirm',
+                  onPressed: () {
+                    Navigator.of(context).pop(_selectedMap.values.toList());
+                  },
+                ),
+              ],
+            ),
           ),
       ],
     );
